@@ -1,0 +1,3026 @@
+{
+  "lockfile-version": 1,
+  "manifest": {
+    "version": 1,
+    "install": {
+      "CoreFoundation": {
+        "pkg-path": "darwin.apple_sdk.frameworks.CoreFoundation",
+        "priority": 2,
+        "systems": [
+          "x86_64-darwin",
+          "aarch64-darwin"
+        ]
+      },
+      "IOKit": {
+        "pkg-path": "darwin.apple_sdk.frameworks.IOKit",
+        "systems": [
+          "x86_64-darwin",
+          "aarch64-darwin"
+        ]
+      },
+      "alsa-lib": {
+        "pkg-path": "alsa-lib",
+        "systems": [
+          "x86_64-linux",
+          "aarch64-linux"
+        ]
+      },
+      "autoconf": {
+        "pkg-path": "autoconf"
+      },
+      "automake": {
+        "pkg-path": "automake"
+      },
+      "barstoolbluz/ffmpeg": {
+        "pkg-path": "ffmpeg",
+        "priority": 7,
+        "systems": [
+          "x86_64-linux"
+        ]
+      },
+      "clang": {
+        "pkg-path": "clang",
+        "systems": [
+          "x86_64-darwin",
+          "aarch64-darwin"
+        ]
+      },
+      "file": {
+        "pkg-path": "file"
+      },
+      "flac": {
+        "pkg-path": "flac"
+      },
+      "gcc": {
+        "pkg-path": "gcc",
+        "systems": [
+          "x86_64-linux",
+          "aarch64-linux"
+        ]
+      },
+      "gnumake": {
+        "pkg-path": "gnumake"
+      },
+      "gnused": {
+        "pkg-path": "gnused"
+      },
+      "gsm": {
+        "pkg-path": "gsm"
+      },
+      "ladspa-sdk": {
+        "pkg-path": "ladspa-sdk",
+        "systems": [
+          "x86_64-linux",
+          "aarch64-linux"
+        ]
+      },
+      "lame": {
+        "pkg-path": "lame"
+      },
+      "libid3tag": {
+        "pkg-path": "libid3tag"
+      },
+      "libltdl": {
+        "pkg-path": "libtool"
+      },
+      "libmad": {
+        "pkg-path": "libmad"
+      },
+      "libogg": {
+        "pkg-path": "libogg"
+      },
+      "libpulseaudio": {
+        "pkg-path": "libpulseaudio",
+        "systems": [
+          "x86_64-linux",
+          "aarch64-linux"
+        ]
+      },
+      "libsndfile": {
+        "pkg-path": "libsndfile"
+      },
+      "libtool": {
+        "pkg-path": "libtool"
+      },
+      "libvorbis": {
+        "pkg-path": "libvorbis"
+      },
+      "opusfile": {
+        "pkg-path": "opusfile"
+      },
+      "pkg-config": {
+        "pkg-path": "pkg-config"
+      },
+      "wavpack": {
+        "pkg-path": "wavpack"
+      },
+      "zlib": {
+        "pkg-path": "zlib"
+      }
+    },
+    "options": {},
+    "build": {
+      "soxxx": {
+        "command": "set -euo pipefail\nmkdir -p \"$out\"\n\n# First, rename all sox_ng references to soxxx\necho \"Renaming sox_ng to soxxx throughout the codebase...\"\n\n# Update configure.ac\nsed -i 's/sox_ng/soxxx/g' configure.ac\n\n# Update CMakeLists.txt files\nsed -i 's/sox_ng/soxxx/g' CMakeLists.txt\nsed -i 's/sox_ng/soxxx/g' src/CMakeLists.txt\n\n# Update Makefile.am files\nsed -i 's/sox_ng/soxxx/g' Makefile.am\nsed -i 's/soxi_ng/soxixx/g' Makefile.am\nsed -i 's/soxformat_ng/soxxxformat/g' Makefile.am\nsed -i 's/libsox_ng/libsoxxx/g' Makefile.am\nsed -i 's/play_ng/playxx/g' Makefile.am\nsed -i 's/rec_ng/recxx/g' Makefile.am\nsed -i 's/sox_ng/soxxx/g' src/Makefile.am\nsed -i 's/libsox_ng/libsoxxx/g' src/Makefile.am\n\n# Also update the optional-fmts.am file which is included by src/Makefile.am\nif [ -f src/optional-fmts.am ]; then\n    sed -i 's/sox_ng/soxxx/g' src/optional-fmts.am\n    sed -i 's/libsox_ng/libsoxxx/g' src/optional-fmts.am\nfi\n\n# Update references to libsox (without _ng) in Makefile.am files\nsed -i 's/libsox_i\\.c/libsoxxx_i.c/g' src/Makefile.am\nsed -i 's/libsox_i\\.c/libsoxxx_i.c/g' src/optional-fmts.am 2>/dev/null || true\n\n# Rename pkg-config file\nif [ -f sox_ng.pc.in ]; then\n    mv sox_ng.pc.in soxxx.pc.in\n    sed -i 's/sox_ng/soxxx/g' soxxx.pc.in\n    sed -i 's/libsox_ng/libsoxxx/g' soxxx.pc.in\nfi\n\n# Rename source files\nif [ -f src/sox_ng.h ]; then\n    mv src/sox_ng.h src/soxxx.h\nfi\nif [ -f src/sox_ng.c ]; then\n    mv src/sox_ng.c src/soxxx.c\nfi\nif [ -f src/libsox_ng.c ]; then\n    mv src/libsox_ng.c src/libsoxxx.c\nfi\nif [ -f src/libsox_i.c ]; then\n    mv src/libsox_i.c src/libsoxxx_i.c\nfi\n\n# Update all C source and header files to use new names\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/sox_ng\\.h/soxxx.h/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/libsox_ng/libsoxxx/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/\"libsox\\.h\"/\"libsoxxx.h\"/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/<libsox\\.h>/<libsoxxx.h>/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/libsox_i/libsoxxx_i/g'\n\n# Rename man pages\nif [ -f sox_ng.1 ]; then\n    mv sox_ng.1 soxxx.1\n    sed -i 's/sox_ng/soxxx/g' soxxx.1\n    sed -i 's/play_ng/playxx/g' soxxx.1\n    sed -i 's/rec_ng/recxx/g' soxxx.1\nfi\nif [ -f soxi_ng.1 ]; then\n    mv soxi_ng.1 soxixx.1\n    sed -i 's/sox_ng/soxxx/g' soxixx.1\n    sed -i 's/soxi_ng/soxixx/g' soxixx.1\nfi\nif [ -f soxformat_ng.7 ]; then\n    mv soxformat_ng.7 soxxxformat.7\n    sed -i 's/sox_ng/soxxx/g' soxxxformat.7\n    sed -i 's/soxformat_ng/soxxxformat/g' soxxxformat.7\nfi\nif [ -f libsox_ng.3 ]; then\n    mv libsox_ng.3 libsoxxx.3\n    sed -i 's/sox_ng/soxxx/g' libsoxxx.3\n    sed -i 's/libsox_ng/libsoxxx/g' libsoxxx.3\nfi\n\n# Update test scripts\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/sox_ng/soxxx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/soxi_ng/soxixx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/play_ng/playxx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/rec_ng/recxx/g' 2>/dev/null || true\n\n# Update build scripts\nfor script in mingwbuild osxbuild release.sh; do\n    if [ -f \"$script\" ]; then\n        sed -i 's/sox_ng/soxxx/g' \"$script\"\n        sed -i 's/soxi_ng/soxixx/g' \"$script\"\n        sed -i 's/libsox_ng/libsoxxx/g' \"$script\"\n        sed -i 's/play_ng/playxx/g' \"$script\"\n        sed -i 's/rec_ng/recxx/g' \"$script\"\n    fi\ndone\n\necho \"Checking and fixing math.h include if needed...\"\nif ! grep -q \"math.h\" src/sox_sample_test.h; then\n    echo \"Adding math.h include to src/sox_sample_test.h\"\n    sed -i '/^#include <assert.h>$/a #include <math.h>' src/sox_sample_test.h\nelse\n    echo \"math.h include already present\"\nfi\n\n# Fix function pointer type compatibility issues on macOS\necho \"Searching and fixing function pointer type compatibility issues...\"\nif [[ \"$OSTYPE\" == \"darwin\"* ]]; then\n    # Find all C source files and fix uint64_t parameter issues in seek functions\n    find src -name \"*.c\" -exec grep -l \"uint64_t.*offset\" {} \\; | while read file; do\n        echo \"Patching $file...\"\n        sed -i 's/uint64_t \\([A-Z_]*\\) offset/sox_uint64_t \\1 offset/g' \"$file\"\n    done\n    \n    # Fix lsx_rawseek function definitions and declarations\n    echo \"Fixing lsx_rawseek function signatures...\"\n    # Fix header declaration\n    sed -i 's/int lsx_rawseek(sox_format_t \\* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' src/sox_i.h\n    # Fix function definition\n    sed -i 's/int lsx_rawseek(sox_format_t \\* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' src/raw.c\n    \n    # Fix any remaining uint64_t in function pointer contexts\n    find src -name \"*.c\" -exec grep -l \"uint64_t\" {} \\; | while read file; do\n        echo \"Final cleanup of uint64_t types in $file...\"\n        sed -i 's/(\\(sox_format_t[^,]*\\), uint64_t/(\\1, sox_uint64_t/g' \"$file\"\n    done\nelse\n    echo \"Not on macOS, skipping function pointer type fixes\"\nfi\n\nautoreconf -fiv\n\n./configure \\\n    --prefix=\"$out\" \\\n    --enable-shared \\\n    --enable-static \\\n    --with-ffmpeg\n\nmake -j$(nproc)\n\nmake install\n\n# Rename the symlinks created during install\ncd \"$out/bin\"\nif [ -L play_ng ]; then\n    rm play_ng\n    ln -s soxxx playxx\nfi\nif [ -L rec_ng ]; then\n    rm rec_ng\n    ln -s soxxx recxx\nfi\nif [ -L soxi_ng ]; then\n    rm soxi_ng\n    ln -s soxxx soxixx\nfi\n",
+        "sandbox": "pure",
+        "version": "14.6.0",
+        "description": "soxxx: A fork of sox_ng with DSD + maximum codec/container support"
+      }
+    }
+  },
+  "packages": [
+    {
+      "attr_path": "darwin.apple_sdk.frameworks.CoreFoundation",
+      "broken": false,
+      "derivation": "/nix/store/dbnyj7qkapg941y7icvkl7bm61qx0ldm-CoreFoundation-11.0.drv",
+      "install_id": "CoreFoundation",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "CoreFoundation-11.0",
+      "pname": "CoreFoundation",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:20:34.900652Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "11.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/sdvi902nygmpiaqlj660zcygbnvr49rq-CoreFoundation-11.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 2
+    },
+    {
+      "attr_path": "darwin.apple_sdk.frameworks.CoreFoundation",
+      "broken": false,
+      "derivation": "/nix/store/qgnzr3n7mbymc5fhp1m76525zq4cxvv9-CoreFoundation-11.0.drv",
+      "install_id": "CoreFoundation",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "CoreFoundation-11.0",
+      "pname": "CoreFoundation",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:55:35.450685Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "11.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/gqya17d7sjjih6f35w4pcgj4jbp52cz4-CoreFoundation-11.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 2
+    },
+    {
+      "attr_path": "darwin.apple_sdk.frameworks.IOKit",
+      "broken": false,
+      "derivation": "/nix/store/crn8an39khfgprlsq218dcwsa3n4dpb3-IOKit-11.0.drv",
+      "install_id": "IOKit",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "IOKit-11.0",
+      "pname": "IOKit",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:20:35.012732Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "11.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/jk79899hba4hxj95sjg20k1wzfc5shzs-IOKit-11.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "darwin.apple_sdk.frameworks.IOKit",
+      "broken": false,
+      "derivation": "/nix/store/js4mziw01icf09mbdjhf7dv1dv0akcrb-IOKit-11.0.drv",
+      "install_id": "IOKit",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "IOKit-11.0",
+      "pname": "IOKit",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:55:35.562664Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "11.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/v8xk2pp9j6vmi7qay7xn0a4568nky07l-IOKit-11.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "alsa-lib",
+      "broken": false,
+      "derivation": "/nix/store/w2hjrk3x4zwy8ydvq9p3gzckcb5ifln5-alsa-lib-1.2.13.drv",
+      "description": "ALSA, the Advanced Linux Sound Architecture libraries",
+      "install_id": "alsa-lib",
+      "license": "LGPL-2.1-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "alsa-lib-1.2.13",
+      "pname": "alsa-lib",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:19.150495Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.2.13",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/1yqa4vh5nc9lslk06b9q4dgan84m3d5c-alsa-lib-1.2.13-dev",
+        "out": "/nix/store/v35d81i08bqs8psbnfachip0lh73zkal-alsa-lib-1.2.13"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "alsa-lib",
+      "broken": false,
+      "derivation": "/nix/store/x34zsjgq0jvh2p45xgry7ma3yk0pnxcw-alsa-lib-1.2.13.drv",
+      "description": "ALSA, the Advanced Linux Sound Architecture libraries",
+      "install_id": "alsa-lib",
+      "license": "LGPL-2.1-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "alsa-lib-1.2.13",
+      "pname": "alsa-lib",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:53.921335Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.2.13",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/8a8c7khfdpiwbl7jc8lnwlpsbafq59vl-alsa-lib-1.2.13-dev",
+        "out": "/nix/store/2bp6s10j3b6rwqn6p0wy27q78db7ldz1-alsa-lib-1.2.13"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "autoconf",
+      "broken": false,
+      "derivation": "/nix/store/vdz5k13ycwkyak05l905g5kahk4cdx5f-autoconf-2.72.drv",
+      "description": "Part of the GNU Build System",
+      "install_id": "autoconf",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "autoconf-2.72",
+      "pname": "autoconf",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:28.002050Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.72",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/w5496l4a8izsjp1xgkcdcrkqwxg0ksnk-autoconf-2.72-doc",
+        "out": "/nix/store/w4sa5dan2crr3yr1bs4i6jflyfa0d17p-autoconf-2.72"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "autoconf",
+      "broken": false,
+      "derivation": "/nix/store/85vfa27rxbn3zgawf5gal7lys97ybzmk-autoconf-2.72.drv",
+      "description": "Part of the GNU Build System",
+      "install_id": "autoconf",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "autoconf-2.72",
+      "pname": "autoconf",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:19.249856Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.72",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/xlx1ypdkb571zb1dqplykh3djhp2vpg8-autoconf-2.72-doc",
+        "out": "/nix/store/iibqpna9lkv2r83pbff7jrknayf98lby-autoconf-2.72"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "autoconf",
+      "broken": false,
+      "derivation": "/nix/store/jzjqkw20z40j1sncjllq32s1gd0syfjd-autoconf-2.72.drv",
+      "description": "Part of the GNU Build System",
+      "install_id": "autoconf",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "autoconf-2.72",
+      "pname": "autoconf",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.023488Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.72",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/dvblzb1hhwkc88k00qsgzjhvag09b510-autoconf-2.72-doc",
+        "out": "/nix/store/sxk5q9zfx2k340v2f28vllgjy20sxzmr-autoconf-2.72"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "autoconf",
+      "broken": false,
+      "derivation": "/nix/store/4nvjr1q475hr3l5gvkb3s1dws6i6zw6v-autoconf-2.72.drv",
+      "description": "Part of the GNU Build System",
+      "install_id": "autoconf",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "autoconf-2.72",
+      "pname": "autoconf",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:54.035358Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.72",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/6c16616bdnfr89r7mfp8rsfmy2lz284z-autoconf-2.72-doc",
+        "out": "/nix/store/kz7dz3kz0w2hzdq1rixh5qr90w3sn3gj-autoconf-2.72"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "automake",
+      "broken": false,
+      "derivation": "/nix/store/v395sqpwh3vnxsf1qq8mbmcspggphnk6-automake-1.16.5.drv",
+      "description": "GNU standard-compliant makefile generator",
+      "install_id": "automake",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "automake-1.16.5",
+      "pname": "automake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:28.003088Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.16.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/5h7vgh26ns0xckj6p95zq4j1z8n4dc7g-automake-1.16.5"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "automake",
+      "broken": false,
+      "derivation": "/nix/store/kn0qk00ccyg4k4bzs0y9hjjjqfdsvjwz-automake-1.16.5.drv",
+      "description": "GNU standard-compliant makefile generator",
+      "install_id": "automake",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "automake-1.16.5",
+      "pname": "automake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:19.251186Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.16.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/n2mwia3ngp07xhjhim2x8nqzhq0nxrbx-automake-1.16.5"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "automake",
+      "broken": false,
+      "derivation": "/nix/store/wn25xc3qkyw7s0ixi6fyfprgm3dw0fw1-automake-1.16.5.drv",
+      "description": "GNU standard-compliant makefile generator",
+      "install_id": "automake",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "automake-1.16.5",
+      "pname": "automake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.024534Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.16.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/j8pdq1rvss5zs7frgbc6driv7nlhlrsl-automake-1.16.5"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "automake",
+      "broken": false,
+      "derivation": "/nix/store/ryzgl1j33d1n70a7fyb7vgvmmhwy2xwi-automake-1.16.5.drv",
+      "description": "GNU standard-compliant makefile generator",
+      "install_id": "automake",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "automake-1.16.5",
+      "pname": "automake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:54.036769Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.16.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/j9nmwa41glbq2spczvjg23ndqna78isi-automake-1.16.5"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "ffmpeg",
+      "broken": false,
+      "derivation": "/nix/store/8vgjyjf9p8vnsdxadllh6q5g481x4xqr-ffmpeg-7.1.1.drv",
+      "description": "Complete, cross-platform solution to record, convert and stream audio and video",
+      "install_id": "barstoolbluz/ffmpeg",
+      "license": "[ LGPL-2.1-or-later, GPL-2.0-or-later, LGPL-3.0-or-later, GPL-3.0-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "ffmpeg-7.1.1",
+      "pname": "ffmpeg",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:55.101723Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "7.1.1",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/xszxrw67mpq1f0k00j8cgs34j3w388m5-ffmpeg-7.1.1-bin",
+        "data": "/nix/store/hxi44c7zlhf887inzmmp0ai9fdv7pnjj-ffmpeg-7.1.1-data",
+        "dev": "/nix/store/h8qsz4awbx1h3p0i3v17ymc14b5rn887-ffmpeg-7.1.1-dev",
+        "doc": "/nix/store/1qyf3kfda2ix2sfjfv4kjky38pqsa99a-ffmpeg-7.1.1-doc",
+        "lib": "/nix/store/8mi2n0ir1i4qkdcgbm3m6i5bfax26xxq-ffmpeg-7.1.1-lib",
+        "man": "/nix/store/a6kzx5iip1vrb597i378f3dflj26lbvz-ffmpeg-7.1.1-man",
+        "out": "/nix/store/31rczwwh1jwpmg48ijcc4a3cl6wk24vw-ffmpeg-7.1.1"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 7
+    },
+    {
+      "attr_path": "clang",
+      "broken": false,
+      "derivation": "/nix/store/4il7f1gq034a5p8an033wh507md9clhh-clang-wrapper-19.1.7.drv",
+      "description": "C language family frontend for LLVM (wrapper script)",
+      "install_id": "clang",
+      "license": "[ NCSA, Apache-2.0, LLVM-exception ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "clang-wrapper-19.1.7",
+      "pname": "clang",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:28.626856Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "19.1.7",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/xpja3ad45p55aryvgng6g9grp8yivvsd-clang-wrapper-19.1.7"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "clang",
+      "broken": false,
+      "derivation": "/nix/store/6hw2ja56687jxrrhcfmfvibss64qpch6-clang-wrapper-19.1.7.drv",
+      "description": "C language family frontend for LLVM (wrapper script)",
+      "install_id": "clang",
+      "license": "[ NCSA, Apache-2.0, LLVM-exception ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "clang-wrapper-19.1.7",
+      "pname": "clang",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.245016Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "19.1.7",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/8b3idsmg4ajv79jmqcz87pimzhc5a4j9-clang-wrapper-19.1.7"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "file",
+      "broken": false,
+      "derivation": "/nix/store/0h1rx73ikb2ahpijf5zgpks5jndfn1nf-file-5.46.drv",
+      "description": "Program that shows the type of files",
+      "install_id": "file",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "file-5.46",
+      "pname": "file",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:28.982930Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.46",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/9kczq60yijiqdg4chkr7kvfx6y4gva4k-file-5.46-dev",
+        "man": "/nix/store/n2acs4zvm06kgg1s6fvx4gpg7grwavs1-file-5.46-man",
+        "out": "/nix/store/vify5yqsg42blv631021bd45xbihdhzw-file-5.46"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "file",
+      "broken": false,
+      "derivation": "/nix/store/ki2syyglclgw4f6v1bnq5rfn0672djq8-file-5.46.drv",
+      "description": "Program that shows the type of files",
+      "install_id": "file",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "file-5.46",
+      "pname": "file",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:20.213173Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.46",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/zf6dx6r1zywr00w6arc1gcdn64q2y3pw-file-5.46-dev",
+        "man": "/nix/store/6cgsj2xfr0lhsmq0mzz6qx8q1lkwqmp5-file-5.46-man",
+        "out": "/nix/store/xmf8dw64djsyqjwh67zd5z2lnbzjnng0-file-5.46"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "file",
+      "broken": false,
+      "derivation": "/nix/store/6npl0mxsy7g0mznqjbwyhc8v1bm8s9fx-file-5.46.drv",
+      "description": "Program that shows the type of files",
+      "install_id": "file",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "file-5.46",
+      "pname": "file",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.609089Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.46",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/48gpp3ny96flbcbj0y5n4chzjdjk41l3-file-5.46-dev",
+        "man": "/nix/store/hw6x0vikpg2g2r2l346dksjixqcy20lv-file-5.46-man",
+        "out": "/nix/store/vc7hv21chw9mzbc3qgwxga6s977sm7hi-file-5.46"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "file",
+      "broken": false,
+      "derivation": "/nix/store/78n1x64258z7a3ys50d5qr9v9dnh86r1-file-5.46.drv",
+      "description": "Program that shows the type of files",
+      "install_id": "file",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "file-5.46",
+      "pname": "file",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:55.114881Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.46",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/q8gwka9wkm6amdhqf922z2rq48ld6dac-file-5.46-dev",
+        "man": "/nix/store/scgp194phhj654kc7hf06ffj1bm3z4z8-file-5.46-man",
+        "out": "/nix/store/ahflikbm2kni7jz66nwy2f7agvk6il3s-file-5.46"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "flac",
+      "broken": false,
+      "derivation": "/nix/store/364wk67g32z106zkfrzvx7s5zl456hxd-flac-1.5.0.drv",
+      "description": "Library and tools for encoding and decoding the FLAC lossless audio file format",
+      "install_id": "flac",
+      "license": "[ BSD-3-Clause, GFDL-1.3-or-later, GPL-2.0-or-later, LGPL-2.1-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "flac-1.5.0",
+      "pname": "flac",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:29.007608Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/v7j0a7sa6rjdj84rj38ixfjmmabn50mz-flac-1.5.0-bin",
+        "dev": "/nix/store/an6f30rhjihj4q1nyc0b4q26yxcpb9vm-flac-1.5.0-dev",
+        "doc": "/nix/store/2b2srrbwywap5awn5dcw8n7si6dxn6yn-flac-1.5.0-doc",
+        "man": "/nix/store/8srb1r5fsj6lgr275637kqgga7m366n8-flac-1.5.0-man",
+        "out": "/nix/store/15lwr91096dgvq0qhhhpzb1a7qhx30jz-flac-1.5.0"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "flac",
+      "broken": false,
+      "derivation": "/nix/store/dsl4zjy30z3gsn8ga9p34mkyn4ahay18-flac-1.5.0.drv",
+      "description": "Library and tools for encoding and decoding the FLAC lossless audio file format",
+      "install_id": "flac",
+      "license": "[ BSD-3-Clause, GFDL-1.3-or-later, GPL-2.0-or-later, LGPL-2.1-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "flac-1.5.0",
+      "pname": "flac",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:20.255085Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/cyar76y5gpwjxaxbz5shlxiwihim6ylx-flac-1.5.0-bin",
+        "dev": "/nix/store/va7zp2hblxqzads57rr20zabcr8ip7az-flac-1.5.0-dev",
+        "doc": "/nix/store/4dmqda66qc7a25yq38r1xcls3pcms5v7-flac-1.5.0-doc",
+        "man": "/nix/store/d9vnr3v3jl4180aplgvv1jpa5vdrd9my-flac-1.5.0-man",
+        "out": "/nix/store/n278r7k4xr6bzhl1k4m5mala6638f1f8-flac-1.5.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "flac",
+      "broken": false,
+      "derivation": "/nix/store/sm0jjxr1psh40fqrk69xi38ir9agmcjj-flac-1.5.0.drv",
+      "description": "Library and tools for encoding and decoding the FLAC lossless audio file format",
+      "install_id": "flac",
+      "license": "[ BSD-3-Clause, GFDL-1.3-or-later, GPL-2.0-or-later, LGPL-2.1-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "flac-1.5.0",
+      "pname": "flac",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.634062Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/n7248kmkky0bq6zipig4w3w8cfdnnb3x-flac-1.5.0-bin",
+        "dev": "/nix/store/3ch10n4n9zb7dy88nj7qki00b9h3pi6x-flac-1.5.0-dev",
+        "doc": "/nix/store/0kb788ascjbyd8pvls3f17csvb316650-flac-1.5.0-doc",
+        "man": "/nix/store/qqr9pddk7byvn1s4qw1yx45dgqmrz756-flac-1.5.0-man",
+        "out": "/nix/store/3c6s0qxmlbg42zz3xz7mczlxmdf7gzsd-flac-1.5.0"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "flac",
+      "broken": false,
+      "derivation": "/nix/store/qcjkmf3fh2adi3k3lf1l5y40y02gbamr-flac-1.5.0.drv",
+      "description": "Library and tools for encoding and decoding the FLAC lossless audio file format",
+      "install_id": "flac",
+      "license": "[ BSD-3-Clause, GFDL-1.3-or-later, GPL-2.0-or-later, LGPL-2.1-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "flac-1.5.0",
+      "pname": "flac",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:55.160759Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.5.0",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/9syr7iff4s3p92gigv1xpfj8kqvk1jzj-flac-1.5.0-bin",
+        "dev": "/nix/store/43184gnj9f3yakiasgv1aqg8mgz8aywv-flac-1.5.0-dev",
+        "doc": "/nix/store/kvg8npvks9hj52y0nn9p44kan9y4wcn8-flac-1.5.0-doc",
+        "man": "/nix/store/svzwpb5bw7pydci45nn6fhg8lkgpv7k3-flac-1.5.0-man",
+        "out": "/nix/store/7igxq0zylz88hsmqwjsa2avqmzypkbb2-flac-1.5.0"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gcc",
+      "broken": false,
+      "derivation": "/nix/store/mvq26ns0vkglyz35x6zd6jn1dvpr0wvx-gcc-wrapper-14.2.1.20250322.drv",
+      "description": "GNU Compiler Collection, version 14.2.1.20250322 (wrapper script)",
+      "install_id": "gcc",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gcc-wrapper-14.2.1.20250322",
+      "pname": "gcc",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:20.415079Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "14.2.1.20250322",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/7y6glm22qfb7sw1ybf0lgi5ml9ra278b-gcc-wrapper-14.2.1.20250322-info",
+        "man": "/nix/store/km6mm6rmh1p2av5vw37skaprgrd293vl-gcc-wrapper-14.2.1.20250322-man",
+        "out": "/nix/store/rpxlridr3yn6mbmd34r0bya9qv91b79s-gcc-wrapper-14.2.1.20250322"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gcc",
+      "broken": false,
+      "derivation": "/nix/store/7chb1402lr3jgd7sxcbj3v01l97kvs3h-gcc-wrapper-14.2.1.20250322.drv",
+      "description": "GNU Compiler Collection, version 14.2.1.20250322 (wrapper script)",
+      "install_id": "gcc",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gcc-wrapper-14.2.1.20250322",
+      "pname": "gcc",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:55.338399Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "14.2.1.20250322",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/rs9pvqy38dx84320sxf7ql4ppv2k4rhj-gcc-wrapper-14.2.1.20250322-info",
+        "man": "/nix/store/1icxr998a24dfw4dk30v4n8kwdl0v29y-gcc-wrapper-14.2.1.20250322-man",
+        "out": "/nix/store/f0m6caffiykyvsjim9376a3hx2yj2ghj-gcc-wrapper-14.2.1.20250322"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnumake",
+      "broken": false,
+      "derivation": "/nix/store/mk6kphiq5bi760hg7cdzir2fxf44l78i-gnumake-4.4.1.drv",
+      "description": "Tool to control the generation of non-source files from sources",
+      "install_id": "gnumake",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnumake-4.4.1",
+      "pname": "gnumake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:29.226077Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.4.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/268bwy8k7q2inj2iq3q7g257jgyf0khl-gnumake-4.4.1-info",
+        "man": "/nix/store/s1790sv4yjsdfk9lgsnbxir78f6a6yhq-gnumake-4.4.1-man",
+        "out": "/nix/store/shwsndmpjz2nc236q64cl89rhn6rgy1r-gnumake-4.4.1"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnumake",
+      "broken": false,
+      "derivation": "/nix/store/1b0qzw6vxw2di0gxxfdl8lgipsj59gcw-gnumake-4.4.1.drv",
+      "description": "Tool to control the generation of non-source files from sources",
+      "install_id": "gnumake",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnumake-4.4.1",
+      "pname": "gnumake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:20.910388Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.4.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "debug": "/nix/store/sw6daq4lahs9fbidbsy2k81n8aw9xyi2-gnumake-4.4.1-debug",
+        "info": "/nix/store/cd3ln44d4ahapjmm9b87h4r05jn2285a-gnumake-4.4.1-info",
+        "man": "/nix/store/vlqa2vsbbw625kl1cvm87kaavflg88rh-gnumake-4.4.1-man",
+        "out": "/nix/store/ni8hj9acwi2bykis48hl00xhkzzxnlb6-gnumake-4.4.1"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnumake",
+      "broken": false,
+      "derivation": "/nix/store/wjd06zmhgxf9f9nd9kpnc6z997akmx7b-gnumake-4.4.1.drv",
+      "description": "Tool to control the generation of non-source files from sources",
+      "install_id": "gnumake",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnumake-4.4.1",
+      "pname": "gnumake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.884873Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.4.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/hsnvjfnmmjvnlwiixwxivvvvr2wkn6cn-gnumake-4.4.1-info",
+        "man": "/nix/store/43jrph58b42a21v8ly0hksxy86qq1wcq-gnumake-4.4.1-man",
+        "out": "/nix/store/i8vw2xmxranfx28avdh52xxsh1c8fdz0-gnumake-4.4.1"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnumake",
+      "broken": false,
+      "derivation": "/nix/store/pxccis4lr0y6rmiiy49vyprr6hw2kh7r-gnumake-4.4.1.drv",
+      "description": "Tool to control the generation of non-source files from sources",
+      "install_id": "gnumake",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnumake-4.4.1",
+      "pname": "gnumake",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:55.898485Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.4.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "debug": "/nix/store/p4gvw42cyd98kxb9vmrgirdz826jl81f-gnumake-4.4.1-debug",
+        "info": "/nix/store/lkyw273cshz8czx9r4cy5k3zdaj0jif8-gnumake-4.4.1-info",
+        "man": "/nix/store/7b2j3nzzch1is3im1hc8a690fy295718-gnumake-4.4.1-man",
+        "out": "/nix/store/w74bmnwhk21l914zgf5qs1f5c30wxqj4-gnumake-4.4.1"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnused",
+      "broken": false,
+      "derivation": "/nix/store/khzaw8bx5zxyk7g5h7w2xrqq5czpgwk4-gnused-4.9.drv",
+      "description": "GNU sed, a batch stream editor",
+      "install_id": "gnused",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnused-4.9",
+      "pname": "gnused",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:29.230541Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.9",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/8gv6x7m1991sqdwvrhb01818lanx9nxz-gnused-4.9-info",
+        "out": "/nix/store/yfk1iriif0acn91as6qg96nwz6hs93si-gnused-4.9"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnused",
+      "broken": false,
+      "derivation": "/nix/store/bvfc94q7iaqdk53p2i87krzf96fiblvk-gnused-4.9.drv",
+      "description": "GNU sed, a batch stream editor",
+      "install_id": "gnused",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnused-4.9",
+      "pname": "gnused",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:20.917425Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.9",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/s1jx0n2b73jjl3yzs94mhprk584yqlmb-gnused-4.9-info",
+        "out": "/nix/store/svfwjzik1zgd7rdwii95jkw6pzl91cgq-gnused-4.9"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnused",
+      "broken": false,
+      "derivation": "/nix/store/ww763gvc3sas8002cc3nk4cg00a99357-gnused-4.9.drv",
+      "description": "GNU sed, a batch stream editor",
+      "install_id": "gnused",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnused-4.9",
+      "pname": "gnused",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:29.889450Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.9",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/fr5ywbk03g9a4b3a8sfx2m9sw16vamdv-gnused-4.9-info",
+        "out": "/nix/store/i18y4ld5k1jk91vinswb9lk1cnkc7s30-gnused-4.9"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gnused",
+      "broken": false,
+      "derivation": "/nix/store/f9hww3k6x8djmy8j95bpqpz8rg6qi0mp-gnused-4.9.drv",
+      "description": "GNU sed, a batch stream editor",
+      "install_id": "gnused",
+      "license": "GPL-3.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gnused-4.9",
+      "pname": "gnused",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:55.905941Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "4.9",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "info": "/nix/store/zvwfjxlkcv2pyj1dkqlm5shmx9059hzj-gnused-4.9-info",
+        "out": "/nix/store/bz6z6c26ajk870qxipxkkp8a6cympj3l-gnused-4.9"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gsm",
+      "broken": false,
+      "derivation": "/nix/store/y5a8vlh0l9gppsvlan5571mv5k5159jm-gsm-1.0.22.drv",
+      "description": "Lossy speech compression codec",
+      "install_id": "gsm",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gsm-1.0.22",
+      "pname": "gsm",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:29.339318Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.0.22",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/amazlpgpabf5iryxy6bgy03v0ji99y7y-gsm-1.0.22"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gsm",
+      "broken": false,
+      "derivation": "/nix/store/wlvrap63p86jlmz9zmb3dl3wyahmy069-gsm-1.0.22.drv",
+      "description": "Lossy speech compression codec",
+      "install_id": "gsm",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gsm-1.0.22",
+      "pname": "gsm",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:21.115450Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.0.22",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/l435iqcrpv2iy4hv9wnlqrs6j6pz78ws-gsm-1.0.22"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gsm",
+      "broken": false,
+      "derivation": "/nix/store/97q2l1rrg0wyf0qbq6vji1vbz6vq0fsk-gsm-1.0.22.drv",
+      "description": "Lossy speech compression codec",
+      "install_id": "gsm",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gsm-1.0.22",
+      "pname": "gsm",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.001642Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.0.22",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/z9jg7dy9kz0zjjvnsm5rbrc3g7di4alj-gsm-1.0.22"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "gsm",
+      "broken": false,
+      "derivation": "/nix/store/wpf6am4r4f4gvz1awpdqyzivbg4816xy-gsm-1.0.22.drv",
+      "description": "Lossy speech compression codec",
+      "install_id": "gsm",
+      "license": "BSD-2-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "gsm-1.0.22",
+      "pname": "gsm",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:56.121216Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.0.22",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/6jg7m2c7g3c9aqzvjhys2zi8207rgm5k-gsm-1.0.22"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "ladspa-sdk",
+      "broken": false,
+      "derivation": "/nix/store/7yn0mgw9h6jmm1s6drdkj88v93qgppnx-ladspa-sdk-1.15.drv",
+      "description": "SDK for the LADSPA audio plugin standard",
+      "install_id": "ladspa-sdk",
+      "license": "LGPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "ladspa-sdk-1.15",
+      "pname": "ladspa-sdk",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:22.856268Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.15",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/lq5nvczd3xnswwwkl2km7m9h1a9by18l-ladspa-sdk-1.15"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "ladspa-sdk",
+      "broken": false,
+      "derivation": "/nix/store/1cwnnznlfpjnvs4fl1xabb2mp15d4ikr-ladspa-sdk-1.15.drv",
+      "description": "SDK for the LADSPA audio plugin standard",
+      "install_id": "ladspa-sdk",
+      "license": "LGPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "ladspa-sdk-1.15",
+      "pname": "ladspa-sdk",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:57.986326Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.15",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "out": "/nix/store/69i98si552b13fgrz7z26bcjwzj2lfq2-ladspa-sdk-1.15"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lame",
+      "broken": false,
+      "derivation": "/nix/store/v5maxwgqslvcdfz3isi9rnm449q6jkvs-lame-3.100.drv",
+      "description": "High quality MPEG Audio Layer III (MP3) encoder",
+      "install_id": "lame",
+      "license": "LGPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "lame-3.100",
+      "pname": "lame",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:29.871644Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "3.100",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/bw00i4laz66rsi1283yll49yhx7n2bfb-lame-3.100-doc",
+        "lib": "/nix/store/awaxpsj8vnnqa8x81ps545x3jc1k29b6-lame-3.100-lib",
+        "out": "/nix/store/k4jg6fl84d4ara7a4dzkk2am5qkxnc2q-lame-3.100"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lame",
+      "broken": false,
+      "derivation": "/nix/store/z6gjyifpymqzqj1cdn6jhd85hipdczcn-lame-3.100.drv",
+      "description": "High quality MPEG Audio Layer III (MP3) encoder",
+      "install_id": "lame",
+      "license": "LGPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "lame-3.100",
+      "pname": "lame",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:22.862101Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "3.100",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/9131sp1anvwr83csjkrczi8544gkaql6-lame-3.100-doc",
+        "lib": "/nix/store/8bjfkc6lrzzhidzl6ab6xr1859z4lxmz-lame-3.100-lib",
+        "out": "/nix/store/iz9wjmqyarqidh7kzd8gjwaxnmpfy7h6-lame-3.100"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lame",
+      "broken": false,
+      "derivation": "/nix/store/1w67mjfqnfvzbrh3vr3kks7789p9pw4s-lame-3.100.drv",
+      "description": "High quality MPEG Audio Layer III (MP3) encoder",
+      "install_id": "lame",
+      "license": "LGPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "lame-3.100",
+      "pname": "lame",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.549836Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "3.100",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/jx8a47mqs8k0z9i13rvwvm9rrwv4q1mw-lame-3.100-doc",
+        "lib": "/nix/store/maqynlasr7c59kr1iqsfl02p0qbwqn43-lame-3.100-lib",
+        "out": "/nix/store/2ypl2ci7m9rma9rh9a3k3mncz40342hv-lame-3.100"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "lame",
+      "broken": false,
+      "derivation": "/nix/store/9c6sdxaajirv1mwwlgnr7k8qwn2zm7q0-lame-3.100.drv",
+      "description": "High quality MPEG Audio Layer III (MP3) encoder",
+      "install_id": "lame",
+      "license": "LGPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "lame-3.100",
+      "pname": "lame",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:57.993984Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "3.100",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/c1mfwcd4fb797vxxvcs3m80sfda575ds-lame-3.100-doc",
+        "lib": "/nix/store/fvh55kjcrdc11s35npigqh99n9ndvvsq-lame-3.100-lib",
+        "out": "/nix/store/vdg0vriafrdmak4kl566lhd2dg96v33z-lame-3.100"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libid3tag",
+      "broken": false,
+      "derivation": "/nix/store/m1dw27y5j98vs2z3m8p7pmn3dj3zkx5j-libid3tag-0.16.3.drv",
+      "description": "ID3 tag manipulation library",
+      "install_id": "libid3tag",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libid3tag-0.16.3",
+      "pname": "libid3tag",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.005547Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.16.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/zwdczd97ifhb44ypl4xb4mkh0fgxkhrb-libid3tag-0.16.3-dev",
+        "out": "/nix/store/7yhv9xh1i82lwv7w3g2ggq0pl0nxcgpb-libid3tag-0.16.3"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libid3tag",
+      "broken": false,
+      "derivation": "/nix/store/lqlmgfx8sc5pl6xl0b5j7s1wq5grkx6i-libid3tag-0.16.3.drv",
+      "description": "ID3 tag manipulation library",
+      "install_id": "libid3tag",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libid3tag-0.16.3",
+      "pname": "libid3tag",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.154536Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.16.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/568jnn981hj22dvx8pq0769f8v6chh8x-libid3tag-0.16.3-dev",
+        "out": "/nix/store/kdwzhbq49sbq0gq5m4ia5klkwichpcs5-libid3tag-0.16.3"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libid3tag",
+      "broken": false,
+      "derivation": "/nix/store/2cyy7bf75fz08z9dz27m6jk330fir8yc-libid3tag-0.16.3.drv",
+      "description": "ID3 tag manipulation library",
+      "install_id": "libid3tag",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libid3tag-0.16.3",
+      "pname": "libid3tag",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.687331Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.16.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/fnkjr2x2hix0m3jlmf3m00sj42wz89wr-libid3tag-0.16.3-dev",
+        "out": "/nix/store/g0kh4gy0d22k9z5gy9g3x6fxsjnmj7vc-libid3tag-0.16.3"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libid3tag",
+      "broken": false,
+      "derivation": "/nix/store/d9ssa9snym99i8yk6sqn1f3vqi1c7rad-libid3tag-0.16.3.drv",
+      "description": "ID3 tag manipulation library",
+      "install_id": "libid3tag",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libid3tag-0.16.3",
+      "pname": "libid3tag",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.309365Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.16.3",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/9gdbs4dpvsc9y7wic51k3pvv4z315vfh-libid3tag-0.16.3-dev",
+        "out": "/nix/store/2i2izrf2hgx4xm2cccvhpns76fwp0plq-libid3tag-0.16.3"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/9xm6rl9k3wgrzhs8lf4rwys5hblsy475-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libltdl",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.221447Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/p3vzk00cbl77b6hnyk6x5vywzvr3vcr3-libtool-2.5.4-lib",
+        "out": "/nix/store/lq7xxm15l0xxraxgd3ggg0004sqrfcxs-libtool-2.5.4"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/ipp3smv6wsvhzrhbypqc2gnw3wq93zch-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libltdl",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.765162Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/csbwn25168cii515zwvxc8qinmwcqlp3-libtool-2.5.4-lib",
+        "out": "/nix/store/c66dfaz9024ks52chhl1szpyvag8wz5x-libtool-2.5.4"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/f1bi71mjfkmnb6430841kgzb80mpi59n-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libltdl",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.907421Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/7sz36iw09n6pzcv84yk0dr8yhjhk4hga-libtool-2.5.4-lib",
+        "out": "/nix/store/0nj2l5m7h8vr6hqp6ysfj0xrag12gzbb-libtool-2.5.4"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/8hs072mcb6bggb7qkq78vxin171qaaqy-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libltdl",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.952288Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/ymwgw73kir5hn8ps96d3r08acylgxcjv-libtool-2.5.4-lib",
+        "out": "/nix/store/0cpzncvjzccbydhwm59dp6d74agz5l3v-libtool-2.5.4"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libmad",
+      "broken": false,
+      "derivation": "/nix/store/2b7c9lhwk5cihxbx3ym558kivl5g8xsd-libmad-0.15.1b.drv",
+      "description": "High-quality, fixed-point MPEG audio decoder supporting MPEG-1 and MPEG-2",
+      "install_id": "libmad",
+      "license": "GPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libmad-0.15.1b",
+      "pname": "libmad",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.027834Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.15.1b",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/qznskh6iqgpaih58rq8524czhwliq1bh-libmad-0.15.1b-dev",
+        "out": "/nix/store/m19h98p184bnbdvas7hjg33d70ghx0v1-libmad-0.15.1b"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libmad",
+      "broken": false,
+      "derivation": "/nix/store/v626wv2lpp04yydbpqzw65fc9r3vx874-libmad-0.15.1b.drv",
+      "description": "High-quality, fixed-point MPEG audio decoder supporting MPEG-1 and MPEG-2",
+      "install_id": "libmad",
+      "license": "GPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libmad-0.15.1b",
+      "pname": "libmad",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.205685Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.15.1b",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/3fpld4bnaikm607db62qbk8vgrg8xij6-libmad-0.15.1b-dev",
+        "out": "/nix/store/3wi74icjkhxjigd3z85sjzb9dw3xy18m-libmad-0.15.1b"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libmad",
+      "broken": false,
+      "derivation": "/nix/store/vrss0khcwnnly19xf56plhvq8kn9yz88-libmad-0.15.1b.drv",
+      "description": "High-quality, fixed-point MPEG audio decoder supporting MPEG-1 and MPEG-2",
+      "install_id": "libmad",
+      "license": "GPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libmad-0.15.1b",
+      "pname": "libmad",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.709968Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.15.1b",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/ia4zz2sf35ixwrgkc5nfblvhvslgrv9h-libmad-0.15.1b-dev",
+        "out": "/nix/store/vlqk28iaz8arfsxprwyacyqdfq0vn0fg-libmad-0.15.1b"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libmad",
+      "broken": false,
+      "derivation": "/nix/store/2mbivz2849qxnmpif6j78w00i3c421kx-libmad-0.15.1b.drv",
+      "description": "High-quality, fixed-point MPEG audio decoder supporting MPEG-1 and MPEG-2",
+      "install_id": "libmad",
+      "license": "GPL-2.0",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libmad-0.15.1b",
+      "pname": "libmad",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.365147Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.15.1b",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/z2pzfsnmjgsjvnpim5w2zsgmclvsa5cx-libmad-0.15.1b-dev",
+        "out": "/nix/store/yzp9l4r2p9bswxkn53zrzrcjjm1v2618-libmad-0.15.1b"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libogg",
+      "broken": false,
+      "derivation": "/nix/store/3s0dsm3p9lac6r6hlgjb0hj14vkvkrqi-libogg-1.3.5.drv",
+      "description": "Media container library to manipulate Ogg files",
+      "install_id": "libogg",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libogg-1.3.5",
+      "pname": "libogg",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.053210Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/p8ckqh8pz5jdn2j83p77vjwza4wpbjr8-libogg-1.3.5-dev",
+        "doc": "/nix/store/i3bv5b2pj171lcdjcbbfmapk711nlsjm-libogg-1.3.5-doc",
+        "out": "/nix/store/cpfnhf0wi2701mbyxi95ps2h0fp9xlqp-libogg-1.3.5"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libogg",
+      "broken": false,
+      "derivation": "/nix/store/h3q82rj36gh1fwjjni84azb6kyiha9wp-libogg-1.3.5.drv",
+      "description": "Media container library to manipulate Ogg files",
+      "install_id": "libogg",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libogg-1.3.5",
+      "pname": "libogg",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.263267Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/i8bz0y5r8ispjbvs3k1q4iv81jscjbgh-libogg-1.3.5-dev",
+        "doc": "/nix/store/0j0ckxaacgf8bpdjp83gvzc85xkbmqdc-libogg-1.3.5-doc",
+        "out": "/nix/store/y14mnm4h40lm80zrxm56y4khj82j6npf-libogg-1.3.5"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libogg",
+      "broken": false,
+      "derivation": "/nix/store/2ppqq42m3isr0588lbxind11d66j3b29-libogg-1.3.5.drv",
+      "description": "Media container library to manipulate Ogg files",
+      "install_id": "libogg",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libogg-1.3.5",
+      "pname": "libogg",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.735735Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/1s5x9g2zyfrs8z6qq1fr27apd0y666vk-libogg-1.3.5-dev",
+        "doc": "/nix/store/9gywg3fq3zxj3m4imqqq3s1zq8xrqcdp-libogg-1.3.5-doc",
+        "out": "/nix/store/9n1xsmr0qnmmm2mr975v8bra95ainvh2-libogg-1.3.5"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libogg",
+      "broken": false,
+      "derivation": "/nix/store/jbcbsc9zwvg9w5bkjnk2ccw437ibczj4-libogg-1.3.5.drv",
+      "description": "Media container library to manipulate Ogg files",
+      "install_id": "libogg",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libogg-1.3.5",
+      "pname": "libogg",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.425622Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.5",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/qn60kbj4iq8fdyfvdy9y3pfw574n3g5y-libogg-1.3.5-dev",
+        "doc": "/nix/store/n2h914s2yym5r3sfbyvm0plc52bm83jv-libogg-1.3.5-doc",
+        "out": "/nix/store/9yv78i1cg0bx4xiw1n5894pfcf3x00mk-libogg-1.3.5"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libpulseaudio",
+      "broken": false,
+      "derivation": "/nix/store/arc6hrw6fcnc8xc3lg9rkd1pypk11j4g-libpulseaudio-17.0.drv",
+      "description": "Sound server for POSIX and Win32 systems",
+      "install_id": "libpulseaudio",
+      "license": "LGPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libpulseaudio-17.0",
+      "pname": "libpulseaudio",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.304403Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "17.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/vdyq2pgngjcapc427w2rwf3gw3b9jhyr-libpulseaudio-17.0-dev",
+        "out": "/nix/store/bln8pi7zplsihj4yzlkkh0b2fc0dy09n-libpulseaudio-17.0"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libpulseaudio",
+      "broken": false,
+      "derivation": "/nix/store/6wz48p7v2bm70ixpdghnxh428ja4mnyf-libpulseaudio-17.0.drv",
+      "description": "Sound server for POSIX and Win32 systems",
+      "install_id": "libpulseaudio",
+      "license": "LGPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libpulseaudio-17.0",
+      "pname": "libpulseaudio",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.469226Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "17.0",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/bqj481jwgqx52awxh6snbgk4ij1p3zkm-libpulseaudio-17.0-dev",
+        "out": "/nix/store/cwir5mz7b44h506gz1kq726nbx8qjj7l-libpulseaudio-17.0"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libsndfile",
+      "broken": false,
+      "derivation": "/nix/store/qn6vik2nh9lp9sjfjfcv98v79s8aa27s-libsndfile-1.2.2.drv",
+      "description": "C library for reading and writing files containing sampled sound",
+      "install_id": "libsndfile",
+      "license": "LGPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libsndfile-1.2.2",
+      "pname": "libsndfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.204747Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.2.2",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/39n9kpppzkpsmv83rh4l4d0k7bp1vygz-libsndfile-1.2.2-bin",
+        "dev": "/nix/store/f0r62j73wihjdmpb2xbxc1zbc26cj20y-libsndfile-1.2.2-dev",
+        "doc": "/nix/store/rcdbfhvwcpvxb195an4wq3z7h2aqbx43-libsndfile-1.2.2-doc",
+        "man": "/nix/store/kw5da68sxpy7nd38x59iszvqimqmri6p-libsndfile-1.2.2-man",
+        "out": "/nix/store/6986nr917f8k0gikzcw8y5i188vaprgl-libsndfile-1.2.2"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libsndfile",
+      "broken": false,
+      "derivation": "/nix/store/nlqydjv1ksgik212karrs5mdw5qf4pdz-libsndfile-1.2.2.drv",
+      "description": "C library for reading and writing files containing sampled sound",
+      "install_id": "libsndfile",
+      "license": "LGPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libsndfile-1.2.2",
+      "pname": "libsndfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.734297Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.2.2",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/szy6r1ivkrmgm422k35dbgyx1pwf2yrn-libsndfile-1.2.2-bin",
+        "dev": "/nix/store/68bmgl7wifgyj24ndzg7y7q89icb0arx-libsndfile-1.2.2-dev",
+        "doc": "/nix/store/gll9rsw26fqqnxaskvjpyzp94b72wmdh-libsndfile-1.2.2-doc",
+        "man": "/nix/store/h63k5zch3sdapp7v7id6qn0spll99sj5-libsndfile-1.2.2-man",
+        "out": "/nix/store/w1ws9f03chgdwpazyw6i6w4yd0cppm2x-libsndfile-1.2.2"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libsndfile",
+      "broken": false,
+      "derivation": "/nix/store/61ccg09n012cazai7w4x32772nwip7sb-libsndfile-1.2.2.drv",
+      "description": "C library for reading and writing files containing sampled sound",
+      "install_id": "libsndfile",
+      "license": "LGPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libsndfile-1.2.2",
+      "pname": "libsndfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.890462Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.2.2",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/h3djcy7j1hqx0bnalqsqkgyqkfxpgih8-libsndfile-1.2.2-bin",
+        "dev": "/nix/store/p40wrlmjhyfj7jv9a9py7q6dh14h3ym1-libsndfile-1.2.2-dev",
+        "doc": "/nix/store/jhn7p6inxg9dzb08fsaqgxl2pqwvp9dx-libsndfile-1.2.2-doc",
+        "man": "/nix/store/hzza9qbdjsmy9d3l9ych1j7nh2n9dnc3-libsndfile-1.2.2-man",
+        "out": "/nix/store/fgrcz4qayq11f7ppzr7kiawfw9xw836d-libsndfile-1.2.2"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libsndfile",
+      "broken": false,
+      "derivation": "/nix/store/977bh3wsspxz81b5dlajbcxswzgg4r3y-libsndfile-1.2.2.drv",
+      "description": "C library for reading and writing files containing sampled sound",
+      "install_id": "libsndfile",
+      "license": "LGPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libsndfile-1.2.2",
+      "pname": "libsndfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.918888Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.2.2",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/8wgmfkvp5ck49pfis1jzv972nzpdg4bw-libsndfile-1.2.2-bin",
+        "dev": "/nix/store/w29pinr805bw4r2xsd554wms20s98y3v-libsndfile-1.2.2-dev",
+        "doc": "/nix/store/yf5cv4l23nqaw5wdfvzxc4gcw1ixj6km-libsndfile-1.2.2-doc",
+        "man": "/nix/store/67cx47pwxh01r5hz11f5xbj72zfm2kfx-libsndfile-1.2.2-man",
+        "out": "/nix/store/42mqq1n930y90jz513hm44715g9z1zkk-libsndfile-1.2.2"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/9xm6rl9k3wgrzhs8lf4rwys5hblsy475-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libtool",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.221447Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/p3vzk00cbl77b6hnyk6x5vywzvr3vcr3-libtool-2.5.4-lib",
+        "out": "/nix/store/lq7xxm15l0xxraxgd3ggg0004sqrfcxs-libtool-2.5.4"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/ipp3smv6wsvhzrhbypqc2gnw3wq93zch-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libtool",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.765162Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/csbwn25168cii515zwvxc8qinmwcqlp3-libtool-2.5.4-lib",
+        "out": "/nix/store/c66dfaz9024ks52chhl1szpyvag8wz5x-libtool-2.5.4"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/f1bi71mjfkmnb6430841kgzb80mpi59n-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libtool",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.907421Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/7sz36iw09n6pzcv84yk0dr8yhjhk4hga-libtool-2.5.4-lib",
+        "out": "/nix/store/0nj2l5m7h8vr6hqp6ysfj0xrag12gzbb-libtool-2.5.4"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libtool",
+      "broken": false,
+      "derivation": "/nix/store/8hs072mcb6bggb7qkq78vxin171qaaqy-libtool-2.5.4.drv",
+      "description": "GNU Libtool, a generic library support script",
+      "install_id": "libtool",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libtool-2.5.4",
+      "pname": "libtool",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:58.952288Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "2.5.4",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "lib": "/nix/store/ymwgw73kir5hn8ps96d3r08acylgxcjv-libtool-2.5.4-lib",
+        "out": "/nix/store/0cpzncvjzccbydhwm59dp6d74agz5l3v-libtool-2.5.4"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libvorbis",
+      "broken": false,
+      "derivation": "/nix/store/5ijfc9fm3bh8505liwn2xin8x8fz8az0-libvorbis-1.3.7.drv",
+      "description": "Vorbis audio compression reference implementation",
+      "install_id": "libvorbis",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libvorbis-1.3.7",
+      "pname": "libvorbis",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:30.239596Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.7",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/ic3dz3ccyplnsxhrnsjhc4r9s5bh18kc-libvorbis-1.3.7-dev",
+        "doc": "/nix/store/4z9b0sd7m390hp43vq0dxyx04716msxd-libvorbis-1.3.7-doc",
+        "out": "/nix/store/fyvac1jnyl6d1s6v4qq0hcfl1ykrggzc-libvorbis-1.3.7"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libvorbis",
+      "broken": false,
+      "derivation": "/nix/store/05r0z94ancqbwzas5anlic7cqglsz2wb-libvorbis-1.3.7.drv",
+      "description": "Vorbis audio compression reference implementation",
+      "install_id": "libvorbis",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libvorbis-1.3.7",
+      "pname": "libvorbis",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:23.811313Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.7",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/2mqrwza6xxdl5867hm469yc0bg6r7jy8-libvorbis-1.3.7-dev",
+        "doc": "/nix/store/3h2cjgmkrrv62mw9jj206jaz186nkjvs-libvorbis-1.3.7-doc",
+        "out": "/nix/store/ry5c1bxxp3a31apfsglgp3rq1rwdkgam-libvorbis-1.3.7"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libvorbis",
+      "broken": false,
+      "derivation": "/nix/store/n135wnvh4sib20bl4ww1c6zgip2l5wwc-libvorbis-1.3.7.drv",
+      "description": "Vorbis audio compression reference implementation",
+      "install_id": "libvorbis",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libvorbis-1.3.7",
+      "pname": "libvorbis",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:30.925501Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.7",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/gvp9g1wl65qqr21mvpk0wv22xf6j46j2-libvorbis-1.3.7-dev",
+        "doc": "/nix/store/4g4sf47cww35sq4nc69dir0f80mphxsq-libvorbis-1.3.7-doc",
+        "out": "/nix/store/la7py2d49dbgsz0fn0s6z89m2xmmys3p-libvorbis-1.3.7"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "libvorbis",
+      "broken": false,
+      "derivation": "/nix/store/3ff8yacxy8h1phfx62lcjx14wxlh3wb9-libvorbis-1.3.7.drv",
+      "description": "Vorbis audio compression reference implementation",
+      "install_id": "libvorbis",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "libvorbis-1.3.7",
+      "pname": "libvorbis",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:15:59.002409Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.7",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/ns8zp5fifdcrwihfm75g78ivkrnjpy39-libvorbis-1.3.7-dev",
+        "doc": "/nix/store/pfkmxmgfs7nmg2p597gh4ggr7y63m8x9-libvorbis-1.3.7-doc",
+        "out": "/nix/store/lpkvw1qam2h11dvfxglqdafl7qrhvwd3-libvorbis-1.3.7"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "opusfile",
+      "broken": false,
+      "derivation": "/nix/store/k24yk77hfdmsqrvz7z1620w8fsx0izil-opusfile-0.12.drv",
+      "description": "High-level API for decoding and seeking in .opus files",
+      "install_id": "opusfile",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "opusfile-0.12",
+      "pname": "opusfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:32.431641Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/ybfafy4cjgac6r66w002zas6diji80k8-opusfile-0.12-dev",
+        "out": "/nix/store/xlgrmc1j08kn63f0mbqqv5sssfcvs1xs-opusfile-0.12"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "opusfile",
+      "broken": false,
+      "derivation": "/nix/store/21hpbbp4w6f9drmgngxazvg1w1vvm3l1-opusfile-0.12.drv",
+      "description": "High-level API for decoding and seeking in .opus files",
+      "install_id": "opusfile",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "opusfile-0.12",
+      "pname": "opusfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:32.189051Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/xqzfrdzfmmr7pp759p428rcwzxkhdfnc-opusfile-0.12-dev",
+        "out": "/nix/store/jx25aiqjkdl3pfbdlsyj3fc0zgk5ngyr-opusfile-0.12"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "opusfile",
+      "broken": false,
+      "derivation": "/nix/store/cjr5m77jlajpdpwq89xg18gkil7jm80i-opusfile-0.12.drv",
+      "description": "High-level API for decoding and seeking in .opus files",
+      "install_id": "opusfile",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "opusfile-0.12",
+      "pname": "opusfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:33.144335Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/25ij0bzkwq0ppy507lp75nd2kmbxmhb0-opusfile-0.12-dev",
+        "out": "/nix/store/pspykmgh1z4xhl0hc74hppl75xlxn30h-opusfile-0.12"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "opusfile",
+      "broken": false,
+      "derivation": "/nix/store/dx1f6mkz2r7dxlq5wmfjbqqk8cn249ls-opusfile-0.12.drv",
+      "description": "High-level API for decoding and seeking in .opus files",
+      "install_id": "opusfile",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "opusfile-0.12",
+      "pname": "opusfile",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:16:09.153786Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.12",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/jwgnh0c6v2m0v0ykyrmgm5a709csfidb-opusfile-0.12-dev",
+        "out": "/nix/store/qf7fykwkbyq2hdp2k9hdrnigpczm2gmb-opusfile-0.12"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pkg-config",
+      "broken": false,
+      "derivation": "/nix/store/mdkzl0m3s6x39v2ksqj2dkbkhnn7vfdr-pkg-config-wrapper-0.29.2.drv",
+      "description": "Tool that allows packages to find out information about other packages (wrapper script)",
+      "install_id": "pkg-config",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "pkg-config-wrapper-0.29.2",
+      "pname": "pkg-config",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:19:36.602209Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.29.2",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/893mq0rp0wmpqyd76b1j7ys6zhh6aff7-pkg-config-wrapper-0.29.2-doc",
+        "man": "/nix/store/nd2y3dcrg2k77y665ck6fykyjysk9q6s-pkg-config-wrapper-0.29.2-man",
+        "out": "/nix/store/hj7iydwvhkslzsvw82iilv8say0xv5n7-pkg-config-wrapper-0.29.2"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pkg-config",
+      "broken": false,
+      "derivation": "/nix/store/ackjpq13s7r06vp9c78rvbrv1fl8npl6-pkg-config-wrapper-0.29.2.drv",
+      "description": "Tool that allows packages to find out information about other packages (wrapper script)",
+      "install_id": "pkg-config",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "pkg-config-wrapper-0.29.2",
+      "pname": "pkg-config",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:37:39.700951Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.29.2",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/dhq8xj50fv2xpswih45mf7j3dam7dx62-pkg-config-wrapper-0.29.2-doc",
+        "man": "/nix/store/8d5xsrv73ibsgs985hwh58xvrz7gj7cq-pkg-config-wrapper-0.29.2-man",
+        "out": "/nix/store/whs8d6yi944jfsb7iwc4qkc7hn52z07h-pkg-config-wrapper-0.29.2"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pkg-config",
+      "broken": false,
+      "derivation": "/nix/store/1m96a58v603a57bx752vj9h5wywj4hlf-pkg-config-wrapper-0.29.2.drv",
+      "description": "Tool that allows packages to find out information about other packages (wrapper script)",
+      "install_id": "pkg-config",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "pkg-config-wrapper-0.29.2",
+      "pname": "pkg-config",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:54:37.356389Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.29.2",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/2wxc6i00xjph99cn4klkd57rli306na6-pkg-config-wrapper-0.29.2-doc",
+        "man": "/nix/store/xj37p1qmvrkz60ina77hn672bxqj0hzi-pkg-config-wrapper-0.29.2-man",
+        "out": "/nix/store/4vzwqmyagz1aq6a6204hlwnj6dc9ip6a-pkg-config-wrapper-0.29.2"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "pkg-config",
+      "broken": false,
+      "derivation": "/nix/store/7nhryzl55g04w205svcaf6qm5p3lzirg-pkg-config-wrapper-0.29.2.drv",
+      "description": "Tool that allows packages to find out information about other packages (wrapper script)",
+      "install_id": "pkg-config",
+      "license": "GPL-2.0-or-later",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "pkg-config-wrapper-0.29.2",
+      "pname": "pkg-config",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:16:17.259982Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "0.29.2",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "doc": "/nix/store/7gbj5n0rg43li2hidn78i2dml4agl5g9-pkg-config-wrapper-0.29.2-doc",
+        "man": "/nix/store/zf1nw8vgv090hxsfp080mqpr5bx77yl0-pkg-config-wrapper-0.29.2-man",
+        "out": "/nix/store/bbp56ai8w43xkfisar83h37imjdlcx6r-pkg-config-wrapper-0.29.2"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wavpack",
+      "broken": false,
+      "derivation": "/nix/store/hcq3ga3wnfi5ff6rqrrc6chn4iz6kfq9-wavpack-5.8.1.drv",
+      "description": "Hybrid audio compression format",
+      "install_id": "wavpack",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "wavpack-5.8.1",
+      "pname": "wavpack",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:20:31.314792Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.8.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/m3iikizlq8b2ga3r8lv5nd6chdvzr2wz-wavpack-5.8.1-dev",
+        "doc": "/nix/store/bribxam4rvgiyni0kilairxx5lbv5jg1-wavpack-5.8.1-doc",
+        "man": "/nix/store/r7h25s8hnl86mh5zps1309y358s03h1p-wavpack-5.8.1-man",
+        "out": "/nix/store/iiqnzcmyy3h6avlp02vwbc9c6mn0ik0b-wavpack-5.8.1"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wavpack",
+      "broken": false,
+      "derivation": "/nix/store/n3m9ckm36zgksgi250i3ddpfd0fzc1dz-wavpack-5.8.1.drv",
+      "description": "Hybrid audio compression format",
+      "install_id": "wavpack",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "wavpack-5.8.1",
+      "pname": "wavpack",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:39:00.050384Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.8.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/a9cm4w6a77pmfbscpj1d8v509igb0c28-wavpack-5.8.1-dev",
+        "doc": "/nix/store/g33kw4l7y32iaah2vx1wc10l0vrg40lc-wavpack-5.8.1-doc",
+        "man": "/nix/store/ghkbfrywgzvfqfxbalgh3j6lz65jxl9s-wavpack-5.8.1-man",
+        "out": "/nix/store/p05jd389lw8hrnwy4ixv96cfbl460hsy-wavpack-5.8.1"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wavpack",
+      "broken": false,
+      "derivation": "/nix/store/4ysivj3f5cargjhz78n83qvk7wwr3z36-wavpack-5.8.1.drv",
+      "description": "Hybrid audio compression format",
+      "install_id": "wavpack",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "wavpack-5.8.1",
+      "pname": "wavpack",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:55:31.799926Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.8.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/gs13zrd76i0k9gh9ksnwvqym71adqcn6-wavpack-5.8.1-dev",
+        "doc": "/nix/store/wfvb9zb40nyihc7yxbzbhrnigg2jv5n5-wavpack-5.8.1-doc",
+        "man": "/nix/store/m52fw1xnx2vkfqck36j0jrnxrfc5qzzl-wavpack-5.8.1-man",
+        "out": "/nix/store/29pcdnbhz8adlx2xpggbffgzwyj1qln2-wavpack-5.8.1"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "wavpack",
+      "broken": false,
+      "derivation": "/nix/store/2pnmpd5dv7ffxkkqjgc5ygk9yf14z7yv-wavpack-5.8.1.drv",
+      "description": "Hybrid audio compression format",
+      "install_id": "wavpack",
+      "license": "BSD-3-Clause",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "wavpack-5.8.1",
+      "pname": "wavpack",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:17:41.905736Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "5.8.1",
+      "outputs_to_install": [
+        "man",
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/dpsz16kryzhps25mzsg009k9xz17iyr4-wavpack-5.8.1-dev",
+        "doc": "/nix/store/d2z5d02y35wqlb1vkkbiiq7fww04rdg7-wavpack-5.8.1-doc",
+        "man": "/nix/store/z5r6wj84nxynpq5hacpba08fgx0a5j2a-wavpack-5.8.1-man",
+        "out": "/nix/store/iv6qm527zq0y8biqf3qbpjh71k4icj70-wavpack-5.8.1"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "zlib",
+      "broken": false,
+      "derivation": "/nix/store/fvxsz4vrlrhy42xp32zf8b3wdsdlvs41-zlib-1.3.1.drv",
+      "description": "Lossless data-compression library",
+      "install_id": "zlib",
+      "license": "Zlib",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "zlib-1.3.1",
+      "pname": "zlib",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:20:33.268330Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.1",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/pf991r4nlvf4zqjpad3rf2rq2qm1l9n9-zlib-1.3.1-dev",
+        "out": "/nix/store/b9gf4syj3jr5lxbk8qn27468lfbb2kpi-zlib-1.3.1",
+        "static": "/nix/store/d92h50i8c0rv900fngjx5wp61pg3j245-zlib-1.3.1-static"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "zlib",
+      "broken": false,
+      "derivation": "/nix/store/8s30bw3qvrpxhzf3199j8r5yiwrwi7c1-zlib-1.3.1.drv",
+      "description": "Lossless data-compression library",
+      "install_id": "zlib",
+      "license": "Zlib",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "zlib-1.3.1",
+      "pname": "zlib",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:39:04.115719Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.1",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/wjlz2l5pj5bxwnrnkb550sh3x1z2zyf9-zlib-1.3.1-dev",
+        "out": "/nix/store/grijdnmcv297hh9s1wl5qbcxnf8zkgjl-zlib-1.3.1",
+        "static": "/nix/store/qmsnxv9gygxa678qsk6vzdjxwkjxmlsr-zlib-1.3.1-static"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "zlib",
+      "broken": false,
+      "derivation": "/nix/store/14zy1fsv7v7537cym7bzj20lgnfwj1zc-zlib-1.3.1.drv",
+      "description": "Lossless data-compression library",
+      "install_id": "zlib",
+      "license": "Zlib",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "zlib-1.3.1",
+      "pname": "zlib",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T04:55:33.812946Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.1",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/dd890p5kyk8iqrk3pjhhf731bkg646x1-zlib-1.3.1-dev",
+        "out": "/nix/store/sz8s3filp0wpxjzv3brxyxldwhb6152r-zlib-1.3.1",
+        "static": "/nix/store/k2a71cvcn2qcrf6gkjqgxl16sdgvr11a-zlib-1.3.1-static"
+      },
+      "system": "x86_64-darwin",
+      "group": "toplevel",
+      "priority": 5
+    },
+    {
+      "attr_path": "zlib",
+      "broken": false,
+      "derivation": "/nix/store/q4n1wb8nby687gn153wsh79lrzycgjvg-zlib-1.3.1.drv",
+      "description": "Lossless data-compression library",
+      "install_id": "zlib",
+      "license": "Zlib",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "name": "zlib-1.3.1",
+      "pname": "zlib",
+      "rev": "979daf34c8cacebcd917d540070b52a3c2b9b16e",
+      "rev_count": 793735,
+      "rev_date": "2025-05-04T03:14:55Z",
+      "scrape_date": "2025-05-05T05:17:46.382006Z",
+      "stabilities": [
+        "staging",
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "1.3.1",
+      "outputs_to_install": [
+        "out"
+      ],
+      "outputs": {
+        "dev": "/nix/store/p7mdvqshvv4lihh2lhchhjcjrij6mir0-zlib-1.3.1-dev",
+        "out": "/nix/store/jk27jlxfsljcmz4jgxkxkmrc1hjgmq1p-zlib-1.3.1",
+        "static": "/nix/store/g4vhpvb7vxhfmdzc6lw25rhdwa7l2rmh-zlib-1.3.1-static"
+      },
+      "system": "x86_64-linux",
+      "group": "toplevel",
+      "priority": 5
+    }
+  ]
+}
