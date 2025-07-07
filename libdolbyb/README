@@ -1,0 +1,32 @@
+The libdolbyb project aims to translate dolbybcsoftwaredecode.sf.net
+into C so that it can be used as a library in SoX_ng.
+If it's useful to other open source programs, that is very welcome.
+
+The C version produces exactly the same audio output as the
+original Pascal version compiled on a 32-bit system;
+the audio output of the Pascal version compiled on a 64-bit system
+differs in a handful of places by one bit value from what you get
+compiling it on a 32-bit system, presumably some problem with FreePascal,
+but the differences are sure to be well below any noise floor or
+the program's deviation from the ideal Dolby B response curves.
+
+There is a mailing list libdolbyb@groups.io for discussion
+and for announcements of new versions. To subscribe, go to
+http://groups.io/g/libdolbyb or send an email to
+libdolbyb+subscribe@groups.io
+
+The original source code has no copyright statement or licence
+which makes it in the public domain.
+
+The C version of the library is covered by the GNU Public Licence version 2.
+Yes, GPL, not LGPL. If you want to include it in a commercial product,
+you can either translate the original Pascal sources and make them work
+or use FreePascal to compile the original library and link to it.
+
+The name "dolbyb" is pronounced "DOLL bib" and is a new proper noun without
+any implied reference to Dolby Laboratories Inc. with whom I have had
+nothing to do except as a longtime user of their excellent products.
+
+I have the original author's blessing for this work
+
+	Martin Guy <martinwguy&#64;gmail.com> March 2025.

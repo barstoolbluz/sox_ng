@@ -1,0 +1,83 @@
+#!/bin/sh
+
+tmp=/tmp/`basename $0`-$$
+input=$tmp.wav # no comment support
+
+check_file () {
+  ./sox_ng --i -a $1 > $tmp.comments
+  cmp $tmp.comments $2 || exit 1
+}
+
+check () {
+  f=$1; shift
+  : > $tmp.expected
+  while [ $# != 0 ]; do
+    echo "$1" >> $tmp.expected
+    shift
+  done
+  check_file $f $tmp.expected
+}
+
+com0="Processed by SoX"
+com1="foo bar"
+com2="bar foo"
+
+./sox_ng -n $input trim 0 .1
+
+./sox_ng $input $tmp.au # Apply default comment
+check $tmp.au "$com0"
+
+cp $tmp.au $tmp.comment.au
+
+cat > $tmp.i << .
+TITLE=First Track
+ARTIST=A Band
+ALBUM=A Collection Of Songs
+TRACKNUMBER=01
+.
+
+./sox_ng $input --comment-file $tmp.i $tmp.comments.au
+check_file $tmp.comments.au $tmp.i
+
+./sox_ng $input --comment= $tmp.au # Don't apply default comment
+check $tmp.au
+
+./sox_ng $input --add-comment "$com1" $tmp.au
+check $tmp.au "$com1"
+
+./sox_ng $tmp.comment.au --add-comment "$com1" $tmp.au
+check $tmp.au "$com0" "$com1"
+
+./sox_ng $input --add-comment "$com1" --add-comment "$com2" $tmp.au
+check $tmp.au "$com1" "$com2"
+
+./sox_ng $tmp.comment.au --add-comment "$com1" --add-comment "$com2" $tmp.au
+check $tmp.au "$com0" "$com1" "$com2"
+
+./sox_ng $tmp.comments.au --comment= $tmp.au
+check $tmp.au
+
+./sox_ng $tmp.comments.au --comment "$com1" $tmp.au
+check $tmp.au "$com1"
+
+./sox_ng $tmp.comments.au --add-comment "$com1" $tmp.au
+cp $tmp.i $tmp.j
+echo "$com1" >> $tmp.j
+check_file $tmp.au $tmp.j
+
+./sox_ng $tmp.comments.au --add-comment "$com1" --add-comment "$com2" $tmp.au
+echo "$com2" >> $tmp.j
+check_file $tmp.au $tmp.j
+
+# FIXME: smp mp3
+./sox_ng $tmp.comments.au $tmp.aiff
+./sox_ng $tmp.aiff $tmp.flac
+./sox_ng $tmp.flac $tmp.sf
+./sox_ng $tmp.sf $tmp.ogg
+./sox_ng $tmp.ogg $tmp.sndt
+./sox_ng $tmp.sndt $tmp.sox
+./sox_ng $tmp.sox $tmp.au
+check_file $tmp.au $tmp.i
+
+rm -f $tmp.*
+exit 0

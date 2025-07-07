@@ -1,0 +1,12 @@
+#! /bin/sh
+
+# Test reading of AIFC ALAW encoding
+
+rm -f core out.wav
+
+${sox:-sox} alaw.aifc out.wav
+status=$?
+
+rm -f core out.wav
+
+exit $status

@@ -1,0 +1,35 @@
+Yet another test suite for SoX
+------------------------------
+
+There are already several test suites in sox's source directory
+as well as a test/ directory (which doesn't seem to work).
+
+This one is a regression test suite, most of which test CVE's against
+crafted audio files, each with its files in its own directory in which
+there is a shell script "run" that exits
+    0 if the test succeeded,
+    2 if the test failed or SoX threw an unexpected error,
+    254 if the build of SoX does not include the feature under test, or
+other exit codes pinpoint causes of failure - see check.sh
+
+To run all the tests:
+
+    sh check.sh
+
+or to run an individual test:
+
+    cd CVE-2004-0557
+    sh run
+
+You can also test a different executable than the installed "sox" by saying:
+
+    sox=/usr/local/src/sox-14.4.2/src/sox sh check.sh
+or
+    sox=sox_ng sh run
+
+but relative paths will only work properly with "sh run" as check.sh
+cd's into the various directories before running "run" in each one.
+
+If you get unrecognised exit statuses on funny systems, do write.
+
+    Martin Guy <martinwguy@gmail.com>, July 2024.

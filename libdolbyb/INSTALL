@@ -1,0 +1,30 @@
+If you have downloaded a release tarball you should just need
+"make" and a C compiler.
+
+    make
+    make install
+
+If you have FreePascal (fpc) installed, you can compile the original Pascal:
+
+    make DolbyBi64
+
+If you downloaded the latest development version with
+
+    git clone https://codeberg.org/martinwguy/libdolbyb
+    cd libdolbyb
+
+you'll also need to install autoconf, automake and libtool and
+
+    autoreconf -i
+    ./configure
+    make
+    make install
+
+For a standalone executable that you can move and run without
+having to install libdolbyb:
+
+    ./configure --enable-static --disable-shared
+    make clean
+    make
+
+for a "dolbyb" with libdolby linked inside it.

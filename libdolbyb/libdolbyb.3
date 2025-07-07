@@ -1,0 +1,271 @@
+'\" t
+'\" The line above instructs most `man' programs to invoke tbl
+'\"
+'\" Separate paragraphs; not the same as PP which resets indent level.
+.de SP
+.if t .sp .5
+.if n .sp
+..
+'\"
+'\" Enclosure macro for examples
+.de XE
+.SP
+.nf
+.ft CW
+..
+.de XX
+.ft R
+.SP
+.fi
+..
+.TH libdolbyb 3 "April 16, 2025" "libdolbyb"
+.SH NAME
+libdolbyb, a Dolby B encoding and decoding library
+.SH SYNOPSIS
+.B #include <dolbyb.h>
+.na
+.nh
+.P
+.B dolbyb_t dolbyb;
+.P
+.B void dolbyb_init(&dolbyb);
+.P
+.B char *dolbyb_start(&dolbyb);
+.P
+.B char *dolbyb_encode(&dolbyb, void *in, void *out, size_t nframes);
+.P
+.B char *dolbyb_decode(&dolbyb, void *in, void *out, size_t nframes);
+.P
+.B void dolbyb_free(&dolbyb);
+.SH DESCRIPTION
+.B libdolbyb
+is a library to encode and decode audio applying or removing
+Dolby\ B noise reduction for magnetic tape recording.
+.TP
+.B dolbyb_init
+Fills in your \fIdolbyb_t\fP structure with default values.
+.TP
+.B dolbyb_start
+Fills in parts of the \fIdolbyb\fP structure with values that depend on the
+sample rate, number of channels and bit depth and calibrates the circuitry.
+Between \fBdolbyb_init()\fR and \fBdolbyb_start()\fR you must set:
+.RS
+.TP
+.B dolbyb.SmpSec
+The sampling rate of the incoming (and outgoing) audio.
+.PP
+you can set:
+.TP
+.B dolbyb.NumChn
+The number of channels in the audio: 1 or 2 with a default of 1.
+.TP
+.B dolbyb.BDepth
+The size of each sample in bits: 8, 16 or 24.
+8-bit unsigned and 24-bit signed don't yet work perfectly 
+so 16 (signed) is the default.
+.PP
+and you may also set:
+.TP
+.B dolbyb.UpSamp
+Digital filtering only works well if the sample rate is well above
+the cutoff frequency of the filter. For Dolby\ B's sliding filter,
+that frequency can be as high as 34kHz and this does not work well
+if the sample rate is only 44.1Khz. To get around this, it upsamples
+the audio to a higher rate when it passes through this filter.
+By default, the upsample rate is set so that the upper sample rate
+is at least 200Khz; upsampling can be switched off by using \fB\-u1\fR.
+.TP
+.B dolbyb.AllHig
+If \fB\-h\fR is given, upsampling is used throughout the effect
+from when the audio enters the effect to when is leaves.
+As \fBdolbyb\fR's up/downsampling algorithm is simple 
+(repeating and averaging samples) you may obtain higher quality results
+by upsampling before \fBdolbyb\fR, using \fB\-u1\fR and
+downsampling afterwards.
+.TP
+.B dolbyb.ThGndB
+When a tape deck is encoding or decoding a magnetic tape,
+it knows the signal level at the tape heads but with audio files
+the maximum signal level may not accurately represent the tape's
+maximum flux density (200nWb/m for cassette tapes), resulting in 
+erroneous results. To overcome this, \fBThGndB\fR adjusts the volume level
+at which the sliding filter reacts.
+Its default value is 0.0, which assumes that the maximum amplitude
+of the signal represents the maximum recording level on tape.
+To begin with, when you have little idea of what level to use,
+try a wide range of levels like 5, 10, 15 and 20.
+If the result sounds muffled, the threshold is too low and
+if it seems to have too much treble, the threshold is too high.
+Once you know the approximate level, you can try more closely spaced levels
+and listen carefully to find the best level possible.
+Logic would suggest listening to where tracks fade out, to see if
+the treble increases but this method doesn't seem to work well
+and the best way seems to be to see how low the level can be set
+before the results sound dull and muffled, then choose a level
+a bit higher than this; you can just about hear the difference
+between results that differ in threshold setting by about 2.
+.TP
+.B dolbyb.DecAdb
+In decode mode, the program has to use trial and error to get the
+right output sample values. This parameter sets how accurate it
+needs to be before it is considered OK. A figure of 0.0\ Db would
+mean an accuracy of about 1 sample value. The default is -5.0\ dB,
+which is accurate to less than one sample value. A higher value
+would be less accurate but it may make the decode faster; a lower
+value would be more accurate but it may make the program slower.
+.TP
+.B dolbyb.FltTyp
+The program originally simulated an analog circuit for a Dolby\ B
+noise reducer. However, too much filtering in the side path was
+altering the phase of the side path audio, which caused problems
+when the side path was recombined with the main signal. Basically
+signals don't add together very well if there is too much difference
+in the phase.
+.SP
+There are now 4 filter modes with hopefully less of a phase change:
+.RS
+.TP
+.B 1
+is the original method.
+.TP
+.B 2
+is a newer method that seems to work better than 1.
+.TP
+.B 3
+is another rearrangement which in practice doesn't seem to
+be any better than 1.
+.TP
+.B 4
+seems to work best, hence it is the default mode.
+.RE
+.SP
+\fBdolbyb_start()\fR can only fail (and return a non-zero value)
+if you set parameters to out-of-range values or
+if there is no memory available for the few buffers it needs to allocate.
+.TP
+.B dolbyb_encode
+Dolby B encodes a buffer of audio samples with 1, 2 or 3 bytes per sample,
+with the samples for each channel interleaved, and writes the same number
+of samples to the \fIout\fP sample buffer in the same format.
+It cannot fail, believe it or not.
+.TP
+.B dolbyb_encode
+Decodes a buffer of audio samples, the same way as \fBdolbyb_encode()\fP.
+It also cannot fail.
+.TP
+.B dolbyb_free
+Frees memory that was allocated by \fBdolbyb_start()\fP.
+Calling it even if \fBdolbyb_start()\fP failed is safe.
+.PP
+The library is thread-safe and you can run multiple instances of it
+simultaneously by having several \fBdolbyb_t\fP structures.
+If they're all using the same number of channels, sample rate and bit depth,
+you can simply copy the structure filled in by \fBdolbyb_start()\fP
+and hand the different copies to the encoder and decoder functions,
+in which case just make sure you only \fBdolbyb_free()\fP one of them.
+.SH RETURN VALUE
+All functions except dolbyb_init() and dolbyb_free() return NULL if they succeed
+or a pointer to an error message if they fail.
+.SH EXAMPLES
+The following code uses \fBlibsndfile\fR to read and write
+audio files. Put it in \fBdolbyb.c\fR and compile it with
+.XE
+cc -o dolbyb dolbyb.c -ldolbyb -lsndfile -lm
+.XX
+.XE
+#include <stdlib.h>
+#include <stdio.h>
+#include <dolbyb.h>
+#include <sndfile.h>
+
+static void
+usage(void)
+{
+  fprintf(stderr, "Usage: dolbyb [options] in.wav out.wav\n");
+  fprintf(stderr, "-d   Decode a Dolby B-encoded recording (this is the default action)\n");
+  fprintf(stderr, "-e   Encode instead of decoding\n");
+  fprintf(stderr, "-uN  Upsample the low-pass filter N times\n");
+  fprintf(stderr, "     (defaults to the right value for >=200kHz)\n");
+  fprintf(stderr, "-h   Process absolutely everything at the upsampled rate\n");
+  fprintf(stderr, "-tN  Set the threshold gain to N dB (default 0.0)\n");
+  fprintf(stderr, "-aN  Set the decode accuracy to N dB (default -5.0)\n");
+  fprintf(stderr, "-fN  Use filter type N (1-4, default 4)\n");
+}
+
+#define HANDFUL 1024   /* How many sample frames to read/write at a time */
+
+int
+main(int argc, char *argv[])
+{
+  dolbyb_t dolbyb;
+  SNDFILE *sf_in, *sf_out;
+  SF_INFO sfinfo;
+  short *buf_in, *buf_out;
+  sf_count_t n_read;
+  int Encode = 0;
+
+  dolbyb_init(&dolbyb);
+
+  /* Process commandline arguments */
+  argv++; argc--; /* Skip program name */
+  while (argc > 0 && argv[0][0] == '-') {
+    switch (argv[0][1]) {
+    case 'd': Encode        = 0; break;
+    case 'e': Encode        = 1; break;
+    case 'h': dolbyb.AllHig = 1; break;
+    case 'f': dolbyb.FltTyp = argv[0][1] - '0'; break;
+    case 'u': dolbyb.UpSamp = atol(&argv[0][2]); break;
+    case 't': dolbyb.ThGndB = atof(&argv[0][2]); break;
+    case 'a': dolbyb.DecAdB = atof(&argv[0][1]); break;
+    default: usage(); exit(1);
+    }
+    argv++; argc--;
+  }
+  if (argc != 2) { usage(); exit(1); }
+
+  sf_in = sf_open(argv[0], SFM_READ, &sfinfo);
+  if (sf_in == NULL) exit(1);
+  sf_out = sf_open(argv[1], SFM_WRITE, &sfinfo);
+  if (sf_out == NULL) exit(1);
+
+  buf_in = calloc(sfinfo.channels * sizeof(short), HANDFUL);
+  buf_out = calloc(sfinfo.channels * sizeof(short), HANDFUL);
+  if (buf_in == NULL || buf_out == NULL) exit(1);
+
+  dolbyb_init(&dolbyb);
+  dolbyb.SmpSec = sfinfo.samplerate;
+  dolbyb.NumChn = sfinfo.channels;
+  dolbyb.BDepth = 16;
+  if (dolbyb_start(&dolbyb)) exit(1);
+
+  while ((n_read = sf_readf_short(sf_in, buf_in, (sf_count_t)HANDFUL)) > 0) {
+    if (Encode) dolbyb_encode(&dolbyb, buf_in, buf_out, (size_t)n_read);
+    else        dolbyb_decode(&dolbyb, buf_in, buf_out, (size_t)n_read);
+    if (sf_writef_short(sf_out, buf_out, n_read) != n_read) {
+      fprintf(stderr, "Write error on the output file.\n");
+      break;
+    }
+  }
+  sf_close(sf_out);
+  sf_close(sf_in);
+  dolbyb_free(&dolbyb);
+
+  return 0;
+}
+.XX
+.SH COPYRIGHT
+Copyright 1991\-2015 Lance Norskog, Chris Bagwell and sundry contributors.
+.SP
+This library is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+.SP
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
+.SH AUTHORS
+The many authors and contributors are listed in the README file that
+is distributed with the source code.
+.SH SEE ALSO
+dolbyb(1), https://codeberg.org/martinwguy/libdolbyb

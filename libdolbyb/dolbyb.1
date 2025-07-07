@@ -1,0 +1,162 @@
+'\" t
+'\" The line above instructs most `man' programs to invoke tbl
+'\"
+'\" Separate paragraphs; not the same as PP which resets indent level.
+.de SP
+.if t .sp .5
+.if n .sp
+..
+'\"
+'\" Replacement em-dash for nroff (default is too short).
+.ie n .ds m " - 
+.el .ds m \(em
+'\"
+'\" Placeholder macro for if longer nroff arrow is needed.
+.ds RA \(->
+'\"
+'\" Decimal point set slightly raised
+.if t .ds d \v'-.15m'.\v'+.15m'
+.if n .ds d .
+'\"
+.TH dolbyb 1 "April 16, 2025" "dolbyb"
+.SH NAME
+dolbyb, a Dolby B encoding and decoding program
+.SH SYNOPSIS
+.B dolbyb
+[\fIoptions\fR] \fIinput_file output_file\fR
+.SH DESCRIPTION
+.B dolbyb
+is a program to decode and encode audio files applying or removing
+Dolby B noise reduction based on dolbybcsoftwaredecode which
+simulates the operation of a real Dolby B electronic circuit.
+.SH OPTIONS
+.TP
+.B \-e
+Encode to Dolby B instead of decoding.
+.TP
+.B \-d
+Decode a Dolby B-encoded audio file. This is the default action
+but the option flag is included for convenience and symmetry.
+.TP
+.B \-p
+Show a progress meter on stderr.
+.TP
+.BI \-u N
+Digital filtering only works well if the sample rate is well above
+the cutoff frequency of the filter. For Dolby\ B's sliding filter,
+that frequency can be well above 20kHz and this does not work well
+if the sample rate is only 44.1Khz. To get around this, it upsamples
+the audio to a higher rate when it passes through this filter.
+By default, the upsample rate is set so that the upper sample rate
+is at least 200Khz; upsampling can be switched off by using \fB\-u1\fR.
+.TP
+.B \-h
+By default, the program only upsamples the audio when it needs to.
+If \fB\-h\fP is given, this behaviour is changed so that upsampled audio 
+is used throughout the program, which may give marginally better-quality
+results and will certainly take longer.
+.TP
+.BI \-t N
+This adjusts the gain when the audio is fed to the Dolby gain control circuits.
+When a tape deck is encoding or decoding a magnetic tape,
+it knows the signal level at the tape heads but with audio files
+the maximum signal level may not accurately represent
+the tape's maximum flux density (200nWb/m for cassette tapes),
+resulting in erroneous Dolby B decoding. The \fB\-t\fP option
+adjusts the volume levels at which the sliding filter reacts to
+overcome this. Its default value is 0.0, which assumes that the maximum
+amplitude of the signal represents the maximum recording level on tape.
+.SP
+See the section \fBLEVEL ADJUSTMENT\fP below.
+.TP
+.BI \-a N
+In decode mode, the program has to use trial and error to get the right output
+sample values. This parameter sets how accurate it needs to be before it is
+considered OK.
+A figure of 0.0\ dB would mean an accuracy of about 1 sample value.
+The default is -5.0\ dB, which is accurate to less than one sample value.
+A higher (less negative) value would be less accurate but it may
+make the decoding faster.
+A lower (more negative) value would be more accurate but may be slower.
+.TP
+.BI \-f N
+The program originally simulated an analog circuit for a Dolby B noise reducer.
+However, too much filtering in the side path was altering the phase of the
+side path audio, which caused problems when the side path was recombined
+with the main signal. Basically signals don't add together very well
+if there is too much difference in the phase.
+.SP
+To fix this, there are now 4 filter modes with hopefully less of a phase change.
+.RS
+.TP
+.B \-f1
+is the original method.
+.TP
+.B \-f2
+is a newer method that seems to work better than 1.
+.TP
+.B \-f3
+is another rearrangement which in practice doesn't seem to be any better than 1.
+.TP
+.B \-f4
+seems to work best, hence it is the default mode.
+.RE
+.SH "SOME DIGITIZING ADVICE"
+When digitizing, it is important to get the best possible audio from your tapes.
+Firstly, clean the tape heads frequently.
+Secondly, you should demagnetize the tape heads periodically,
+as they tend to accumulate magnetization over time and will
+strip the treble from any tape that passes over them.
+Lastly, adjust the tape head alignment by taking the front off the cassette deck
+so you can adjust the alignment with a small screw driver.
+Listening to the audio in mono makes alignment errors far more obvious,
+which makes alignment a lot easier.
+.SH "BIAS AND EQ SETTINGS"
+More expensive tape decks have settings for Bias and EQ;
+the Bias setting is only really relevant when recording,
+so we don't need to worry about it on playback.
+.SP
+The EQ setting however does make a difference and filters the audio
+at the recording and playback stages; there are different EQ settings
+for different types of tape: 120us for ferric tapes
+and 75us for chrome or metal tapes, and playing back with the wrong
+EQ setting will affect the sound. 
+.SH "LEVEL ADJUSTMENT"
+Dolby B is normally built in to a tape deck, so the audio level
+fed into the decode circuits would be approximately correct.
+However, if using this program, the audio must already have been extracted
+and digitized so this program has no way to determine the correct level
+for the decoding and some trial and error will be needed to find
+the correct level. I suggest using a section of audio as a trial, and using
+a batch file to try decoding the trial at several different levels
+to different output files and then see which version sounds best.
+.SP
+For example, a batch file might look something like this:
+.EX
+dolbyb -t0 Test.wav Out00.wav
+dolbyb -t5 Test.wav Out05.wav
+dolbyb -t10 Test.wav Out10.wav
+dolbyb -t15 Test.wav Out15.wav
+dolbyb -t20 Test.wav Out20.wav
+.EE
+To begin with, when you have little idea of what level to use,
+try a wide range of levels.
+If the result sounds muffled, the threshold is too low and
+if it seems to have too much treble, the threshold is too high.
+.SP
+Once you know the approximate level, you can try more closely-spaced levels
+and listen carefully to find the best level possible.
+Logic would suggest listening to where tracks fade out,
+to see if the treble increases, but this method doesn't seem to work well
+and the best way seems to be to see how low the level can be set
+before the results sound dull and muffled, then choose a level a bit higher
+than this; you can just about hear the difference between results
+that differ in threshold setting by about 2\ dB.
+.SH COPYRIGHT
+Copyright 2025 Martin Guy based on Richard Evans' dolbybcsoftwaredecode.
+.SP
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+.SH SEE ALSO
+libdolbyb(3), https://codeberg.org/martinwguy/libdolbyb
