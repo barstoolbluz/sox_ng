@@ -52,6 +52,14 @@
           "aarch64-darwin"
         ]
       },
+      "ffmpeg": {
+        "pkg-path": "ffmpeg",
+        "priority": 7,
+        "systems": [
+          "aarch64-linux",
+          "aarch64-darwin"
+        ]
+      },
       "file": {
         "pkg-path": "file"
       },
@@ -128,16 +136,16 @@
     },
     "options": {},
     "build": {
-      "soxxx-darwin": {
-        "command": "set -euo pipefail\nmkdir -p \"$out\"\n\n# First, rename all sox_ng references to soxxx\necho \"Renaming sox_ng to soxxx throughout the codebase...\"\n\n# Update configure.ac\nsed -i 's/sox_ng/soxxx/g' configure.ac\n\n# Update CMakeLists.txt files\nsed -i 's/sox_ng/soxxx/g' CMakeLists.txt\nsed -i 's/sox_ng/soxxx/g' src/CMakeLists.txt\n\n# Update Makefile.am files\nsed -i 's/sox_ng/soxxx/g' Makefile.am\nsed -i 's/soxi_ng/soxixx/g' Makefile.am\nsed -i 's/soxformat_ng/soxxxformat/g' Makefile.am\nsed -i 's/libsox_ng/libsoxxx/g' Makefile.am\nsed -i 's/play_ng/playxx/g' Makefile.am\nsed -i 's/rec_ng/recxx/g' Makefile.am\nsed -i 's/sox_ng/soxxx/g' src/Makefile.am\nsed -i 's/libsox_ng/libsoxxx/g' src/Makefile.am\n\n# Also update the optional-fmts.am file which is included by src/Makefile.am\nif [ -f src/optional-fmts.am ]; then\n    sed -i 's/sox_ng/soxxx/g' src/optional-fmts.am\n    sed -i 's/libsox_ng/libsoxxx/g' src/optional-fmts.am\nfi\n\n# Update references to libsox (without _ng) in Makefile.am files\nsed -i 's/libsox_i\\.c/libsoxxx_i.c/g' src/Makefile.am\nsed -i 's/libsox_i\\.c/libsoxxx_i.c/g' src/optional-fmts.am 2>/dev/null || true\n\n# Rename pkg-config file\nif [ -f sox_ng.pc.in ]; then\n    mv sox_ng.pc.in soxxx.pc.in\n    sed -i 's/sox_ng/soxxx/g' soxxx.pc.in\n    sed -i 's/libsox_ng/libsoxxx/g' soxxx.pc.in\nfi\n\n# Rename source files\nif [ -f src/sox_ng.h ]; then\n    mv src/sox_ng.h src/soxxx.h\nfi\nif [ -f src/sox_ng.c ]; then\n    mv src/sox_ng.c src/soxxx.c\nfi\nif [ -f src/libsox_ng.c ]; then\n    mv src/libsox_ng.c src/libsoxxx.c\nfi\nif [ -f src/libsox_i.c ]; then\n    mv src/libsox_i.c src/libsoxxx_i.c\nfi\n\n# Update all C source and header files to use new names\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/sox_ng\\.h/soxxx.h/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/libsox_ng/libsoxxx/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/\"libsox\\.h\"/\"libsoxxx.h\"/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/<libsox\\.h>/<libsoxxx.h>/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/libsox_i/libsoxxx_i/g'\n\n# Rename man pages\nif [ -f sox_ng.1 ]; then\n    mv sox_ng.1 soxxx.1\n    sed -i 's/sox_ng/soxxx/g' soxxx.1\n    sed -i 's/play_ng/playxx/g' soxxx.1\n    sed -i 's/rec_ng/recxx/g' soxxx.1\nfi\nif [ -f soxi_ng.1 ]; then\n    mv soxi_ng.1 soxixx.1\n    sed -i 's/sox_ng/soxxx/g' soxixx.1\n    sed -i 's/soxi_ng/soxixx/g' soxixx.1\nfi\nif [ -f soxformat_ng.7 ]; then\n    mv soxformat_ng.7 soxxxformat.7\n    sed -i 's/sox_ng/soxxx/g' soxxxformat.7\n    sed -i 's/soxformat_ng/soxxxformat/g' soxxxformat.7\nfi\nif [ -f libsox_ng.3 ]; then\n    mv libsox_ng.3 libsoxxx.3\n    sed -i 's/sox_ng/soxxx/g' libsoxxx.3\n    sed -i 's/libsox_ng/libsoxxx/g' libsoxxx.3\nfi\n\n# Update test scripts\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/sox_ng/soxxx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/soxi_ng/soxixx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/play_ng/playxx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/rec_ng/recxx/g' 2>/dev/null || true\n\n# Update build scripts\nfor script in mingwbuild osxbuild release.sh; do\n    if [ -f \"$script\" ]; then\n        sed -i 's/sox_ng/soxxx/g' \"$script\"\n        sed -i 's/soxi_ng/soxixx/g' \"$script\"\n        sed -i 's/libsox_ng/libsoxxx/g' \"$script\"\n        sed -i 's/play_ng/playxx/g' \"$script\"\n        sed -i 's/rec_ng/recxx/g' \"$script\"\n    fi\ndone\n\necho \"Checking and fixing math.h include if needed...\"\nif ! grep -q \"math.h\" src/sox_sample_test.h; then\n    echo \"Adding math.h include to src/sox_sample_test.h\"\n    sed -i '/^#include <assert.h>$/a #include <math.h>' src/sox_sample_test.h\nelse\n    echo \"math.h include already present\"\nfi\n\n# Fix function pointer type compatibility issues on macOS\necho \"Searching and fixing function pointer type compatibility issues...\"\nif [[ \"$OSTYPE\" == \"darwin\"* ]]; then\n    # Find all C source files and fix uint64_t parameter issues in seek functions\n    find src -name \"*.c\" -exec grep -l \"uint64_t.*offset\" {} \\; | while read file; do\n        echo \"Patching $file...\"\n        sed -i 's/uint64_t \\([A-Z_]*\\) offset/sox_uint64_t \\1 offset/g' \"$file\"\n    done\n    \n    # Fix lsx_rawseek function definitions and declarations\n    echo \"Fixing lsx_rawseek function signatures...\"\n    # Fix header declaration\n    sed -i 's/int lsx_rawseek(sox_format_t \\* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' src/sox_i.h\n    # Fix function definition\n    sed -i 's/int lsx_rawseek(sox_format_t \\* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' src/raw.c\n    \n    # Fix any remaining uint64_t in function pointer contexts\n    find src -name \"*.c\" -exec grep -l \"uint64_t\" {} \\; | while read file; do\n        echo \"Final cleanup of uint64_t types in $file...\"\n        sed -i 's/(\\(sox_format_t[^,]*\\), uint64_t/(\\1, sox_uint64_t/g' \"$file\"\n    done\nelse\n    echo \"Not on macOS, skipping function pointer type fixes\"\nfi\n\nautoreconf -fiv\n\n./configure \\\n    --prefix=\"$out\" \\\n    --enable-shared \\\n    --enable-static \\\n    --with-ffmpeg\n\nmake -j$(nproc)\n\nmake install\n\n# Rename the symlinks created during install\ncd \"$out/bin\"\nif [ -L play_ng ]; then\n    rm play_ng\n    ln -s soxxx playxx\nfi\nif [ -L rec_ng ]; then\n    rm rec_ng\n    ln -s soxxx recxx\nfi\nif [ -L soxi_ng ]; then\n    rm soxi_ng\n    ln -s soxxx soxixx\nfi\n",
+      "sox_ng-darwin": {
+        "command": "set -euo pipefail\nmkdir -p \"$out\"\n\necho \"Checking and fixing math.h include if needed...\"\nif ! grep -q \"math.h\" src/sox_sample_test.h; then\n    echo \"Adding math.h include to src/sox_sample_test.h\"\n    sed -i '/^#include <assert.h>$/a #include <math.h>' src/sox_sample_test.h\nelse\n    echo \"math.h include already present\"\nfi\n\n# fixes function pointer type compatibility issues on macOS\necho \"Searching and fixing function pointer type compatibility issues...\"\nif [[ \"$OSTYPE\" == \"darwin\"* ]]; then\n    # finds all C source files and fixes uint64_t parameter issues in seek functions\n    find src -name \"*.c\" -exec grep -l \"uint64_t.*offset\" {} \\; | while read file; do\n        echo \"Patching $file...\"\n        sed -i 's/uint64_t \\([A-Z_]*\\) offset/sox_uint64_t \\1 offset/g' \"$file\"\n    done\n    \n    # fixes lsx_rawseek function definitions and declarations\n    echo \"Fixing lsx_rawseek function signatures...\"\n    # fixes header declaration\n    sed -i 's/int lsx_rawseek(sox_format_t \\* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' src/sox_i.h\n    # fixes function definition\n    sed -i 's/int lsx_rawseek(sox_format_t \\* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' src/raw.c\n    \n    # fixes any remaining uint64_t in function pointer contexts\n    find src -name \"*.c\" -exec grep -l \"uint64_t\" {} \\; | while read file; do\n        echo \"Final cleanup of uint64_t types in $file...\"\n        sed -i 's/(\\(sox_format_t[^,]*\\), uint64_t/(\\1, sox_uint64_t/g' \"$file\"\n    done\nelse\n    echo \"Not on macOS, skipping function pointer type fixes\"\nfi\n\nautoreconf -fiv\n\n./configure \\\n    --prefix=\"$out\" \\\n    --enable-shared \\\n    --enable-static \\\n    --enable-replace \\\n    --with-ffmpeg\n\nmake -j$(nproc)\n\nmake install\n\nmkdir -p \"$out/share/doc/sox_ng\"\ncp README.md \"$out/share/doc/sox_ng/README\"\ncp SOX_DSD_BASICS.md \"$out/share/doc/sox_ng/DSD_BASICS\"\n\ncd \"$out/share/doc\" && ln -sf sox_ng sox\n",
         "version": "14.6.0",
-        "description": "soxxx: A fork of sox_ng with DSD + maximum codec/container support"
+        "description": "sox_ng: Sound eXchange_ng with native DSD support and maximal codec/container support"
       },
-      "soxxx-linux": {
-        "command": "set -euo pipefail\nmkdir -p \"$out\"\n\n# First, rename all sox_ng references to soxxx\necho \"Renaming sox_ng to soxxx throughout the codebase...\"\n\n# Update configure.ac\nsed -i 's/sox_ng/soxxx/g' configure.ac\n\n# Update CMakeLists.txt files\nsed -i 's/sox_ng/soxxx/g' CMakeLists.txt\nsed -i 's/sox_ng/soxxx/g' src/CMakeLists.txt\n\n# Update Makefile.am files\nsed -i 's/sox_ng/soxxx/g' Makefile.am\nsed -i 's/soxi_ng/soxixx/g' Makefile.am\nsed -i 's/soxformat_ng/soxxxformat/g' Makefile.am\nsed -i 's/libsox_ng/libsoxxx/g' Makefile.am\nsed -i 's/play_ng/playxx/g' Makefile.am\nsed -i 's/rec_ng/recxx/g' Makefile.am\nsed -i 's/sox_ng/soxxx/g' src/Makefile.am\nsed -i 's/libsox_ng/libsoxxx/g' src/Makefile.am\n\n# Also update the optional-fmts.am file which is included by src/Makefile.am\nif [ -f src/optional-fmts.am ]; then\n    sed -i 's/sox_ng/soxxx/g' src/optional-fmts.am\n    sed -i 's/libsox_ng/libsoxxx/g' src/optional-fmts.am\nfi\n\n# Update references to libsox (without _ng) in Makefile.am files\nsed -i 's/libsox_i\\.c/libsoxxx_i.c/g' src/Makefile.am\nsed -i 's/libsox_i\\.c/libsoxxx_i.c/g' src/optional-fmts.am 2>/dev/null || true\n\n# Rename pkg-config file\nif [ -f sox_ng.pc.in ]; then\n    mv sox_ng.pc.in soxxx.pc.in\n    sed -i 's/sox_ng/soxxx/g' soxxx.pc.in\n    sed -i 's/libsox_ng/libsoxxx/g' soxxx.pc.in\nfi\n\n# Rename source files\nif [ -f src/sox_ng.h ]; then\n    mv src/sox_ng.h src/soxxx.h\nfi\nif [ -f src/sox_ng.c ]; then\n    mv src/sox_ng.c src/soxxx.c\nfi\nif [ -f src/libsox_ng.c ]; then\n    mv src/libsox_ng.c src/libsoxxx.c\nfi\nif [ -f src/libsox_i.c ]; then\n    mv src/libsox_i.c src/libsoxxx_i.c\nfi\n\n# Update all C source and header files to use new names\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/sox_ng\\.h/soxxx.h/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/libsox_ng/libsoxxx/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/\"libsox\\.h\"/\"libsoxxx.h\"/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/<libsox\\.h>/<libsoxxx.h>/g'\nfind src -name \"*.c\" -o -name \"*.h\" | xargs sed -i 's/libsox_i/libsoxxx_i/g'\n\n# Rename man pages\nif [ -f sox_ng.1 ]; then\n    mv sox_ng.1 soxxx.1\n    sed -i 's/sox_ng/soxxx/g' soxxx.1\n    sed -i 's/play_ng/playxx/g' soxxx.1\n    sed -i 's/rec_ng/recxx/g' soxxx.1\nfi\nif [ -f soxi_ng.1 ]; then\n    mv soxi_ng.1 soxixx.1\n    sed -i 's/sox_ng/soxxx/g' soxixx.1\n    sed -i 's/soxi_ng/soxixx/g' soxixx.1\nfi\nif [ -f soxformat_ng.7 ]; then\n    mv soxformat_ng.7 soxxxformat.7\n    sed -i 's/sox_ng/soxxx/g' soxxxformat.7\n    sed -i 's/soxformat_ng/soxxxformat/g' soxxxformat.7\nfi\nif [ -f libsox_ng.3 ]; then\n    mv libsox_ng.3 libsoxxx.3\n    sed -i 's/sox_ng/soxxx/g' libsoxxx.3\n    sed -i 's/libsox_ng/libsoxxx/g' libsoxxx.3\nfi\n\n# Update test scripts\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/sox_ng/soxxx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/soxi_ng/soxixx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/play_ng/playxx/g' 2>/dev/null || true\nfind test -name \"*.sh\" -o -name \"*.test\" | xargs sed -i 's/rec_ng/recxx/g' 2>/dev/null || true\n\n# Update build scripts\nfor script in mingwbuild osxbuild release.sh; do\n    if [ -f \"$script\" ]; then\n        sed -i 's/sox_ng/soxxx/g' \"$script\"\n        sed -i 's/soxi_ng/soxixx/g' \"$script\"\n        sed -i 's/libsox_ng/libsoxxx/g' \"$script\"\n        sed -i 's/play_ng/playxx/g' \"$script\"\n        sed -i 's/rec_ng/recxx/g' \"$script\"\n    fi\ndone\n\necho \"Checking and fixing math.h include if needed...\"\nif ! grep -q \"math.h\" src/sox_sample_test.h; then\n    echo \"Adding math.h include to src/sox_sample_test.h\"\n    sed -i '/^#include <assert.h>$/a #include <math.h>' src/sox_sample_test.h\nelse\n    echo \"math.h include already present\"\nfi\n\nautoreconf -fiv\n\n./configure \\\n    --prefix=\"$out\" \\\n    --enable-shared \\\n    --enable-static \\\n    --with-ffmpeg\n\nmake -j$(nproc)\n\nmake install\n\n# Rename the symlinks created during install\ncd \"$out/bin\"\nif [ -L play_ng ]; then\n    rm play_ng\n    ln -s soxxx playxx\nfi\nif [ -L rec_ng ]; then\n    rm rec_ng\n    ln -s soxxx recxx\nfi\nif [ -L soxi_ng ]; then\n    rm soxi_ng\n    ln -s soxxx soxixx\nfi\n",
+      "sox_ng-linux": {
+        "command": "set -euo pipefail\nmkdir -p \"$out\"\n\necho \"Checking and fixing math.h include if needed...\"\nif ! grep -q \"math.h\" src/sox_sample_test.h; then\n    echo \"Adding math.h include to src/sox_sample_test.h\"\n    sed -i '/^#include <assert.h>$/a #include <math.h>' src/sox_sample_test.h\nelse\n    echo \"math.h include already present\"\nfi\n\nautoreconf -fiv\n\n./configure \\\n    --prefix=\"$out\" \\\n    --enable-shared \\\n    --enable-static \\\n    --enable-replace \\\n    --with-ffmpeg\n\nmake -j$(nproc)\n\nmake install\n\nmkdir -p \"$out/share/doc/sox_ng\"\ncp README.md \"$out/share/doc/sox_ng/README\"\ncp SOX_DSD_BASICS.md \"$out/share/doc/sox_ng/DSD_BASICS\"\n\ncd \"$out/share/doc\" && ln -sf sox_ng sox\n",
         "sandbox": "pure",
         "version": "14.6.0",
-        "description": "soxxx: A fork of sox_ng with DSD + maximum codec/container support"
+        "description": "sox_ng: Sound eXchange_ng with native DSD support and maximal codec/container support"
       }
     }
   },
@@ -594,7 +602,7 @@
       "rev": "74d1590805a1fcdaa0391350ccca5fdf03d94b63",
       "rev_count": 4,
       "rev_date": "2025-07-07T05:27:48Z",
-      "scrape_date": "2025-07-07T07:21:10.200759Z",
+      "scrape_date": "2025-07-07T23:00:52.647448654Z",
       "stabilities": [
         "unstable"
       ],
@@ -666,6 +674,78 @@
       "system": "x86_64-darwin",
       "group": "toplevel",
       "priority": 5
+    },
+    {
+      "attr_path": "ffmpeg",
+      "broken": false,
+      "derivation": "/nix/store/3771861j024gcjckjaw80wdpzd8hj4zh-ffmpeg-7.1.1.drv",
+      "description": "Complete, cross-platform solution to record, convert and stream audio and video",
+      "install_id": "ffmpeg",
+      "license": "[ LGPL-2.1-or-later, GPL-2.0-or-later, LGPL-3.0-or-later, GPL-3.0-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=5c724ed1388e53cc231ed98330a60eb2f7be4be3",
+      "name": "ffmpeg-7.1.1",
+      "pname": "ffmpeg",
+      "rev": "5c724ed1388e53cc231ed98330a60eb2f7be4be3",
+      "rev_count": 824861,
+      "rev_date": "2025-07-04T13:52:00Z",
+      "scrape_date": "2025-07-06T05:14:23.703197Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "7.1.1",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/dfc4gg05vh5wini7z0wvia3x0slszqxi-ffmpeg-7.1.1-bin",
+        "data": "/nix/store/gvi63i8d8bgskz7sn9cyxxxiv672sf85-ffmpeg-7.1.1-data",
+        "dev": "/nix/store/mkn3bcjc31ncgrkkz9dpz1kk6qa42xg4-ffmpeg-7.1.1-dev",
+        "doc": "/nix/store/hk8y3r6balvnnfcq3k13cfm9c3ia2mk8-ffmpeg-7.1.1-doc",
+        "lib": "/nix/store/baskwy2f8dv70x8wbzn0snalmj4jbi0s-ffmpeg-7.1.1-lib",
+        "man": "/nix/store/5kihrhaqwl512s3ls81jabkks12k0a5p-ffmpeg-7.1.1-man",
+        "out": "/nix/store/gifp9jd3qjab52msjb5s2hgqfmxl56wr-ffmpeg-7.1.1"
+      },
+      "system": "aarch64-darwin",
+      "group": "toplevel",
+      "priority": 7
+    },
+    {
+      "attr_path": "ffmpeg",
+      "broken": false,
+      "derivation": "/nix/store/dykir58glqirqfiy32pmi73975wl7cyx-ffmpeg-7.1.1.drv",
+      "description": "Complete, cross-platform solution to record, convert and stream audio and video",
+      "install_id": "ffmpeg",
+      "license": "[ LGPL-2.1-or-later, GPL-2.0-or-later, LGPL-3.0-or-later, GPL-3.0-or-later ]",
+      "locked_url": "https://github.com/flox/nixpkgs?rev=5c724ed1388e53cc231ed98330a60eb2f7be4be3",
+      "name": "ffmpeg-7.1.1",
+      "pname": "ffmpeg",
+      "rev": "5c724ed1388e53cc231ed98330a60eb2f7be4be3",
+      "rev_count": 824861,
+      "rev_date": "2025-07-04T13:52:00Z",
+      "scrape_date": "2025-07-06T05:35:12.999746Z",
+      "stabilities": [
+        "unstable"
+      ],
+      "unfree": false,
+      "version": "7.1.1",
+      "outputs_to_install": [
+        "bin",
+        "man"
+      ],
+      "outputs": {
+        "bin": "/nix/store/h6mwj82isk6jr3k4mgxb1nag64f0jss7-ffmpeg-7.1.1-bin",
+        "data": "/nix/store/rfw07bhd8y5ijlgjdna5qasvawxw2n4w-ffmpeg-7.1.1-data",
+        "dev": "/nix/store/gfx8kpcy7k3gxkvn7yhky7vg9a3mwyv3-ffmpeg-7.1.1-dev",
+        "doc": "/nix/store/dcxfjlbafvx46j4g390556aq2qw18750-ffmpeg-7.1.1-doc",
+        "lib": "/nix/store/s32cgc65yyyypc7hrr1rmk176s91swby-ffmpeg-7.1.1-lib",
+        "man": "/nix/store/z10q1cvxg07xc14v0m67f803a6qdfmw6-ffmpeg-7.1.1-man",
+        "out": "/nix/store/pycnzblqxmz73m01vlhm56bm9f4c23dk-ffmpeg-7.1.1"
+      },
+      "system": "aarch64-linux",
+      "group": "toplevel",
+      "priority": 7
     },
     {
       "attr_path": "file",
