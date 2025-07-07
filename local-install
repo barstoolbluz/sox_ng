@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Default installation directory
+DEFAULT_PREFIX="$HOME/.local/sox_ng"
+PREFIX="${1:-$DEFAULT_PREFIX}"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}SoX_ng Local Installation${NC}"
+echo "This will create a portable, self-contained installation of SoX_ng"
+echo ""
+
+# Check if flox is available
+if ! command -v flox &> /dev/null; then
+    echo -e "${RED}Error: flox is not installed${NC}"
+    echo "Please install flox first: https://flox.dev/get"
+    exit 1
+fi
+
+# Check if we're in the right directory
+if [ ! -f "configure.ac" ] || [ ! -d ".flox" ]; then
+    echo -e "${RED}Error: This script must be run from the SoX_ng root directory${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}Building SoX_ng with Flox...${NC}"
+
+# Detect the platform and build accordingly
+case "$(uname -s)" in
+    Linux)
+        BUILD_TARGET="sox_ng-linux"
+        ;;
+    Darwin)
+        BUILD_TARGET="sox_ng-darwin"
+        ;;
+    *)
+        echo -e "${RED}Error: Unsupported platform$(NC)"
+        exit 1
+        ;;
+esac
+
+flox build "$BUILD_TARGET"
+
+# Check if build was successful
+RESULT_LINK="result-${BUILD_TARGET}"
+if [ ! -L "$RESULT_LINK" ]; then
+    echo -e "${RED}Error: Build failed - $RESULT_LINK not found${NC}"
+    exit 1
+fi
+
+# Get the actual store path
+STORE_PATH=$(readlink -f "$RESULT_LINK")
+
+echo ""
+echo -e "${YELLOW}Installing to: ${PREFIX}${NC}"
+
+# Create parent directory if needed
+mkdir -p "$(dirname "$PREFIX")"
+
+# Remove existing installation if present
+if [ -d "$PREFIX" ]; then
+    echo "Removing existing installation..."
+    rm -rf "$PREFIX"
+fi
+
+# Copy the closure
+echo "Copying self-contained SoX_ng package..."
+cp -r "$STORE_PATH" "$PREFIX"
+
+echo ""
+echo -e "${GREEN}Installation complete!${NC}"
+echo ""
+
+# Detect current shell
+CURRENT_SHELL=$(basename "$SHELL")
+case "$CURRENT_SHELL" in
+    bash)
+        SHELL_RC="$HOME/.bashrc"
+        EXPORT_CMD="export PATH=\"$PREFIX/bin:\$PATH\""
+        ;;
+    zsh)
+        SHELL_RC="$HOME/.zshrc"
+        EXPORT_CMD="export PATH=\"$PREFIX/bin:\$PATH\""
+        ;;
+    fish)
+        SHELL_RC="$HOME/.config/fish/config.fish"
+        EXPORT_CMD="set -x PATH $PREFIX/bin \$PATH"
+        ;;
+    *)
+        SHELL_RC=""
+        EXPORT_CMD="export PATH=\"$PREFIX/bin:\$PATH\""
+        ;;
+esac
+
+# Prompt user for PATH setup
+echo "Would you like to set up your PATH?"
+echo ""
+echo "  1) Add to PATH for this session only"
+echo "  2) Update $SHELL_RC to make it permanent"
+echo "  3) Show me what to do manually"
+echo "  4) Skip PATH setup"
+echo ""
+read -p "Choose an option [1-4]: " choice
+
+case "$choice" in
+    1)
+        echo ""
+        echo "Run this command in your current shell:"
+        echo -e "  ${YELLOW}$EXPORT_CMD${NC}"
+        echo ""
+        echo "Note: This will only last for your current session."
+        ;;
+    2)
+        if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
+            # Check if PATH entry already exists
+            if grep -q "$PREFIX/bin" "$SHELL_RC"; then
+                echo ""
+                echo -e "${YELLOW}PATH entry already exists in $SHELL_RC${NC}"
+            else
+                echo "" >> "$SHELL_RC"
+                echo "# SoX_ng installation" >> "$SHELL_RC"
+                echo "$EXPORT_CMD" >> "$SHELL_RC"
+                echo ""
+                echo -e "${GREEN}Updated $SHELL_RC${NC}"
+                echo "Run this to reload your shell configuration:"
+                echo -e "  ${YELLOW}source $SHELL_RC${NC}"
+            fi
+        else
+            echo ""
+            echo -e "${RED}Could not determine shell configuration file${NC}"
+            echo "Please add this line manually to your shell profile:"
+            echo -e "  ${YELLOW}$EXPORT_CMD${NC}"
+        fi
+        ;;
+    3)
+        echo ""
+        echo "To use SoX_ng, add this to your PATH:"
+        echo -e "  ${YELLOW}$EXPORT_CMD${NC}"
+        echo ""
+        echo "To make this permanent, add the above line to:"
+        echo "  - Bash: ~/.bashrc"
+        echo "  - Zsh: ~/.zshrc"
+        echo "  - Fish: ~/.config/fish/config.fish"
+        ;;
+    4)
+        echo ""
+        echo "Skipping PATH setup."
+        ;;
+    *)
+        echo ""
+        echo -e "${YELLOW}Invalid option. Skipping PATH setup.${NC}"
+        ;;
+esac
+
+echo ""
+echo "Test your installation with:"
+echo -e "  ${YELLOW}$PREFIX/bin/sox_ng --version${NC}"
