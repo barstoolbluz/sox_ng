@@ -1,6 +1,6 @@
 # sox-sinc
 
-A specialized build of sox_ng supporting extremely large sinc filters for audio resampling
+A specialized build of `sox_ng` supporting extremely large sinc filters for audio resampling
 
 ## What is sox-sinc?
 
