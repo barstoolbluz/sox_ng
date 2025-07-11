@@ -62,7 +62,7 @@ ffmpeg.priority = 7
 ffmpeg.systems = ["aarch64-darwin", "aarch64-linux"]
 
 
-[build.soxx-sinc-linux]
+[build.sox_ng-sinc-linux]
 description = "soxx-sinc: sox_ng with large sinc filter support (up to 1 billion taps)"
 version = "14.6.0-sinc"
 sandbox = "pure"
@@ -205,7 +205,7 @@ fi
 '''
 
 
-[build.soxx-sinc-darwin]
+[build.sox_ng-sinc-darwin]
 description = "soxx-sinc: sox_ng with large sinc filter support (up to 1 billion taps)"
 version = "14.6.0-sinc"
 command = '''
