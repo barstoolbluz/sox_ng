@@ -9,7 +9,17 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          config = {
+            allowUnfree = true;
+          };
+        };
+        
+        # Build ffmpeg-full with unfree codecs
+        ffmpeg-unfree = pkgs.ffmpeg-full.override {
+          withUnfree = true;
+        };
         
         # Extract the build script from the manifest
         buildScript = pkgs.writeScript "build-sox-sinc" ''
@@ -151,7 +161,7 @@
             wavpack
             libid3tag
             file  # for libmagic
-            ffmpeg
+            ffmpeg-unfree  # ffmpeg-full with unfree codecs
           ] ++ lib.optionals stdenv.isLinux [
             alsa-lib
             libpulseaudio
@@ -186,16 +196,20 @@
           '';
           
           meta = with pkgs.lib; {
-            description = "sox_ng with support for extremely large sinc filters";
+            description = "sox_ng with support for extremely large sinc filters and full ffmpeg codec support";
             longDescription = ''
               A specialized build of sox_ng that removes the standard limitation
               on sinc filter lengths, supporting up to approximately 1 billion taps
-              for experimental and research purposes.
+              for experimental and research purposes. Includes ffmpeg-full with
+              unfree codecs for maximum format support.
+              
+              Note: Building requires --impure flag due to unfree codecs:
+              nix build --impure
             '';
-            homepage = "https://github.com/yourusername/sox-sinc";
+            homepage = "https://github.com/barstoolbluz/sox_ng";
             license = with licenses; [ gpl2Plus lgpl21Plus ];
             platforms = platforms.unix;
-            maintainers = with maintainers; [ ];
+            maintainers = with maintainers; [barstoolbluz];
           };
         };
       in
