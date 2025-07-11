@@ -8,7 +8,7 @@ sox-sinc is a modified build of [sox_ng](https://codeberg.org/sox_ng/sox_ng) tha
 
 ## Important Context
 
-The standard sox resampling implementation is already highly robust and produces excellent results that are audibly transparent for the vast majority of use cases. The perceptual differences between standard sox resampling and extreme filter implementations are, at best, subtle and may be imperceptible to most listeners.
+The standard sox resampling implementation is already incredibly robust and produces excellent results that are audibly transparent for the vast majority of use cases. The perceptual differences between standard sox resampling and extreme filter implementations are, at best, subtle.They're imperceptible to most listeners, they are not typically validated by rigorous testing, _et tamen sunt_. 
 
 This specialized build exists primarily for:
 - Those who wish to experiment with extreme filter implementations
@@ -283,7 +283,6 @@ The goal is to maintain this as a focused, experimental platform while ensuring 
 
 ## Acknowledgments
 
-- Original SoX team for the excellent foundation
-- [sox_ng maintainers](https://codeberg.org/sox_ng/sox_ng) for the actively maintained fork
-- The audio engineering community for pushing quality boundaries
-- Flox for reproducible build environments
+- Original SoX team for the excellent foundation; Måns Rullgård, especially, for creating his DSD-enabled SoX fork
+- [sox_ng maintainers](https://codeberg.org/sox_ng/sox_ng) for all the work that goes into enabling an actively maintained fork
+- Nix for providing the foundation for reproducible build environments, Flox for making this just a _bit_ more accessible.
