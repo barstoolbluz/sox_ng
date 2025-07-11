@@ -1,348 +1,289 @@
-# README.md
+# sox-sinc
 
-**SoX_ng** is a feature-enhanced fork of the venerable SoX (Sound eXchange) audio processing toolkit. While maintaining full compatibility with the original sox-14.4.2, this "next generation" fork adds significant new capabilities and addresses longstanding issues.
+A specialized build of sox_ng supporting extremely large sinc filters for audio resampling
 
-## Why SoX_ng?
+## What is sox-sinc?
 
-The `SoX_ng` project imports, compares and refines bug fixes and
-new work from the 50-odd software distributions that package SoX
-and from the plethora of forks on github and elsewhere
-and makes regular releases with a six-monthly cadence
-for each of the micro (bug fixes) and minor (new features) releases.
-A major release (non-backwards-compatible changes) is not planned.
+sox-sinc is a modified build of [sox_ng](https://codeberg.org/sox_ng/sox_ng) that removes the standard limitation on sinc filter lengths. Where standard builds limit filters to 32,767 taps, this build supports up to approximately 1 billion taps, enabling the implementation of extremely steep filter characteristics.
 
-The next micro release is scheduled for the 18th August 2025.<BR>
-The next minor release is scheduled for the 18th November 2025.
+## Important Context
 
-## Key Features and Improvements over Original SoX
+The standard sox resampling implementation is already highly robust and produces excellent results that are audibly transparent for the vast majority of use cases. The perceptual differences between standard sox resampling and extreme filter implementations are, at best, subtle and may be imperceptible to most listeners.
 
-### 🎵 Native DSD (Direct Stream Digital) Support
-- **New format support**: DSF (DSD Stream File), DSDIFF, and WSD files for high-resolution 1-bit audio
-- **DSD over PCM (DoP)**: Transport DSD data over standard PCM interfaces
-- **Sigma-Delta Modulation**: New `sdm` effect with multiple advanced modulators:
-  - CLANS (Closed Loop Analysis of Noise Shapers) - optimized for stability
-  - SDM (Standard Delta-Sigma Modulation) - conventional approach
-  - CRFB (Cascade of Resonators with distributed FeedBack) - alternative design
-- **Trellis Optimization**: High-quality encoding with configurable lookahead
-- **Multiple DSD Rates**: DSD64 (2.8MHz), DSD128 (5.6MHz), DSD256 (11.3MHz), DSD512 (22.6MHz)
+This specialized build exists primarily for:
+- Those who wish to experiment with extreme filter implementations
+- Research into the theoretical limits of digital filtering
+- Specific applications where mathematical precision takes precedence over practicality
+- Users who believe they can perceive differences with extremely steep filters
 
-### 🛡️ Security and Stability
-- **42 CVEs fixed** (2004-2023) with comprehensive test coverage
-- **13 critical bugs resolved** that affected the original SoX
-- Memory leak fixes and improved boundary checking
-- Enhanced error handling throughout the codebase
+The computational cost of these extreme filters is substantial—processing times can increase from seconds to many minutes for typical audio files.
 
-### 🚀 Enhanced Capabilities
-- **Extended format support**: 48+ additional audio/video formats via ffmpeg integration
-- **Multi-threading support** for improved performance on modern systems
-- **Reproducible builds** with deterministic output
-- **NSP format** file reading capability
+## Technical Specifications
 
-### 🔧 Better Maintenance
-- Regular release schedule with predictable updates
-- Systematic integration of fixes from 50+ downstream distributions
-- Active consolidation of improvements from community forks
-- Comprehensive test suite for regression prevention
+- **Filter length**: Up to ~1 billion taps (vs 32,767 in standard builds)
+- **FFT size**: Supports up to 2^30 points for DFT-based convolution
+- **Memory usage**: Scales linearly with filter length (~8 bytes per tap)
+- **Base**: Built on sox_ng, the actively maintained fork of SoX
+- **Compatibility**: Functions as a drop-in replacement for standard sox
 
-## Terminology
+## Installation
 
-`sox` means [sox.sf.net](http://sox.sf.net)<BR>
-`SoX` means the Swiss Army Knife of command-line audio processing in any of its incarnations<BR>
-`sox_ng` means the hard fork of `sox-14.4.2` aiming to sanitize `SoX`<BR>
-`SoX_ng` means the project to maintain `sox_ng`
+### Using Flox (Recommended)
 
-## How to get it
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/sox-sinc.git
+cd sox-sinc
 
-### Official Repository
-`sox_ng` lives at
-[codeberg.org/sox_ng/sox_ng](https://codeberg.org/sox_ng/sox_ng)
-and is composed of a SoX code base, a wiki and an issue tracker.
+# Build with flox
+flox build soxx-sinc-linux  # For Linux
+flox build soxx-sinc-darwin # For macOS
 
-### Flox-Enabled Fork
-For a version with built-in Flox build support, you can also get `sox_ng` from:
-[github.com/barstoolbluz/sox_ng](https://github.com/barstoolbluz/sox_ng)
-
-This fork includes pre-configured Flox environments for easy building and installation.
-
-### Releases
-
-Download one of the
-[release tarballs](https://codeberg.org/sox_ng/sox_ng/releases).
-
-Extract it:
-```
-gzip -d < sox_ng-*.tar.gz | tar xf -
-```
-Build it:
-```
-cd sox_ng*
-./configure
-make
-```
-Install it:
-```
-make install
+# The binaries will be in ./result-soxx-sinc-linux/bin/ or ./result-soxx-sinc-darwin/bin/
+# Optionally, add to your PATH:
+export PATH="$PWD/result-soxx-sinc-linux/bin:$PATH"
 ```
 
-It installs as `sox_ng`, `sox_ng.h`, `libsox_ng.so` and so on
-so that `sox` and `sox_ng` can coexist on the same system.
-To make it work the same as the original `sox`, use
-`./configure --enable-replace`
+### Traditional Build
 
-### Development branches
-
-#### main
-
-To fetch the latest version:
-```
-git clone https://codeberg.org/sox_ng/sox_ng
-cd sox_ng
-```
-and to make local copies of the wiki and the issues:
-```
-git clone https://codeberg.org/sox_ng/sox_ng.wiki wiki
-issues/getissues.sh
-```
-
-To compile it:
-```
+```bash
+# Standard autotools build (requires all dependencies)
 autoreconf -i
 ./configure
 make
-```
-and to install it:
-```
 sudo make install
 ```
-This installs it as `sox_ng`, `sox_ng.h`, `libsox_ng` and so on,
-so that it can coexist with traditional `sox`. If you want it to work
-the same as the original `sox`, use `./configure --enable-replace`
-and if `ffmpeg` is installed add `--with-ffmpeg` to decode 48 more
-audio and video formats.
 
-## Building with Flox (Recommended)
+## Usage Examples
 
-The easiest way to build SoX_ng is using [Flox](https://flox.dev/), which provides a reproducible build environment with all necessary dependencies automatically managed.
+### Standard Usage
+For typical resampling, the standard sox parameters remain appropriate:
+```bash
+sox input.flac -b 24 output.flac rate -v 192000
+```
+
+### Large Filter Example
+For those wishing to experiment with larger filters:
+```bash
+sox -S -V3 input_96k.flac -b 24 -r 192000 output_192k.flac \
+  upsample 4 \
+  sinc -n 1638400 -b 16 \
+  vol 1
+```
+
+This applies a 1.6 million tap filter. Processing time will be significantly longer than standard resampling.
+
+### Extreme Filter Example
+```bash
+sox input.flac output.flac \
+  upsample 8 \
+  sinc -n 8388608 -b 20 \
+  vol 1
+```
+
+Note: An 8 million tap filter may require 10-20 minutes to process a typical song.
+
+## Resampling Parameters
+
+The following parameters control the resampling process. These are standard sox options; this build simply extends the allowed ranges for some parameters.
+
+### Option Explanations
+
+#### Quality
+**Description:**
+Selects the overall resampling quality preset, controlling how aggressively SoX optimizes for accuracy versus performance. Higher quality settings use longer filters, sharper transitions, and stricter rejection of aliasing.
+
+**Typical Use:**
+Choose higher settings for archival, mastering, scientific, or audiophile tasks where preserving fidelity is paramount. Lower settings may be preferred for faster processing or real-time applications.
+
+#### Filter Taps (`-n`)
+**Description:**
+Sets the number of coefficients ("taps") in the FIR filter kernel. 0 or "auto" allows the program to determine an appropriate length based on other parameters.
+
+**Typical Use:**
+Specify a value only if you need to reproduce a particular filter or are experimenting. "Auto" is optimal for general use.
+
+**sox-sinc enhancement:** Supports up to ~1 billion taps (vs 32,767 in standard sox/sox_ng)
+
+#### Transition Band
+**Description:**
+Controls how abruptly the filter transitions from pass-band (preserved) to stop-band (attenuated). Specified in Hz, with smaller values resulting in steeper, more "brick-wall" filtering.
+
+**Typical Use:**
+For extreme anti-aliasing, set a very narrow transition band (requires more filter taps and CPU/RAM). Broader transition bands are more efficient but less aggressive.
+
+#### Passband Frequency
+**Description:**
+The upper frequency passed without attenuation—usually set as a fraction or percentage of the output's Nyquist frequency. "Auto" lets the software decide based on context.
+
+**Typical Use:**
+Override only if you require a specific cutoff or want to tailor the response for specialized workflows (e.g., early roll-off for measurement).
+
+#### Kaiser Beta (`-b`)
+**Description:**
+Adjusts the window function used to design the FIR filter. Higher beta values reduce passband ripple and sidelobes (less ringing), at the cost of a slightly less sharp transition.
+
+**Typical Use:**
+Increase for smoother filters, decrease (or set to zero) for maximum steepness.
+
+**Values:**
+- 0: Rectangular window (sharp cutoff, most ringing)
+- 8.6: Excellent rejection (-80 dB)
+- 16.0: Exceptional rejection (-140 dB) [default]
+- 25.0: Extreme rejection (-180 dB)
+
+#### Phase Response
+**Description:**
+Selects linear-phase (preserves waveform shape, adds latency), minimum-phase (lower latency, possible transient smearing), or intermediate settings.
+
+**Options:**
+- `-L`: Linear phase (best for music)
+- `-M`: Minimum phase
+- `-I`: Intermediate phase
+
+**Typical Use:**
+Linear phase is recommended for offline processing and mastering; minimum phase may be preferred for real-time or emulation of analog hardware.
+
+#### Gain Compensation
+**Description:**
+Applies a gain adjustment (in dB) to compensate for any level changes caused by filtering.
+
+**Typical Use:**
+Leave at zero unless you observe a consistent change in signal amplitude after resampling.
+
+#### Allow Aliasing
+**Description:**
+If enabled, allows frequencies above the output's Nyquist to fold (alias) into the audible range, which is generally undesirable for hi-fi or scientific work but may be used for creative effects.
+
+**Typical Use:**
+Keep disabled for transparent conversion.
+
+#### Dither
+**Description:**
+Specifies the type of dither noise added during bit-depth reduction. Triangular (TPDF) is widely accepted as the most transparent for audio.
+
+**Typical Use:**
+Always dither when reducing bit depth (e.g., from 24 to 16 bits) to avoid quantization artifacts.
+
+#### Noise Shaping
+**Description:**
+Controls how dither noise is distributed across the frequency spectrum. Shaping curves like "Shibata" push more noise energy into ultrasonic frequencies, improving subjective noise performance within the audible band.
+
+**Typical Use:**
+Useful for maximizing perceived quality in 16-bit (or lower) output. Can be disabled or set to "none" for flat dither.
+
+## Practical Considerations
+
+### When Standard Sox is Sufficient
+- Professional audio production and mastering
+- Format conversion for distribution
+- General resampling tasks
+- Real-time processing
+
+The standard sox resampling engine already provides excellent quality with sensible trade-offs between quality and processing time.
+
+### When This Build May Be Considered
+- Academic research into filter design
+- Exploration of theoretical limits in digital filtering
+- Specific measurement or analysis requirements
+- Personal experimentation with extreme parameters
+- Perceived discernment of actual, audible, aurally pleasing differences
+- Metaphysical comfort, a la Nietzsche's account of tragedy: i.e., beneath all painful, transitory appearances there lies an indestructible, ever-renewing life-force which gives us to feel, however briefly, that existence is ultimately powerful and enduring--: that life and living are worth affirming. 
+
+Remember that the audible benefits of extreme filter lengths are debatable and likely imperceptible in most listening scenarios.
+
+## Performance Characteristics
+
+| Filter Taps | Processing Time* | RAM Usage |
+|------------|------------------|----------|
+| 32,767 (standard) | <5 seconds | ~1 MB |
+| 65,536 | ~10 seconds | ~1 MB |
+| 262,144 | ~40 seconds | ~2 MB |
+| 1,638,400 | 2-5 minutes | ~13 MB |
+| 8,388,608 | 10-20 minutes | ~64 MB |
+
+*For a 5-minute stereo track on modern hardware
+
+Note the exponential increase in processing time with filter length.
+
+## Implementation Details
+
+This build modifies three constraints in the sox_ng codebase:
+
+1. **FFT Size Limit**: `FFT4G_MAX_SIZE` increased from 262,144 to 1,073,741,824
+2. **Working Array Size**: `ip[]` arrays in FFT routines increased from 256 to 16,384 elements
+3. **Filter Length Limit**: Maximum sinc filter taps increased from 32,767 to 1,073,741,823
+
+These changes allow the DFT-based convolution engine to handle much larger filters at the cost of increased memory usage and computation time.
+
+## Differences from Standard sox_ng
+
+- Increased maximum filter length from 32,767 to ~1 billion taps
+- Proportionally increased memory allocation for FFT operations
+- No changes to default behavior or standard usage patterns
+- Fully backward compatible with existing sox scripts and workflows
+
+## Relationship to sox_ng
+
+sox-sinc is a specialized build of [sox_ng](https://codeberg.org/sox_ng/sox_ng), which is itself an actively maintained fork of the original SoX project. sox_ng:
+- Imports, compares and refines bug fixes from 50+ distributions
+- Makes regular releases with a six-monthly cadence
+- Maintains compatibility while fixing long-standing issues
+- Lives at [codeberg.org/sox_ng/sox_ng](https://codeberg.org/sox_ng/sox_ng)
+
+This build adds extreme FIR filter capabilities on top of sox_ng's improvements.
+
+## Building from Source
 
 ### Prerequisites
 
-1. Install Flox:
-   ```bash
-   curl -L https://flox.dev/install | sh
-   ```
-
-2. Clone the repository:
-   ```bash
-   # Option A: Clone from the Flox-enabled fork (recommended for Flox builds)
-   git clone https://github.com/barstoolbluz/sox_ng
-   cd sox_ng
-   
-   # Option B: Clone from the official repository
-   git clone https://codeberg.org/sox_ng/sox_ng
-   cd sox_ng
-   ```
+- GNU Autotools (autoconf, automake, libtool)
+- C compiler (gcc/clang)
+- Optional: FLAC, MP3, Vorbis libraries for format support
 
 ### Build Instructions
 
-The repository includes a pre-configured Flox environment. Simply run:
+See [INSTALL](INSTALL) for detailed instructions.
 
-```bash
-# Activate the Flox environment
-flox activate
+## Documentation
 
-# Build SoX_ng
-flox build sox
+- [INSANE_RESAMPLING_MODE.md](sox-sinc/INSANE_RESAMPLING_MODE.md) - Detailed parameter guide
+- [LARGE_SINC_FILTERS_IMPLEMENTATION.md](LARGE_SINC_FILTERS_IMPLEMENTATION.md) - Technical implementation details
+- [sox_ng README](https://codeberg.org/sox_ng/sox_ng) - Parent project documentation
+- Original SoX documentation in man pages
 
-# The built binary will be available at:
-./result-sox/bin/sox_ng
-```
+## Summary
 
-The Flox environment automatically handles:
-- Platform-specific dependencies (Linux/macOS)
-- All required audio codec libraries (FLAC, LAME, Vorbis, Opus, etc.)
-- Build tools (autoconf, automake, libtool)
-- Audio I/O libraries (ALSA, PulseAudio on Linux; CoreAudio on macOS)
+sox-sinc is a specialized tool that extends the already capable sox_ng resampling engine to support extremely large filter implementations. While standard sox provides excellent quality for virtually all practical applications, this build exists for those who wish to explore the theoretical limits of FIR filtering or who believe they require filter characteristics beyond what standard implementations provide.
 
-### Installing SoX_ng via Flox
+Users should carefully consider whether the substantial increase in processing time is justified for their specific use case.
 
-#### Option 1: Local Installation
+## License
 
-For a portable, self-contained installation:
+This project maintains SoX's original dual license:
+- GPL for the executables
+- LGPL for the library
 
-```bash
-./local-install  # Installs to $HOME/.local/sox_ng
-```
+See [LICENSE.GPL](LICENSE.GPL) and [LICENSE.LGPL](LICENSE.LGPL) for details.
 
-Or to a custom location:
-```bash
-./local-install /path/to/installation
-```
+## Contributing
 
-After installation, add to your PATH:
-```bash
-export PATH="$HOME/.local/sox_ng/bin:$PATH"
-```
+### Upstream First
+For general improvements, bug fixes, and features that benefit all sox users, please contribute directly to the parent [sox_ng project](https://codeberg.org/sox_ng/sox_ng). This fork tracks sox_ng and will inherit those improvements.
 
-#### Option 2: Publish to Flox Catalog
+### Fork-Specific Contributions
+For contributions specific to extreme filtering capabilities, we welcome:
+- Research and documentation on perceptual effects of extreme filters
+- Optimizations for large-scale DFT operations
+- Memory efficiency improvements for multi-million tap filters
+- Benchmarking data and performance analysis
+- Use case documentation from scientific or measurement applications
 
-You can publish SoX_ng to your private Flox Catalog for easy distribution:
+The goal is to maintain this as a focused, experimental platform while ensuring general improvements flow through the sox_ng ecosystem.
 
-```bash
-# Ensure git is clean and pushed
-git status  # Should show "working tree clean"
-git push
+## Acknowledgments
 
-# Publish to your catalog
-flox publish -o <your-floxhub-handle> sox
-
-# Then install anywhere with:
-flox install <your-handle>/sox_ng
-```
-
-## Build dependencies (Traditional Method)
-
-To compile a release tarball you will need `make`, `libtool`
-and `gcc` or `clang` (`./configure CC=clang`)
-
-To build the git repository you will also need `autoconf` and `automake`.
-
-To enable all of SoX's optional modules you can install
-`ladspa-sdk`
-`lame`,
-`libao`,
-`libfftw3`,
-`libflac`,
-`libid3tag`,
-`libmad`
-`libogg`,
-`libopus`,
-`libopusfile`,
-`libpng`,
-`libsndfile`,
-`libspeex`,
-`libspeexdsp`,
-`libvorbis`,
-`opencore-amr`,
-`twolame`,
-`wavpack`.
-
-### Debian, Ubuntu, Mint etc.
-```
-apt install gcc make libtool ladspa-sdk libao-dev libasound2-dev libfftw3-dev \
-	libgsm1-dev libid3tag0-dev libltdl-dev libmad0-dev libmagic-dev \
-	libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev \
-	libopusfile-dev libpng-dev libpulse-dev libsamplerate0-dev \
-	libsndfile1-dev libspeex-dev libspeexdsp-dev libtwolame-dev \
-	libvorbis-dev libwavpack-dev
-```
-and to run `issues/getissues.sh` and the `makehtml.sh` scripts you will need
-```
-apt-get install jq libtext-multimarkdown-perl
-```
-
-### Fedora, Red Hat, CentOS etc.
-```
-yum install gcc make libtool \
-	alsa-lib-devel fftw-devel file-devel flac-devel gsm-devel \
-	ladspa-devel lame-devel libao-devel libcaca-devel libid3tag-devel \
-	libmad-devel libpng-devel libsamplerate-devel libsndfile-devel \
-	libtool-ltdl-devel libvorbis-devel opencore-amr-devel \
-	opusfile-devel pulseaudio-libs-devel speex-devel speexdsp-devel \
-	twolame-devel wavpack-devel
-```
-and to run `issues/getissues.sh` and the `makehtml.sh` scripts you will need
-```
-yum install jq multimarkdown
-```
-
-## Accessibility
-
-You can edit and commit to the code and the wiki using Codeberg's web interface
-or from the command-line.
-The command-line is the only way to add images and attachments to the wiki.
-
-The issues can be downloaded as well as uploaded replacing all remote content
-but this risks overwriting changes made via the web interface so for now
-it is recommended to edit them on the Codeberg web site.
-
-## Using DSD Features
-
-### Basic DSD Encoding
-
-Convert PCM to DSD64:
-```bash
-sox_ng input.wav output.dsf rate -v 2822400 sdm -f clans-8
-```
-
-Convert PCM to DSD128:
-```bash
-sox_ng input.wav output.dsf rate -v 5644800 sdm -f clans-7
-```
-
-### Advanced Encoding with Trellis Optimization
-
-For higher quality encoding:
-```bash
-# High-quality encoding with trellis optimization
-sox_ng input.wav output.dsf rate -v 2822400 sdm -f clans-8 -t 32 -n 32
-```
-
-Trellis parameters:
-- `-t N`: Lookahead depth (1-64)
-- `-n N`: Number of trellis nodes (1-32+)
-- `-l N`: Trellis latency in samples (optional)
-
-### Recommended Settings by DSD Rate
-
-| DSD Rate | Sample Rate | Recommended Modulator | Alternative |
-|----------|-------------|----------------------|-------------|
-| DSD64    | 2.8224 MHz  | CLANS-8             | SDM-8       |
-| DSD128   | 5.6448 MHz  | CLANS-7             | SDM-7       |
-| DSD256   | 11.2896 MHz | CLANS-6             | SDM-6       |
-| DSD512   | 22.5792 MHz | CLANS-5             | SDM-5       |
-
-### Format Conversions
-
-DSD to PCM:
-```bash
-sox_ng input.dsf output.wav rate -v 96000 gain +2.5
-```
-
-DSF to DSDIFF:
-```bash
-sox_ng input.dsf output.dff
-```
-
-DSD over PCM (DoP):
-```bash
-sox_ng input.dsf output.dop
-```
-
-### Signal Level Standards
-
-DSD uses different level references than PCM:
-- **0dBDSD**: 50% modulation, equivalent to -6dBFS PCM
-- **+3.1dBDSD**: SACD peak limit (71.43% modulation, -2.9dBFS PCM)
-
-## Community
-
-### Mailing list
-
-* [sox-ng@groups.io](https://groups.io/g/sox-ng)<BR>
-  To subscribe, go there or send an email to
-  [sox-ng+subscribe@groups.io](mailto:sox-ng+subscribe@groups.io)
-
-### Private email
-
-* [sox_ng@fastmail.com](mailto:sox_ng@fastmail.com)
-
-### Finances
-
-* [`SoX_ng`'s financial accounts](Accounting) are public and
-* [Bounties](Bounties) can be offered for specific issues to be resolved
-
-## README and PDFs
-
-To generate SoX's original README, run `./README.sh` or `make README`
-
-To generate the PDF version of the documentation, `make pdf`
+- Original SoX team for the excellent foundation
+- [sox_ng maintainers](https://codeberg.org/sox_ng/sox_ng) for the actively maintained fork
+- The audio engineering community for pushing quality boundaries
+- Flox for reproducible build environments
