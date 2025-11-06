@@ -62,9 +62,9 @@ ffmpeg.priority = 7
 ffmpeg.systems = ["aarch64-darwin", "aarch64-linux"]
 
 
-[build.sox_ng-sinc-linux]
-description = "soxx-sinc: sox_ng with large sinc filter support (up to 1 billion taps); uses familiar 'sox' command"
-version = "14.6.0-sinc"
+[build.sox_ng-linux]
+description = "sox_ng: custom sox_ng with large sinc filter support (up to 1 billion taps); uses familiar 'sox' command, drop-in replacement for legacy sox"
+version = "14.6.0-custom"
 sandbox = "pure"
 command = '''
 set -euo pipefail
@@ -205,9 +205,9 @@ fi
 '''
 
 
-[build.sox_ng-sinc-darwin]
-description = "soxx-sinc: sox_ng with large sinc filter support (up to 1 billion taps)"
-version = "14.6.0-sinc"
+[build.sox_ng-darwin]
+description = "sox_ng: custom sox_ng with large sinc filter support (up to 1 billion taps); uses familiar 'sox' command, drop-in replacement for legacy sox"
+version = "14.6.0-custom"
 command = '''
 set -euo pipefail
 mkdir -p "$out"
