@@ -26,22 +26,51 @@ The computational cost of these extreme filters is substantial—processing time
 - **Base**: Built on sox_ng, the actively maintained fork of SoX
 - **Compatibility**: Functions as a drop-in replacement for standard sox
 
+## Key Features
+
+- **Large Sinc Filters**: Up to ~1 billion taps (1,073,741,823 vs 32,767 standard)
+- **DSD Audio Support**: Native Direct Stream Digital format support (DSF, DSDIFF)
+- **Full Codec Support**: FFmpeg integration for comprehensive format compatibility
+- **Drop-in Replacement**: Binary named `sox` for seamless replacement of legacy SoX
+- **Cross-Platform**: Linux (x86_64, aarch64) and macOS (x86_64, aarch64) support
+- **Reproducible Builds**: Nix flakes with locked dependencies
+
 ## Installation
 
-### Using Flox (Recommended)
+### Using Nix Flakes (Recommended for Nix Users)
+
+```bash
+# Build and run directly from GitHub
+nix run github:barstoolbluz/sox_ng -- --version
+
+# Build locally
+nix build github:barstoolbluz/sox_ng
+./result/bin/sox --version
+
+# Or clone and build
+git clone https://github.com/barstoolbluz/sox_ng.git
+cd sox_ng
+nix build .
+./result/bin/sox --version
+```
+
+### Using Flox (Recommended for Flox Users)
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/sox-sinc.git
-cd sox-sinc
+git clone https://github.com/barstoolbluz/sox_ng.git
+cd sox_ng
 
-# Build with flox
-flox build soxx-sinc-linux  # For Linux
-flox build soxx-sinc-darwin # For macOS
+# Build with Flox (Nix expression - cross-platform)
+flox build sox_ng
+./result-sox_ng/bin/sox --version
 
-# The binaries will be in ./result-soxx-sinc-linux/bin/ or ./result-soxx-sinc-darwin/bin/
-# Optionally, add to your PATH:
-export PATH="$PWD/result-soxx-sinc-linux/bin:$PATH"
+# OR build with manifest (platform-specific)
+flox build sox_ng-linux   # For Linux
+flox build sox_ng-darwin  # For macOS
+
+# Add to your PATH
+export PATH="$PWD/result-sox_ng/bin:$PATH"
 ```
 
 ### Traditional Build
@@ -247,8 +276,9 @@ See [INSTALL](INSTALL) for detailed instructions.
 
 ## Documentation
 
-- [INSANE_RESAMPLING_MODE.md](sox-sinc/INSANE_RESAMPLING_MODE.md) - Detailed parameter guide
+- [EXTREME_RESAMPLING_WITH_SOX_A_GUIDE_FOR_THE_PERPLEXED.md](EXTREME_RESAMPLING_WITH_SOX_A_GUIDE_FOR_THE_PERPLEXED.md) - Detailed parameter guide
 - [LARGE_SINC_FILTERS_IMPLEMENTATION.md](LARGE_SINC_FILTERS_IMPLEMENTATION.md) - Technical implementation details
+- [SOX_DSD_BASICS.md](SOX_DSD_BASICS.md) - DSD encoding primer and usage guide
 - [sox_ng README](https://codeberg.org/sox_ng/sox_ng) - Parent project documentation
 - Original SoX documentation in man pages
 
