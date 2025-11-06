@@ -63,7 +63,7 @@ ffmpeg.systems = ["aarch64-darwin", "aarch64-linux"]
 
 
 [build.sox_ng-sinc-linux]
-description = "soxx-sinc: sox_ng with large sinc filter support (up to 1 billion taps)"
+description = "soxx-sinc: sox_ng with large sinc filter support (up to 1 billion taps); uses familiar 'sox' command"
 version = "14.6.0-sinc"
 sandbox = "pure"
 command = '''
