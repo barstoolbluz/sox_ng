@@ -279,6 +279,7 @@ See [INSTALL](INSTALL) for detailed instructions.
 - [EXTREME_RESAMPLING_WITH_SOX_A_GUIDE_FOR_THE_PERPLEXED.md](EXTREME_RESAMPLING_WITH_SOX_A_GUIDE_FOR_THE_PERPLEXED.md) - Detailed parameter guide
 - [LARGE_SINC_FILTERS_IMPLEMENTATION.md](LARGE_SINC_FILTERS_IMPLEMENTATION.md) - Technical implementation details
 - [SOX_DSD_BASICS.md](SOX_DSD_BASICS.md) - DSD encoding primer and usage guide
+- [UPSTREAM_TRACKING.md](UPSTREAM_TRACKING.md) - Guide for updating from upstream sox_ng releases
 - [sox_ng README](https://codeberg.org/sox_ng/sox_ng) - Parent project documentation
 - Original SoX documentation in man pages
 
