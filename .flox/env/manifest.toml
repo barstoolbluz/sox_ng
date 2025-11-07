@@ -367,12 +367,13 @@ if [ -L soxi_ng ]; then
 fi
 '''
 
-[profile.common]
+[profile]
+common = '''
 # ═══════════════════════════════════════════════════════════════════════════
 # Publishing Helper Functions for sox_ng
 # ═══════════════════════════════════════════════════════════════════════════
 # Usage: flox activate, then run these functions interactively
-# 
+#
 # Quick start:
 #   list_publishable              - Show what can be published
 #   check_publish_ready           - Pre-flight validation
@@ -687,3 +688,4 @@ sox_publish_help() {
 echo ""
 echo "sox_ng publishing helpers loaded. Type 'sox_publish_help' for usage."
 echo ""
+'''
