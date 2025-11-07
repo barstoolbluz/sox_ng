@@ -321,6 +321,107 @@ The workflow has been successfully tested with an update from 14.6.0.2 → 14.6.
 4. ✅ All patches verified working
 5. ✅ Committed and documented
 
+## Post-Update Verification Checklist
+
+After updating to a new version, verify everything works correctly:
+
+### 1. Source Files Check (Should Remain UNPATCHED)
+```bash
+# FFT4G_MAX_SIZE should be 262144 (not 1073741824)
+grep "FFT4G_MAX_SIZE" src/fft4g.h
+# Should show: #define FFT4G_MAX_SIZE 262144
+
+# ip array should be 256 (not 16384)
+grep "int j, j1, k, k1, l, m, m2, ip\[" src/fft4g.c | head -1
+# Should show: ip[256]
+
+# sinc taps should be 32767 (not 1073741823)
+grep "GETOPT.*'n'.*taps.*32767" src/sinc.c
+# Should show: ...32767
+
+# Version should match new upstream version
+grep "AC_INIT" configure.ac
+# Should show: AC_INIT([sox_ng], [14.6.X], ...)
+```
+
+### 2. Nix Expression Check (Should Have PATCHES)
+```bash
+# Version should match with -custom suffix
+grep "version =" .flox/pkgs/sox_ng.nix | head -1
+# Should show: version = "14.6.X-custom"
+
+# Patches should be present
+grep "1073741824" .flox/pkgs/sox_ng.nix  # FFT4G patch
+grep "ip\[16384\]" .flox/pkgs/sox_ng.nix  # ip array patch
+grep "1073741823" .flox/pkgs/sox_ng.nix  # sinc taps patch
+# All three should return results
+```
+
+### 3. Build Check
+```bash
+# Both build methods should work
+flox build sox_ng
+nix --extra-experimental-features 'nix-command flakes' build .
+
+# Check outputs exist
+ls result-sox_ng/bin/sox
+ls result/bin/sox
+```
+
+### 4. Binary Verification
+```bash
+# Version should show new upstream version
+./result-sox_ng/bin/sox --version
+# Should show: SoX_ng v14.6.X
+
+# Binary should be named 'sox' not 'sox_ng'
+ls result-sox_ng/bin/
+# Should show: play, rec, sox, soxi (NOT sox_ng)
+
+# Symlinks should work
+./result-sox_ng/bin/play --version
+./result-sox_ng/bin/rec --version
+```
+
+### 5. Functionality Verification
+```bash
+# Test audio processing works
+./result-sox_ng/bin/sox -n test.flac synth 1 sine 440
+ls -lh test.flac
+# Should show file created
+
+# Test large sinc filter (50k taps)
+./result-sox_ng/bin/sox test.flac out1.flac sinc -n 50000 -20000
+ls -lh out1.flac
+# Should complete without errors
+
+# Test very large sinc filter (500k taps)
+./result-sox_ng/bin/sox test.flac out2.flac sinc -n 500000 -20000
+ls -lh out2.flac
+# Should complete without errors (may take time)
+
+# Test limit boundary (should fail with correct error)
+./result-sox_ng/bin/sox test.flac out3.flac sinc -n 1073741824 -20000 2>&1 | grep "must be"
+# Should show: parameter `taps' must be from 11 to 1.07374e+09
+
+# Cleanup
+rm test.flac out1.flac out2.flac
+```
+
+### 6. Git Status Check
+```bash
+# Review what changed
+git status
+git diff --cached --stat
+
+# Commit should include source updates and Nix expression version bump
+git log -1 --stat
+```
+
+## Quick Reference
+
+For a condensed, copy-paste-friendly update guide, see [QUICK_UPDATE_GUIDE.md](QUICK_UPDATE_GUIDE.md).
+
 ## Next Steps for Future Updates
 
 1. Monitor upstream for new releases (check every 3-6 months)
