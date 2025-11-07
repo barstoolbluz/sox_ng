@@ -280,6 +280,7 @@ See [INSTALL](INSTALL) for detailed instructions.
 - [QUICK_UPDATE_GUIDE.md](QUICK_UPDATE_GUIDE.md) - **Fast reference for updating to new sox_ng versions**
 - [UPSTREAM_TRACKING.md](UPSTREAM_TRACKING.md) - Detailed guide for tracking upstream sox_ng releases
 - [BUILDING_INTERMEDIATE_VERSIONS.md](BUILDING_INTERMEDIATE_VERSIONS.md) - How to build and test multiple versions
+- [PUBLISHING_GUIDE.md](PUBLISHING_GUIDE.md) - Publishing packages to Flox catalogs
 
 ### Usage & Parameters
 - [EXTREME_RESAMPLING_WITH_SOX_A_GUIDE_FOR_THE_PERPLEXED.md](EXTREME_RESAMPLING_WITH_SOX_A_GUIDE_FOR_THE_PERPLEXED.md) - Detailed parameter guide

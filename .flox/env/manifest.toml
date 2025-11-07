@@ -64,7 +64,7 @@ ffmpeg.systems = ["aarch64-darwin", "aarch64-linux"]
 
 [build.sox_ng-linux]
 description = "sox_ng: custom sox_ng with large sinc filter support (up to 1 billion taps); uses familiar 'sox' command, drop-in replacement for legacy sox"
-version = "14.6.0-custom"
+version = "14.6.1.2-custom"
 sandbox = "pure"
 command = '''
 set -euo pipefail
@@ -207,7 +207,7 @@ fi
 
 [build.sox_ng-darwin]
 description = "sox_ng: custom sox_ng with large sinc filter support (up to 1 billion taps); uses familiar 'sox' command, drop-in replacement for legacy sox"
-version = "14.6.0-custom"
+version = "14.6.1.2-custom"
 command = '''
 set -euo pipefail
 mkdir -p "$out"
@@ -366,3 +366,324 @@ if [ -L soxi_ng ]; then
     ln -s sox soxi
 fi
 '''
+
+[profile.common]
+# ═══════════════════════════════════════════════════════════════════════════
+# Publishing Helper Functions for sox_ng
+# ═══════════════════════════════════════════════════════════════════════════
+# Usage: flox activate, then run these functions interactively
+# 
+# Quick start:
+#   list_publishable              - Show what can be published
+#   check_publish_ready           - Pre-flight validation
+#   publish_sox <org> <package>   - Publish to organization
+#   publish_to_flox <package>     - Quick shortcut for flox org
+# ═══════════════════════════════════════════════════════════════════════════
+
+# List all publishable packages with versions
+list_publishable() {
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "Publishable sox_ng Packages"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  echo "Manifest Builds (platform-specific):"
+  echo "  • sox_ng-linux  (14.6.1.2-custom) - Linux x86_64/aarch64"
+  echo "  • sox_ng-darwin (14.6.1.2-custom) - macOS x86_64/aarch64"
+  echo ""
+  echo "Nix Expression Build (cross-platform):"
+  echo "  • sox_ng        (14.6.1.2-custom) - Via .flox/pkgs/sox_ng.nix"
+  echo ""
+  echo "Usage:"
+  echo "  publish_sox <org> <package>     - Publish to specified org"
+  echo "  publish_to_flox <package>       - Publish to flox org"
+  echo "  publish_all <org>               - Publish all three packages"
+  echo ""
+  echo "Examples:"
+  echo "  publish_sox barstoolbluz sox_ng-linux"
+  echo "  publish_to_flox sox_ng"
+  echo "  publish_all barstoolbluz"
+  echo "═══════════════════════════════════════════════════════════════"
+}
+
+# Check if environment is ready for publishing
+check_publish_ready() {
+  local ready=0
+  
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "Pre-Publish Validation"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  
+  # Check git status
+  if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+    echo "✗ Git status: Uncommitted changes detected"
+    echo "  → Commit and push all changes before publishing"
+    ready=1
+  else
+    echo "✓ Git status: Clean working tree"
+  fi
+  
+  # Check if latest commit is pushed
+  local unpushed=$(git log @{u}.. --oneline 2>/dev/null | wc -l)
+  if [ "$unpushed" -gt 0 ]; then
+    echo "✗ Commits: $unpushed unpushed commit(s)"
+    echo "  → Run: git push origin main"
+    ready=1
+  else
+    echo "✓ Commits: All pushed to remote"
+  fi
+  
+  # Check versions are synchronized
+  local src_ver=$(grep "AC_INIT" configure.ac 2>/dev/null | grep -oP '\[\K[0-9.]+' | head -1)
+  local nix_ver=$(grep 'version = ' .flox/pkgs/sox_ng.nix 2>/dev/null | head -1 | grep -oP '"\K[^"]+')
+  local manifest_ver=$(grep 'version = "14' .flox/env/manifest.toml 2>/dev/null | head -1 | grep -oP '"\K[^"]+')
+  
+  if [ "$src_ver" = "14.6.1.2" ] && [ "$nix_ver" = "14.6.1.2-custom" ] && [ "$manifest_ver" = "14.6.1.2-custom" ]; then
+    echo "✓ Versions: Synchronized (14.6.1.2-custom)"
+  else
+    echo "✗ Versions: Mismatch detected"
+    echo "  Source: $src_ver"
+    echo "  Nix:    $nix_ver"
+    echo "  Manifest: $manifest_ver"
+    ready=1
+  fi
+  
+  # Check authentication (best effort)
+  if ! flox whoami >/dev/null 2>&1; then
+    echo "⚠ Auth: Not logged in"
+    echo "  → Run: flox auth login"
+    ready=1
+  else
+    local user=$(flox whoami 2>/dev/null)
+    echo "✓ Auth: Logged in as $user"
+  fi
+  
+  echo ""
+  if [ $ready -eq 0 ]; then
+    echo "✓ Ready to publish!"
+    return 0
+  else
+    echo "✗ Not ready - resolve issues above first"
+    return 1
+  fi
+}
+
+# Main publishing function
+# Usage: publish_sox <org> <package>
+# Example: publish_sox barstoolbluz sox_ng-linux
+publish_sox() {
+  local org="${1:-}"
+  local package="${2:-}"
+  
+  # Validate arguments
+  if [ -z "$org" ]; then
+    echo "Error: Organization not specified"
+    echo ""
+    echo "Usage: publish_sox <org> <package>"
+    echo ""
+    echo "Examples:"
+    echo "  publish_sox barstoolbluz sox_ng-linux"
+    echo "  publish_sox flox sox_ng-darwin"
+    echo "  publish_sox myorg sox_ng"
+    echo ""
+    echo "Available packages:"
+    echo "  sox_ng-linux, sox_ng-darwin, sox_ng"
+    return 1
+  fi
+  
+  if [ -z "$package" ]; then
+    echo "Error: Package not specified"
+    echo ""
+    echo "Usage: publish_sox <org> <package>"
+    echo ""
+    list_publishable
+    return 1
+  fi
+  
+  # Validate package name
+  case "$package" in
+    sox_ng-linux|sox_ng-darwin|sox_ng)
+      : # valid
+      ;;
+    *)
+      echo "Error: Unknown package '$package'"
+      echo ""
+      echo "Valid packages: sox_ng-linux, sox_ng-darwin, sox_ng"
+      return 1
+      ;;
+  esac
+  
+  # Run pre-flight checks
+  echo "Running pre-flight checks..."
+  echo ""
+  if ! check_publish_ready; then
+    echo ""
+    echo "Aborting publish. Fix issues above first."
+    return 1
+  fi
+  
+  # Confirm with user
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "Ready to Publish"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "  Package:      $package"
+  echo "  Organization: $org"
+  echo "  Result:       $org/$package"
+  echo ""
+  read -p "Proceed with publish? [y/N] " -n 1 -r
+  echo ""
+  
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Publish cancelled."
+    return 1
+  fi
+  
+  echo ""
+  echo "Publishing $package to organization: $org"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  
+  # Execute publish
+  if flox publish -o "$org" "$package"; then
+    echo ""
+    echo "✓ Successfully published!"
+    echo ""
+    echo "Package available as: $org/$package"
+    echo ""
+    echo "Install with: flox install $org/$package"
+  else
+    echo ""
+    echo "✗ Publish failed. Check errors above."
+    return 1
+  fi
+}
+
+# Quick shortcut to publish to flox organization
+# Usage: publish_to_flox <package>
+# Example: publish_to_flox sox_ng-linux
+publish_to_flox() {
+  local package="${1:-}"
+  
+  if [ -z "$package" ]; then
+    echo "Error: Package not specified"
+    echo ""
+    echo "Usage: publish_to_flox <package>"
+    echo ""
+    echo "Examples:"
+    echo "  publish_to_flox sox_ng-linux"
+    echo "  publish_to_flox sox_ng-darwin"
+    echo "  publish_to_flox sox_ng"
+    return 1
+  fi
+  
+  publish_sox "flox" "$package"
+}
+
+# Publish all three packages to specified organization
+# Usage: publish_all <org>
+# Example: publish_all barstoolbluz
+publish_all() {
+  local org="${1:-barstoolbluz}"
+  
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "Publishing All Packages to: $org"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  echo "This will publish:"
+  echo "  1. sox_ng-linux"
+  echo "  2. sox_ng-darwin"
+  echo "  3. sox_ng"
+  echo ""
+  echo "To organization: $org"
+  echo ""
+  read -p "Continue? [y/N] " -n 1 -r
+  echo ""
+  
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Cancelled."
+    return 1
+  fi
+  
+  local packages=("sox_ng-linux" "sox_ng-darwin" "sox_ng")
+  local failed=0
+  
+  for pkg in "${packages[@]}"; do
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    echo "Publishing: $pkg"
+    echo "───────────────────────────────────────────────────────────────"
+    
+    # Non-interactive publish for batch
+    if flox publish -o "$org" "$pkg"; then
+      echo "✓ $pkg published successfully"
+    else
+      echo "✗ $pkg publish failed"
+      failed=$((failed + 1))
+      
+      read -p "Continue with remaining packages? [y/N] " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Stopped at $pkg"
+        return 1
+      fi
+    fi
+  done
+  
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  if [ $failed -eq 0 ]; then
+    echo "✓ All packages published successfully!"
+    echo ""
+    echo "Available as:"
+    echo "  $org/sox_ng-linux"
+    echo "  $org/sox_ng-darwin"
+    echo "  $org/sox_ng"
+  else
+    echo "⚠ Completed with $failed failure(s)"
+  fi
+  echo "═══════════════════════════════════════════════════════════════"
+}
+
+# Show what's currently published (requires catalog search)
+show_published() {
+  local org="${1:-barstoolbluz}"
+  
+  echo "Searching for published sox_ng packages from: $org"
+  echo ""
+  
+  flox search "$org/sox" 2>/dev/null || {
+    echo "No packages found or search unavailable."
+    echo ""
+    echo "Try: flox search $org/"
+  }
+}
+
+# Helper: Show quick usage
+sox_publish_help() {
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "Sox_ng Publishing Helper Functions"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  echo "Available commands:"
+  echo "  list_publishable              - List all publishable packages"
+  echo "  check_publish_ready           - Validate prerequisites"
+  echo "  publish_sox <org> <pkg>       - Publish to organization"
+  echo "  publish_to_flox <pkg>         - Publish to flox org"
+  echo "  publish_all <org>             - Publish all packages"
+  echo "  show_published <org>          - Search published packages"
+  echo "  sox_publish_help              - Show this help"
+  echo ""
+  echo "Quick examples:"
+  echo "  publish_sox barstoolbluz sox_ng-linux"
+  echo "  publish_to_flox sox_ng"
+  echo "  publish_all barstoolbluz"
+  echo ""
+  echo "For details: list_publishable"
+  echo "═══════════════════════════════════════════════════════════════"
+}
+
+# Show help on activation
+echo ""
+echo "sox_ng publishing helpers loaded. Type 'sox_publish_help' for usage."
+echo ""
