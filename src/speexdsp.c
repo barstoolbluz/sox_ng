@@ -51,7 +51,7 @@ static int get_param(
     {
         char* arg_end;
         *pParam = strtoul((*pArgv)[1], &arg_end, 0);
-        if (!arg_end || arg_end[0] || *pParam < min_valid || max_valid <= *pParam)
+        if (!arg_end || arg_end[0] || *pParam < min_valid || max_valid < *pParam)
             return 0;
 
         --*pArgc;
@@ -79,20 +79,20 @@ static int getopts(sox_effect_t* effp, int argc, char** argv)
         {
             /* AGC level argument is optional. If not specified, it defaults to agcDefault.
                If specified, it must be from 0 to 100. */
-            if (!get_param(&argc, &argv, &p->agc, agcDefault, 0, 100))
+            if (!get_param(&argc, &argv, &p->agc, agcDefault, 1, 100))
             {
-                lsx_fail("invalid argument \"%s\" to -agc parameter - expected number from 0 to 100", argv[1]);
-                return lsx_usage(effp);
+                lsx_fail("invalid argument \"%s\" to -agc parameter - expected number from 1 to 100", argv[1]);
+                return SOX_EOF;
             }
         }
         else if (!strcasecmp("-denoise", argv[0]))
         {
             /* Denoise level argument is optional. If not specified, it defaults to denoiseDefault.
-               If specified, it must be from 0 to 100. */
-            if (!get_param(&argc, &argv, &p->denoise, denoiseDefault, 0, 100))
+               If specified, it must be from 1 to 100. */
+            if (!get_param(&argc, &argv, &p->denoise, denoiseDefault, 1, 100))
             {
                 lsx_fail("invalid argument \"%s\" to -denoise parameter - expected number from 0 to 100", argv[1]);
-                return lsx_usage(effp);
+                return SOX_EOF;
             }
         }
         else if (!strcasecmp("-dereverb", argv[0]))
@@ -106,7 +106,7 @@ static int getopts(sox_effect_t* effp, int argc, char** argv)
             if (!get_param(&argc, &argv, &p->samples_per_frame, 0, 1, 1000000000) || !p->samples_per_frame)
             {
                 lsx_fail("invalid argument \"%s\" to -spf parameter - expected positive number", argv[1]);
-                return lsx_usage(effp);
+                return SOX_EOF;
             }
         }
         else if (!strcasecmp("-fps", argv[0]))
@@ -117,13 +117,13 @@ static int getopts(sox_effect_t* effp, int argc, char** argv)
             if (!get_param(&argc, &argv, &p->frames_per_second, 0, 1, 100) || !p->frames_per_second)
             {
                 lsx_fail("invalid argument \"%s\" to -fps parameter - expected number from 1 to 100", argv[1]);
-                return lsx_usage(effp);
+                return SOX_EOF;
             }
         }
         else
         {
             lsx_fail("invalid parameter \"%s\"", argv[0]);
-            return lsx_usage(effp);
+            return SOX_EOF;
         }
     }
 
@@ -324,8 +324,8 @@ const sox_effect_handler_t* lsx_speexdsp_effect_fn(void)
 "Use the Speex DSP library to improve perceived sound quality.",
 "-agc [target_level]    Enable automatic gain control and optionally specify",
 "                       a target volume level from 1-100. The default is 100.",
-"-denoise [max_dB]      Enable noise reduction and optionally specify",
-"                       the maximum attenuation. The default is 15.",
+"-denoise [max_dB]      Enable noise reduction and optionally specify the",
+"                       maximum attenuation from 1 to 100. The default is 15.",
 "-dereverb              Enable reverb reduction.",
 "-fps frames_per_second Specify the number of frames per second from 1-100",
 "                       The default is 20.",

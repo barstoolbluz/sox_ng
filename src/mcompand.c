@@ -490,7 +490,7 @@ static int lsx_kill(sox_effect_t * effp)
 const sox_effect_handler_t *lsx_mcompand_effect_fn(void)
 {
   static const char usage[] =
-    "quoted_compand_args {crossover_frequency[k] quoted_compand_args}";
+    "quoted_compand_args {crossover_frequency quoted_compand_args}";
   static char const * const extra_usage[] = {
     "quoted_compand_args are as for the compand effect:",
     "\"<attack,decay> <in-dB,out-dB> [gain [initial-volume [delay]]]\"",

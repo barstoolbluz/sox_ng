@@ -73,7 +73,7 @@ static int getopts(sox_effect_t * effp, int argc, char *argv[])
     NUMERIC_PARAMETER(delay, 0   , 1000 )
     NUMERIC_PARAMETER(depth, 0   , 1000 )
     NUMERIC_PARAMETER(regen,-100 , 100 )
-    NUMERIC_PARAMETER(width,-100 , 100 )
+    NUMERIC_PARAMETER(width, 0   , INFINITY )
     NUMERIC_PARAMETER(speed, 0   , 192000 )
     TEXTUAL_PARAMETER(wave_shape, lsx_get_wave_enum())
     NUMERIC_PARAMETER(phase, 0   , 100)
@@ -103,7 +103,7 @@ static int getopts(sox_effect_t * effp, int argc, char *argv[])
 
   /* Scale to unity: */
   p->regen /= 100;
-  p->width /= 100;
+  if (isfinite(p->width)) p->width /= 100;
   p->phase /= 100;
   p->delay /= 1000;
   p->depth /= 1000;
@@ -122,8 +122,13 @@ static int start(sox_effect_t * effp)
   lsx_valloc(f->delay_last, channels);
 
   /* Balance output */
-  f->gain_in = 1 / (1 + f->width);
-  f->width  /= 1 + f->width;
+  if (isfinite(f->width)) {
+    f->gain_in = 1 / (1 + f->width);
+    f->width  /= 1 + f->width;
+  } else {
+    f->gain_in = 0;
+    f->width   = 1;
+  }
 
   /* Balance feedback loop */
   f->width *= 1 - fabs(f->regen);
@@ -263,10 +268,10 @@ sox_effect_handler_t const * lsx_flanger_effect_fn(void)
 "delay  0-1000    0    base delay in milliseconds",
 "depth  0-1000    2    added swept delay in milliseconds",
 "regen -100-100   0    percentage regeneration (delayed signal feedback)",
-"width -100-100   71   percentage of delayed signal mixed with original",
+"width   0-inf   71    percentage of delayed signal mixed with original",
 "speed   0-192k  0.5   sweeps per second (no more than the sample rate)",
-"shape    s|t    sine  swept wave shape: sine|triangle",
-"phase   0-100    25   percent phase shift of swept wave in multichannel flange",
+"shape    s|t   sine   swept wave shape: sine|triangle",
+"phase   0-100   25    percent phase shift of swept wave in multichannel flange",
 "                      0 = 100 = same phase on each channel",
 "interp   l|q  linear  delay-line interpolation: linear|quadratic",
     NULL

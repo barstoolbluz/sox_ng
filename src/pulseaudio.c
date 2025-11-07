@@ -38,6 +38,7 @@ static int setup(sox_format_t *ft, int is_input)
   char *app_str;
   char *dev;
   pa_sample_spec spec;
+  pa_channel_map map;
 
   /* Pulseaudio will introduce a 250ms buffer if no buffer_attr is set
      (https://github.com/pulseaudio/pulseaudio/blob/master/src/pulse/stream.c#L1028)
@@ -103,8 +104,10 @@ static int setup(sox_format_t *ft, int is_input)
     lsx_debug("OUTPUT cmd buffer size=%zu, pulseaudio buffer size=%u", sox_globals.bufsiz, buffer_attr.tlength);
   }
 
+  pa_channel_map_init_auto(&map, spec.channels, PA_CHANNEL_MAP_ALSA);
+
   pa->pasp = pa_simple_new(server, "SoX", dir, dev, app_str, &spec,
-                          NULL, &buffer_attr, &error);
+                          &map, &buffer_attr, &error);
 
   if (pa->pasp == NULL)
   {

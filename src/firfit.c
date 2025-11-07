@@ -221,10 +221,16 @@ static int start(sox_effect_t * effp)
 
 sox_effect_handler_t const * lsx_firfit_effect_fn(void)
 {
+  static char const usage[] = "[knots-file|<freq gain>]";
+  static char const * const extra_usage[] = {
+    "No argument or `-' reads freq gain pairs from stdin",
+    NULL
+  };
   static sox_effect_handler_t handler;
   handler = *lsx_dft_filter_effect_fn();
   handler.name = "firfit";
-  handler.usage = "[knots-file|<freq gain>]";
+  handler.usage = usage;
+  handler.extra_usage = extra_usage;
   handler.getopts = create;
   handler.start = start;
   handler.priv_size = sizeof(priv_t);

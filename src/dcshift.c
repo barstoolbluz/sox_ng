@@ -162,9 +162,10 @@ static int sox_dcshift_stop(sox_effect_t * effp)
     return SOX_SUCCESS;
 }
 
-static const char usage[] = "shift [limitergain(none)]";
+static const char usage[] = "shift [limiter-gain(none)]";
 
 static char const * const extra_usage[] = {
+   "shift is in the range -2 to +2;",
    "limitergain should be much less than 1.0 (ie 0.05 or 0.02)",
    "and is only used on peaks to prevent clipping.",
    NULL

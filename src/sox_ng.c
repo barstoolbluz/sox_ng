@@ -21,9 +21,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-/* For S_IFDIR and S_IFMT in C89 you need to */
-/* #define _XOPEN_SOURCE 500 */
-
 #include "soxconfig.h"
 #include "sox_ng.h"
 #include "util.h"
@@ -35,6 +32,10 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <time.h>
+
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
 
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
@@ -93,6 +94,10 @@
 
 #ifdef HAVE_UNISTD_H
   #include <unistd.h>
+#endif
+
+#ifdef HAVE_SYS_IOCTL_H
+  #include <sys/ioctl.h>
 #endif
 
 #ifdef HAVE_GETTIMEOFDAY
@@ -253,12 +258,17 @@ static void cleanup(void)
     if (ofile->ft) {
       if (!success && ofile->ft->io_type == lsx_io_file) {   /* If we failed part way through */
         struct stat st;                  /* writing a normal file, remove it. */
-        if (!lsx_stat(ofile->ft->filename, &st) &&
-            (st.st_mode & S_IFMT) == S_IFREG)
+        if (!lsx_stat(ofile->ft->filename, &st) && S_ISREG(st.st_mode)) {
+          /* Don't assume we can unlink a file before closing it
+	   * 'cos that's not true on Windows. */
+          sox_close(ofile->ft);
           lsx_unlink(ofile->ft->filename);
+          goto already_closed;
+        }
       }
-      sox_close(ofile->ft); /* Assume we can unlink a file before closing it. */
+      sox_close(ofile->ft);
     }
+already_closed:
     free(ofile->filename);
     free(ofile);
   }
@@ -1037,7 +1047,14 @@ static void create_user_effects(void)
   }
 
   for (i = 0; i < num_effects; i++) {
-    effp = sox_create_effect(sox_find_effect(user_effargs[current_eff_chain][i].name));
+    sox_effect_handler_t const *handler =
+        sox_find_effect(user_effargs[current_eff_chain][i].name);
+    if (!handler) {
+      lsx_fail("can't find an effect called `%s'",
+               user_effargs[current_eff_chain][i].name);
+      exit(1);
+    }
+    effp = sox_create_effect(handler);
 
     if (effp->handler.flags & SOX_EFF_INTERNAL) {
       lsx_fail("`%s' is a libSoX-only effect", effp->handler.name);
@@ -1218,6 +1235,18 @@ static sox_bool since(struct timeval * then, double secs, sox_bool always_reset)
   return ret;
 }
 
+static unsigned termwidth = 80;
+
+#ifdef TIOCGWINSZ
+static void get_termwidth(int s UNUSED)
+{
+  struct winsize w;
+
+  if (!ioctl(2, TIOCGWINSZ, &w))
+    termwidth = w.ws_col;
+}
+#endif
+
 #define MIN_HEADROOM 6.
 static double min_headroom = MIN_HEADROOM;
 
@@ -1269,16 +1298,19 @@ static void display_status(sox_bool all_done)
   if (all_done || since(&then, .1, sox_false)) {
     double read_time = (double)read_wide_samples / combiner_signal.rate;
     double left_time = 0, in_time = 0, percentage = 0;
+    char buf[128];
 
     if (input_wide_samples) {
       in_time = (double)input_wide_samples / combiner_signal.rate;
       left_time = max(in_time - read_time, 0);
       percentage = max(100. * read_wide_samples / input_wide_samples, 0);
     }
-    fprintf(stderr, "\rIn:%-5s %s [%s] Out:%-5s [%6s|%-6s] %s Clip:%-5s",
+    snprintf(buf, min(termwidth + 2, sizeof(buf)),
+      "\rIn:%-5s %s [%s] Out:%-5s [%6s|%-6s] %s Clip:%-5s",
       lsx_sigfigs3p(percentage), str_time(read_time), str_time(left_time),
       lsx_sigfigs3((double)output_samples),
       vu(0), vu(1), headroom(), lsx_sigfigs3((double)total_clips()));
+    fputs(buf, stderr);
   }
   if (all_done)
     fputc('\n', stderr);
@@ -1300,16 +1332,11 @@ static int kbhit(void)
 #define kbhit() 0
 #endif
 
-#if defined(HAVE_SOUNDCARD_H) || defined(HAVE_AUDIOIO_H)
-# include <sys/ioctl.h>
-#endif
-
 #ifdef HAVE_SOUNDCARD_H
 static void adjust_volume(int delta)
 {
   char * from_env;
 
-  fprintf(stderr, "Soundcard volume\n");
   if (lsx_adjust_softvol(delta) == SOX_SUCCESS) return;
   from_env = getenv("MIXERDEV");
   int vol1 = 0, vol2 = 0, fd = open(from_env? from_env : "/dev/mixer", O_RDWR);
@@ -1332,7 +1359,6 @@ static void adjust_volume(int delta)
 static void adjust_volume(int delta)
 {
   int vol1 = 0, vol2 = 0, fd = fileno((FILE*)ofile->ft->fp);
-  fprintf(stderr, "Audioio volume\n");
   if (lsx_adjust_softvol(delta) == SOX_SUCCESS) return;
   if (fd >= 0) {
     audio_info_t audio_info;
@@ -1353,7 +1379,6 @@ static void adjust_volume(int delta)
 #else
 static void adjust_volume(int delta)
 {
-  fprintf(stderr, "Fallback volume\n");
   if (lsx_adjust_softvol(delta))
     putc('\a', stderr);
 }
@@ -1591,13 +1616,28 @@ static void open_output_file(void)
   report_file_info(ofile);
 }
 
+static void setsig(int sig, void (*handler)(int))
+{
+#ifdef HAVE_SIGACTION
+  struct sigaction sa;
+
+  sa.sa_handler = handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+
+  sigaction(sig, &sa, NULL);
+#else
+  signal(sig, handler);
+#endif
+}
+
 static void sigint(int s)
 {
   static struct timeval then;
   if (input_count > 1 && show_progress && s == SIGINT &&
       is_serial(combine_method) && since(&then, 1.0, sox_true))
   {
-    signal(SIGINT, sigint);
+    setsig(SIGINT, sigint);
     user_skip = sox_true;
   }
   else user_abort = sox_true;
@@ -1819,8 +1859,15 @@ static int process(void)
   }
 #endif
 
-  signal(SIGTERM, sigint); /* Stop gracefully, as soon as we possibly can. */
-  signal(SIGINT , sigint); /* Either skip current input or behave as SIGTERM. */
+#ifdef TIOCGWINSZ
+  get_termwidth(0);
+#ifdef SIGWINCH
+  setsig(SIGWINCH, get_termwidth);
+#endif
+#endif
+
+  setsig(SIGTERM, sigint); /* Stop gracefully, as soon as we possibly can. */
+  setsig(SIGINT , sigint); /* Either skip current input or behave as SIGTERM. */
   if (very_first_effchain) {
     struct timeval now;
     double d;
@@ -1929,7 +1976,7 @@ static void display_supported_effects(void)
     if (e && e->name)
       printf(" %s%s", e->name, (e->flags & SOX_EFF_INTERNAL)? "#" : "");
   }
-  puts("\n  # LibSoX-only effect");
+  putchar('\n');
 }
 
 static void usage(void)
@@ -2413,8 +2460,10 @@ static char parse_gopts_and_fopts(file_t * f)
           lsx_warn("this build of SoX does not include `magic'");
         break;
       case 21: play_rate_arg = lsx_strdup(optstate.arg);
-               if (play_rate_arg[0] != '-')
+               if (play_rate_arg[0] != '-') {
                    lsx_fail("--play-rate-arg must begin with `-')");
+                   exit(1);
+               }
                break;
       case 22: no_clobber = sox_false; break;
       case 23: no_clobber = sox_true; break;
@@ -2600,6 +2649,11 @@ static char const * set_default_device(file_t * f)
 {
   /* Default audio driver type in order of preference: */
   if (!f->filetype) f->filetype = getenv("AUDIODRIVER");
+/* On Windows the only available audio driver is waveaudio
+ * but it is not autodetected so force it */
+#ifdef _WIN32
+  f->filetype = "waveaudio";
+#else
   if (!f->filetype) f->filetype = try_device("coreaudio");
   if (!f->filetype) f->filetype = try_device("pulseaudio");
   if (!f->filetype) f->filetype = try_device("alsa");
@@ -2609,6 +2663,7 @@ static char const * set_default_device(file_t * f)
   if (!f->filetype) f->filetype = try_device("sunau");
   if (!f->filetype && file_count) /*!rec*/
     f->filetype = try_device("ao");
+#endif
 
   if (!f->filetype) {
     lsx_fail("sorry, there is no default audio device configured");
@@ -2892,7 +2947,7 @@ static sox_bool cmp_comment_text(char const * c1, char const * c2)
   return c1 && c2 && !strcasecmp(c1, c2);
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 static int sox_main(int argc, char **argv)
 #else
 int main(int argc, char **argv)
@@ -2979,7 +3034,7 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  signal(SIGINT, SIG_IGN); /* So child pipes aren't killed by track skip */
+  setsig(SIGINT, SIG_IGN); /* So child pipes aren't killed by track skip */
   for (i = 0; i < input_count; i++) {
     size_t j = input_count - 1 - i; /* Open in reverse order 'cos of rec (below) */
     file_t * f = files[j];
@@ -3026,9 +3081,9 @@ int main(int argc, char **argv)
   for (i = 0; i < input_count; i++)
     set_replay_gain(files[i]->ft->oob.comments, files[i]);
 
-  signal(SIGINT, SIG_DFL);
+  setsig(SIGINT, SIG_DFL);
 #ifndef _WIN32
-  signal(SIGPIPE, SIG_IGN);
+  setsig(SIGPIPE, SIG_IGN);
 #endif
 
   /* Loop through the rest of the arguments looking for effects */
@@ -3114,7 +3169,7 @@ int main(int argc, char **argv)
   return 0;
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 
 #include <windows.h>
 

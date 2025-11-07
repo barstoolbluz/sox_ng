@@ -18,6 +18,8 @@
 #include "sox_i.h"
 #include "dft_filter.h"
 
+#include <ctype.h>  /* for isdigit() */
+
 typedef struct {
   dft_filter_priv_t  base;
   double             att, beta, phase, Fc0, Fc1, tbw0, tbw1;
@@ -31,6 +33,7 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   dft_filter_priv_t * b = &p->base;
   char * parse_ptr = argv[0];
   int i = 0;
+
   lsx_getopt_t optstate;
   lsx_getopt_init(argc, argv, "+ra:b:p:MILt:n:", NULL, lsx_getopt_flag_none, 1, &optstate);
 
@@ -39,23 +42,77 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   p->beta = -1;
   while (i < 2) {
     int c = 1;
-    while (c && (c = lsx_getopt(&optstate)) != -1) switch (c) {
-      char * parse_ptr2;
+    while (c && (c = lsx_getopt(&optstate)) != -1) {
+      /* Make error messages say "`att' must be from X to Y"
+       * instead of "`p->att' must be from X to Y"
+       * or "`p->num_taps[1]' must be from X to Y"
+       */
+      double att = p->att, beta = p->beta, phase=p->phase;
+      int taps = p->num_taps[1];
+
+      switch (c) {
+        char * parse_ptr2;
       case 'r': p->round = sox_true; break;
-      GETOPT_NUMERIC(optstate, 'a', att,  40 , 180)
-      GETOPT_NUMERIC(optstate, 'b', beta,  0 , 256)
-      GETOPT_NUMERIC(optstate, 'p', phase, 0, 100)
-      case 'M': p->phase =  0; break;
-      case 'I': p->phase = 25; break;
-      case 'L': p->phase = 50; break;
-      GETOPT_NUMERIC(optstate, 'n', num_taps[1], 11, 32767)
+      GETOPT_LOCAL_NUMERIC(optstate, 'a', att,  40 , 180)
+      GETOPT_LOCAL_NUMERIC(optstate, 'b', beta,  0 , 256)
+      GETOPT_LOCAL_NUMERIC(optstate, 'p', phase, 0, 100)
+      case 'M': phase =  0; break;
+      case 'I': phase = 25; break;
+      case 'L': phase = 50; break;
+      GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 32767)
       case 't': p->tbw1 = lsx_parse_frequency(optstate.arg, &parse_ptr2);
-        if (p->tbw1 < 1 || *parse_ptr2) return lsx_usage(effp);
+        if (p->tbw1 < 1) {
+          lsx_fail("transition bandwidth must be 1 Hz or more");
+          return SOX_EOF;
+        }
+        if (*parse_ptr2) {
+          lsx_fail("don't understand `%s' after -t", parse_ptr2);
+          return SOX_EOF;
+        }
         break;
-      default: c = 0;
+      case '?': case ':':
+        if (optstate.ind < argc) {
+	  /* '-' and more than one character or something that doesn't
+	   * start with '-' (which should be a frequency range).
+	   + optstate.ind is left indexing the unrecognized option.
+	   */
+	  if (argv[optstate.ind][0] == '-') {
+	    char c1 = argv[optstate.ind][1];
+	    if (isdigit(c1) || c1 == '%' || (c1 >= 'A' && c1 <= 'G'))
+	      /* "-1000" or "-A4" or "-%[0-9.]*" or "-%-[0-9.]*" */
+              goto endwhile;
+	  }
+	}
+        if (optstate.ind > argc) {
+          /* Missing obligatory parameter */
+          lsx_fail("%s requires an argument", argv[optstate.ind - 2]);
+          return SOX_EOF;
+        }
+        if (isdigit(argv[optstate.ind - 1][1])) {
+          /* -1 to -9: optstate.ind advances for an unknown single-char flag */
+	  /* Not sure what -0 is supposed to mean - it gives silence */
+          optstate.ind--;
+          goto endwhile;
+        }
+        /* Invalid option flag */
+        lsx_fail("unknown option `-%c'", optstate.opt);
+	return lsx_usage(effp);
+
+      default: goto endwhile; /* Alas, poor "break" */
+      }
+      p->att = att; p->beta = beta; p->phase = phase;
+      p->num_taps[1] = taps;
     }
-    if ((p->att && p->beta >= 0) || (p->tbw1 && p->num_taps[1]))
-      return lsx_usage(effp);
+endwhile: /* Alas, poor "break" */
+
+    if (p->att && p->beta >= 0) {
+      lsx_fail("You can only give one of -a and -b");
+      return SOX_EOF;
+    }
+    if (p->tbw1 && p->num_taps[1]) {
+      lsx_fail("you can only give one of -t and -n");
+      return SOX_EOF;
+    }
     if (!i || !p->Fc1)
       p->tbw0 = p->tbw1, p->num_taps[0] = p->num_taps[1];
     if (!i++ && optstate.ind < argc) {
@@ -65,8 +122,28 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
         p->Fc1 = lsx_parse_frequency(parse_ptr + 1, &parse_ptr);
     }
   }
-  return optstate.ind != argc || p->Fc0 < 0 || p->Fc1 < 0 || *parse_ptr ?
-      lsx_usage(effp) : SOX_SUCCESS;
+  if (optstate.ind != argc) {
+    lsx_fail("extra parameter `%s' not understood", argv[optstate.ind]);
+    return SOX_EOF;
+  }
+  if (p->Fc0 < 0 && p->Fc1 < 0) {
+    lsx_fail("missing frequency range");
+    return SOX_EOF;
+  }
+  if (p->Fc0 < 0 || p->Fc1 < 0) {
+    lsx_fail("invalid frequency range");
+    return SOX_EOF;
+  }
+  if (*parse_ptr) {
+    /* If nothing has been parsed with it, it's still pointing at "sinc" */
+    if (parse_ptr == argv[0])
+      lsx_fail("no frequency range was given");
+    /* Otherwise the parsing of a low or high frequency failed */
+    else lsx_fail("invalid frequency scalar `%s'", parse_ptr);
+    return SOX_EOF;
+  }
+
+  return SOX_SUCCESS;
 }
 
 static void invert(double * h, int n)
@@ -143,12 +220,32 @@ static int start(sox_effect_t * effp)
   return lsx_dft_filter_effect_fn()->start(effp);
 }
 
+static char const usage[] = "[-a att|-b beta] [-p phase|-M|-I|-L] [-t tbw|-n taps] [freqHP][-freqLP [-t tbw|-n taps]] [-r] [-d]";
+
+static char const * const extra_usage[] = {
+  "OPTION   RANGE    DEFAULT  DESCRIPTION",
+  "-a att   40-180     120    Stop band attentuation in dB",
+  "-b beta   0-256  variable  Kaiser window's `beta' parameter",
+  "-p phase  0-100      50    Phase response: 0=minimum, 25=intermediate",
+  "                                          50=linear, 100=maximum",
+  "-M/-I/-L                   Phase response: minimum/intermediate/linear",
+  "-t tbw    1-      5% band  Transition bandwidth",
+  "-n taps  11-32767  varies  Number of filter taps",
+  "freq(s): 3k=high-pass; -4k=low-pass; 3k-4k=band-pass; 4k-3k=band-reject",
+  "-t or -n before frequency range applies to both; after only affects freqLP",
+
+  "-r  Round `taps' to the closest integer instead of the next lower one",
+  "-d  If a low-pass filter's frequency is Nyquist or above, copy, don't fail",
+  NULL
+};
+
 sox_effect_handler_t const * lsx_sinc_effect_fn(void)
 {
   static sox_effect_handler_t handler;
   handler = *lsx_dft_filter_effect_fn();
   handler.name = "sinc";
-  handler.usage = "[-a att|-b beta] [-p phase|-M|-I|-L] [-t tbw|-n taps] [freqHP][-freqLP [-t tbw|-n taps]]";
+  handler.usage = usage;
+  handler.extra_usage = extra_usage;
   handler.getopts = create;
   handler.start = start;
   handler.priv_size = sizeof(priv_t);

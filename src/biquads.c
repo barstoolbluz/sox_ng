@@ -395,11 +395,30 @@ static int start(sox_effect_t * effp)
 #define BIQUAD_EFFECT(name,group,usage,flags) \
 sox_effect_handler_t const * lsx_##name##_effect_fn(void) { \
   static sox_effect_handler_t handler = { \
-    #name, usage, NULL, flags, \
+    #name, usage, name##_extra, flags, \
     group##_getopts, start, lsx_biquad_flow, 0, 0, 0, sizeof(biquad_t)\
   }; \
   return &handler; \
 }
+
+/* Extra usage for all effects */
+
+static char const one_two[] =
+  "-1/-2  Use a 1-pole or 2-pole filter instead of width";
+
+static char const * const highpass_extra[] = { NULL };
+static char const * const lowpass_extra[] = { one_two, NULL };
+static char const * const bandpass_extra[] = {
+  "-c  Use a constant skirt gain instead of a constant 0dB peak gain", NULL };
+static char const * const bandreject_extra[] = { NULL };
+static char const * const allpass_extra[] = { one_two, NULL };
+static char const * const bass_extra[] = { NULL };
+static char const * const treble_extra[] = {NULL };
+static char const * const equalizer_extra[] = { NULL };
+static char const * const band_extra[] = {
+  "-n  Use alternate mode for unpitched audio, with 11dB gain", NULL };
+static char const * const deemph_extra[] = { NULL };
+static char const * const riaa_extra[] = { NULL };
 
 BIQUAD_EFFECT(highpass,  hilo2,    "[-1|-2] frequency [width[q|o|h|k](0.707q)]", 0)
 BIQUAD_EFFECT(lowpass,   hilo2,    "[-1|-2] frequency [width[q|o|h|k]](0.707q)", 0)

@@ -57,6 +57,9 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
     d += p->colour;
     d = d < -1? -2./3 : d > 1? 2./3 : d - d * d * d * (1./3);
     p->last_out = d - p->last_in + .995 * p->last_out;
+    /* Denormalized floating point values run between 7 and 113 times slower
+     * on some CPUs so blat them to zero. */
+    if (!isnormal(p->last_out)) p->last_out = 0;
     p->last_in = d;
     *obuf++ = SOX_FLOAT_64BIT_TO_SAMPLE(d0 * .5 + p->last_out * .75, dummy);
   }
@@ -66,7 +69,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
 sox_effect_handler_t const * lsx_overdrive_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "overdrive", "[gain [colour]]", NULL,
+    "overdrive", "[gain(20) [colour(20)]]", NULL,
     SOX_EFF_GAIN, create, start, flow, NULL, NULL, NULL, sizeof(priv_t)};
   return &handler;
 }

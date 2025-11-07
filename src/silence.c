@@ -686,9 +686,15 @@ static int lsx_kill(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
+static char const usage[] = 
+  "[-l] above_periods [duration threshold[d|%]] [below_periods duration threshold[d|%]]";
+static char const * const extra_usage[] = {
+  "-l  Leave below_periods of silence at the start of each silent period",
+  NULL
+};
 static sox_effect_handler_t sox_silence_effect = {
   "silence",
-  "[-l] above_periods [duration threshold[d|%]] [below_periods duration threshold[d|%]]", NULL,
+  usage, extra_usage,
   SOX_EFF_MCHAN | SOX_EFF_MODIFY | SOX_EFF_LENGTH,
   sox_silence_getopts,
   sox_silence_start,

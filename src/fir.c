@@ -97,7 +97,7 @@ sox_effect_handler_t const * lsx_fir_effect_fn(void)
   static sox_effect_handler_t handler;
   handler = *lsx_dft_filter_effect_fn();
   handler.name = "fir";
-  handler.usage = "[coef-file|coefs]";
+  handler.usage = "[coefs-file | coef <coef>]";
   handler.getopts = create;
   handler.start = start;
   handler.priv_size = sizeof(priv_t);

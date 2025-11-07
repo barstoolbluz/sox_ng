@@ -190,9 +190,16 @@ static int lsx_kill(sox_effect_t UNUSED * effp)
  */
 const sox_effect_handler_t *lsx_softvol_effect_fn(void)
 {
-  static const char usage[] = "[volume [double-time [headroom]]]";
+  static char const usage[] = "[volume [double-time [headroom]]]";
+  static char const * const extra_usage[] = {
+    "OPTION  RANGE  DEFAULT  DESCRIPTION",
+    "volume    0-     1.0    Set the initial volume multiplier",
+    "2bl-time  0-      0     In how many seconds the volume should double",
+    "headroom  0-      0     Limit the maximum output in dB below full range",
+    NULL
+  };
   static sox_effect_handler_t handler = {
-    "softvol", usage, NULL, SOX_EFF_MCHAN | SOX_EFF_GAIN,
+    "softvol", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_GAIN,
     getopts, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
   };
   return &handler;

@@ -222,7 +222,7 @@ static int stop(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   if (p->do_scan)
-    fclose(p->tmp_file); /* auto-deleted by lsx_tmpfile */
+    lsx_close_tmpfile(p->tmp_file);
   return SOX_SUCCESS;
 }
 
@@ -269,9 +269,14 @@ static int norm_getopts(sox_effect_t * effp, int argc, char * * argv)
 sox_effect_handler_t const * lsx_norm_effect_fn(void)
 {
   static sox_effect_handler_t handler;
+  static char const * const extra_usage[] = {
+    "level is in dB with respect to 0dB, usually negative",
+    NULL
+  };
   handler = *lsx_gain_effect_fn();
   handler.name = "norm";
-  handler.usage = "[level]";
+  handler.usage = "[level(0)]";
+  handler.extra_usage = extra_usage;
   handler.getopts = norm_getopts;
   return &handler;
 }

@@ -204,7 +204,7 @@ static int lsx_kill(sox_effect_t * effp)
 
 sox_effect_handler_t const * lsx_pad_effect_fn(void)
 {
-  static const char usage[] = "{length[@position]}";
+  static const char usage[] = "{[%]length[@position]}";
   static sox_effect_handler_t handler = {
     "pad", usage, NULL, SOX_EFF_MCHAN|SOX_EFF_LENGTH|SOX_EFF_MODIFY,
     create, start, flow, drain, stop, lsx_kill, sizeof(priv_t)

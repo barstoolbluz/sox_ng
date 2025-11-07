@@ -101,14 +101,18 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 static int stop(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
-  fclose(p->tmp_file); /* auto-deleted by lsx_tmpfile */
+  lsx_close_tmpfile(p->tmp_file);
   return SOX_SUCCESS;
 }
 
 sox_effect_handler_t const * lsx_repeat_effect_fn(void)
 {
+  static char const * const extra_usage[] = {
+    "-  repeat indefinitely",
+    NULL
+  };
   static sox_effect_handler_t effect = {
-    "repeat", "[count(1)]", NULL,
+    "repeat", "[count(1)|-]", extra_usage,
     SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_MODIFY,
     create, start, flow, drain, stop, NULL, sizeof(priv_t)};
   return &effect;

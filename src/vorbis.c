@@ -309,11 +309,9 @@ static int startwrite(sox_format_t * ft)
 
   /* TODO */
   rate = ft->signal.rate;
-  if (rate) {
+  if (rate)
     lsx_fail_errno(ft, SOX_EHDR,
       "Error setting-up Ogg Vorbis encoder; check sample-rate & # of channels");
-    return SOX_EOF;
-  }
 
   /* Use encoding to average bit rate of VBR as specified by the -C option */
   if (ft->encoding.compression != HUGE_VAL) {

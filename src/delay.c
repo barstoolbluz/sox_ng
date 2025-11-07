@@ -155,9 +155,15 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 
 sox_effect_handler_t const * lsx_delay_effect_fn(void)
 {
+  static char const * const extra_usage[] = {
+    "{positions} give delays for the first channel, the second and so on in seconds.",
+    NULL
+  };
+
   static sox_effect_handler_t handler = {
-    "delay", "{position}", NULL, SOX_EFF_LENGTH | SOX_EFF_MODIFY,
+    "delay", "{position}", extra_usage, SOX_EFF_LENGTH | SOX_EFF_MODIFY,
     create, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
   };
+
   return &handler;
 }

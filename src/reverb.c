@@ -265,6 +265,10 @@ static int stop(sox_effect_t * effp)
 
 sox_effect_handler_t const *lsx_reverb_effect_fn(void)
 {
+  static char const * const extra_usage[] = {
+    "-w  Output only the `wet' signal",
+    NULL
+  };
   static sox_effect_handler_t handler = {"reverb",
     "[-w]"
     " [reverberance(50%)"
@@ -273,7 +277,7 @@ sox_effect_handler_t const *lsx_reverb_effect_fn(void)
     " [stereo-depth(100%)"
     " [pre-delay(0ms)"
     " [wet-gain(0dB)"
-    "]]]]]]", NULL,
+    "]]]]]]", extra_usage,
     SOX_EFF_MCHAN | SOX_EFF_CHAN,
     getopts, start, flow, NULL, stop, NULL, sizeof(priv_t)
   };

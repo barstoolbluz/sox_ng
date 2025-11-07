@@ -305,7 +305,7 @@ static int stopwrite(sox_format_t * ft)
                           return SOX_EOF;
                         }
                 }
-                fclose (p->tmp[i]);
+                lsx_close_tmpfile(p->tmp[i]);
         }
 
         /* add a pad byte if BODY size is odd */

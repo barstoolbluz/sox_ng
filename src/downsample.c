@@ -79,7 +79,7 @@ static int flow(sox_effect_t *effp, const sox_sample_t *ibuf,
 sox_effect_handler_t const *lsx_downsample_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "downsample", "[factor (2)]", NULL, SOX_EFF_RATE | SOX_EFF_MODIFY,
+    "downsample", "[factor(2)]", NULL, SOX_EFF_RATE | SOX_EFF_MODIFY,
     create, start, flow, NULL, NULL, NULL, sizeof(priv_t)};
   return &handler;
 }

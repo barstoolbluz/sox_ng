@@ -158,11 +158,24 @@ static int lsx_kill(sox_effect_t UNUSED * effp)
  * Function returning effect descriptor. This should be the only
  * externally visible object.
  */
-const sox_effect_handler_t *lsx_dolbyb_effect_fn(void);
 const sox_effect_handler_t *lsx_dolbyb_effect_fn(void)
 {
+  static char const usage[] =
+    "[-e|-d] [-u upsamp] [-h] [-t gain] [-a precision] [-f{1|2|3|4}]";
+  static char const * const extra_usage[] = {
+    "OPTION    RANGE  DEFAULT  DESCRIPTION",
+    "-e                        Encode instead of decoding",
+    "-d                        Decode (the default)",
+    "-u upsamp  1-100          Upsample the sliding filter",
+    "                          (default: right for >= 200kHz)",
+    "-h                        Upsample everything",
+    "-t gain -100-100    0     Adjust the sliding filter's threshold in dB",
+    "-a prec -100-0     -5     Adjust the accuracy in dB when decoding",
+    "-f n       1-4      4     Filter type: 1=original 2=better 3=worse 4=best",
+    NULL
+  };
   static sox_effect_handler_t sox_dolbyb_effect = {
-    "dolbyb", "[OPTION]", NULL, SOX_EFF_MCHAN,
+    "dolbyb", usage, extra_usage, SOX_EFF_MCHAN,
     init, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
   };
   return &sox_dolbyb_effect;

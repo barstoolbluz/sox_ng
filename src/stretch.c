@@ -318,9 +318,9 @@ const sox_effect_handler_t *lsx_stretch_effect_fn(void)
 "factor  0-      1    Change in length; >1 lengthens, <1 shortens",
 "window         20    Length of the crossfading window in milliseconds",
 "fade     l      l    Can only be `l' for `linear'",
-"shift   0-1     ?    Shift ratio. The default depends on factor",
-"fading  0-.5    ?    Fading ratio: how much of each window is cross-faded",
-"                     The default value depends on factor and shift",
+"shift   0-1     ?    Shift ratio, (1 when speeding up, 0.8 when slowing down)",
+"fading  0-.5    ?    Fading ratio: how much of each window is cross-faded;",
+"                     its default value depends on factor and shift",
     NULL
   };
 

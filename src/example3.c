@@ -67,6 +67,8 @@ int main(int argc, char * argv[])
   sox_globals.verbosity = 1;
 
   assert(sox_init() == SOX_SUCCESS);
+  assert(sox_format_init() == SOX_SUCCESS);
+
   in = sox_open_read(argv[1], NULL, NULL, NULL);
   assert(in);
   /* Change "alsa" in this line to use an alternative audio device driver: */

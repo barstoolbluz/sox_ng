@@ -84,7 +84,7 @@ static int output_flow(sox_effect_t *effp LSX_UNUSED, sox_sample_t const * ibuf,
 static sox_effect_handler_t const * input_handler(void)
 {
   static sox_effect_handler_t handler = {
-    "input", NULL, SOX_EFF_MCHAN, NULL, NULL, NULL, input_drain, NULL, NULL, 0
+    "input", NULL, NULL, SOX_EFF_MCHAN, NULL, NULL, NULL, input_drain, NULL, NULL, 0
   };
   return &handler;
 }
@@ -94,7 +94,7 @@ static sox_effect_handler_t const * input_handler(void)
 static sox_effect_handler_t const * output_handler(void)
 {
   static sox_effect_handler_t handler = {
-    "output", NULL, SOX_EFF_MCHAN, NULL, NULL, output_flow, NULL, NULL, NULL, 0
+    "output", NULL, NULL, SOX_EFF_MCHAN, NULL, NULL, output_flow, NULL, NULL, NULL, 0
   };
   return &handler;
 }
@@ -113,6 +113,7 @@ int main(int argc, char * argv[])
 
   /* All libSoX applications must start by initialising the SoX library */
   assert(sox_init() == SOX_SUCCESS);
+  assert(sox_format_init() == SOX_SUCCESS);
 
   /* Open the input file (with default parameters) */
   in = sox_open_read(argv[1], NULL, NULL, NULL);

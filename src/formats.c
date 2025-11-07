@@ -240,6 +240,7 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   return NULL;
 }
 
+/* Must match the entries in sox_ng.h:sox_encoding_t */
 static sox_encodings_info_t const s_sox_encodings_info[] = {
   {sox_encodings_none  , "n/a"          , "Unknown or not applicable"},
   {sox_encodings_none  , "Signed PCM"   , "Signed Integer PCM"},
@@ -488,8 +489,8 @@ static int sox_checkformat(sox_format_t * ft)
 {
   ft->sox_errno = SOX_SUCCESS;
 
-  if (!ft->signal.rate) {
-    lsx_fail_errno(ft,SOX_EFMT,"sampling rate was not specified");
+  if (ft->signal.rate <= 0) {
+    lsx_fail_errno(ft, SOX_EFMT, "sample rate zero or negative");
     return SOX_EOF;
   }
   if (!ft->signal.precision) {
@@ -1365,14 +1366,29 @@ int sox_close(sox_format_t * ft)
     result = ft->handler.stopread? (*ft->handler.stopread)(ft) : SOX_SUCCESS;
   else {
     if (ft->handler.flags & SOX_FILE_REWIND) {
+      /* Really write out a final zero byte if we're writing a sparse file.
+       * See lsx_writebuf() */
+      if (ft->last_byte_was_zero) {
+	if (lsx_seeki(ft, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
+	  putc('\0', (FILE *)ft->fp);
+	ft->last_byte_was_zero = sox_false;
+      }
       if (ft->olength != ft->signal.length && ft->seekable) {
         result = lsx_seeki(ft, (off_t)0, 0);
         if (result == SOX_SUCCESS)
           result = ft->handler.stopwrite? (*ft->handler.stopwrite)(ft)
              : ft->handler.startwrite?(*ft->handler.startwrite)(ft) : SOX_SUCCESS;
       }
+    } else {
+      result = ft->handler.stopwrite? (*ft->handler.stopwrite)(ft) : SOX_SUCCESS;
+      /* Really write out a final zero byte if we're writing a sparse file.
+       * See lsx_writebuf() */
+      if (ft->last_byte_was_zero) {
+	if (lsx_seeki(ft, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
+	  putc('\0', (FILE *)ft->fp);
+	ft->last_byte_was_zero = sox_false;
+      }
     }
-    else result = ft->handler.stopwrite? (*ft->handler.stopwrite)(ft) : SOX_SUCCESS;
   }
 
   if (ft->fp && ft->fp != stdin && ft->fp != stdout)
@@ -1562,7 +1578,7 @@ sox_get_format_fns(void)
   {
     lt_dlhandle lth = lt_dlopenext(file);
     const char *end = file + strlen(file);
-    const char prefix[] = "sox_fmt_";
+    const char prefix[] = "sox_ng_fmt_";
     char fnname[MAX_NAME_LEN];
     char *start = strstr(file, prefix);
 

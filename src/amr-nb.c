@@ -90,7 +90,7 @@ static char const amrnb_magic[] = "#!AMR\n";
 #ifdef AMR_OPENCORE
 static const char* const amr_opencore_library_names[] =
 {
-#ifdef DL_AMRWB
+#ifdef DL_AMRNB
   "libopencore-amrnb",
   "libopencore-amrnb-0",
 #endif
@@ -126,7 +126,7 @@ static const char* const amr_opencore_library_names[] =
   Decoder_Interface_exit(state)
 
 #define AMR_GP3_DESC "amr-nb 3GPP reference library"
-#ifdef DL_AMRWB
+#ifdef DL_AMRNB
 static const char* const amr_gp3_library_names[] =
 {
   "libamrnb-3",

@@ -341,9 +341,20 @@ static int sox_stat_stop(sox_effect_t * effp)
 
 }
 
+static char const usage[] = "[-s scale] [-rms] [-freq] [-v] [-d] [-a]";
+static char const * const extra_usage[] = {
+  "-s     Scale the input data by a factor",
+  "-rms   Convert all average values to root mean square",
+  "-freq  Output the input's power spectrum (a 4096-point DFT)",
+  "-v     Output only the `Volume Adjustment' value",
+  "-d     Output a hex dump of the 32-bit signed PCM audio data",
+  "-a     Output the average power spectrum",
+  NULL
+};
+
 static sox_effect_handler_t sox_stat_effect = {
   "stat",
-  "[-s N] [-rms] [-freq] [-v] [-d] [-a]", NULL,
+  usage, extra_usage,
   SOX_EFF_MCHAN | SOX_EFF_MODIFY,
   sox_stat_getopts,
   sox_stat_start,

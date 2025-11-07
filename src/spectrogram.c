@@ -232,7 +232,7 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
 
   /* Default to 0 -> nyquist freq. But don't have sample rate at this point so
    * set high_freq=-1 as flag. Replace with nyquist freq in stop() function. */
-  p->low_freq = 0;
+  p->low_freq = -1;
   p->high_freq = -1;
 
   while ((c = lsx_getopt(&optstate)) != -1) switch (c) {
@@ -289,6 +289,10 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
     lsx_fail("only one of -y, -Y may be given");
     return SOX_EOF;
   }
+  if (p->log10_axis && p->low_freq == 0) {
+    lsx_fail("the logarithmic axis' low frequency must be > 0");
+    return SOX_EOF;
+  }
   p->gain = -p->gain;
   --p->perm;
   p->spectrum_points += 2;
@@ -306,11 +310,10 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
   return optstate.ind !=argc || p->win_type == INT_MAX? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-
 static double make_window(priv_t * p, int end)
 {
   double sum = 0, * w = end < 0? p->window : p->window + end;
-  int i, n = p->dft_size - abs(end);
+  int i, n = 1 + p->dft_size - abs(end);
 
   if (end) memset(p->window, 0, sizeof(*p->window) * (p->dft_size + 1));
   for (i = 0; i < n; ++i) w[i] = 1;
@@ -325,7 +328,7 @@ static double make_window(priv_t * p, int end)
         (p->dB_range + p->gain) * (1.005 + p->window_adjust / 50) + 6);
   }
   for (i = 0; i < p->dft_size; ++i) sum += p->window[i];
-  for (i = 0; i < p->dft_size; ++i) p->window[i] *= 2 / sum
+  for (--n, i = 0; i < p->dft_size; ++i) p->window[i] *= 2 / sum
     * sqr((double)n / p->dft_size);    /* empirical small window adjustment */
   return sum;
 }
@@ -374,7 +377,7 @@ static int start(sox_effect_t * effp)
   uint64_t d;
 
   if (p->duration_str) {
-    lsx_parsesamples(effp->in_signal.rate, p->duration_str, &d, 't');
+      lsx_parsesamples(effp->in_signal.rate, p->duration_str, &d, 't');
     duration = d / effp->in_signal.rate;
   }
   if (p->start_time_str) {
@@ -389,6 +392,15 @@ static int start(sox_effect_t * effp)
   }
 
   p->x_size = p->x_size0;
+
+  /* If we're supposed to scale the spectrogram to the length of the audio
+   * but the audio length is unknown, emit a warning to this effect */
+  if (!duration && effp->in_signal.length == SOX_UNKNOWN_LEN &&
+      !pixels_per_sec) {
+    lsx_warn("cannot scale to an unknown audio length; use -d if you know it");
+    /* pixels_per_sec will get 100 below */
+  }
+
   while (sox_true) {
     if (!pixels_per_sec && p->x_size && duration)
       pixels_per_sec = min(5000, p->x_size / duration);
@@ -397,8 +409,8 @@ static int start(sox_effect_t * effp)
     if (!duration && effp->in_signal.length != SOX_UNKNOWN_LEN) {
       duration = effp->in_signal.length / (effp->in_signal.rate * effp->in_signal.channels);
       duration -= start_time;
-      if (duration <= 0)
-        duration = 1;
+      if (duration < 0)
+        duration = 0;
       continue;
     } else if (!p->x_size) {
       p->x_size = 800;
@@ -741,13 +753,12 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
   float log10_low_freq, log10_high_freq;
   float nyquist_freq = (float)effp->in_signal.rate / 2;
 
-  /* No chart upper freq set, so use nyquist freq as default */
+  /* set default values for frequency range */
   if (p->high_freq == -1) {
     p->high_freq = effp->in_signal.rate/2;
   }
-  /* Cannot have 0Hz on log axis. Use 1Hz instead. */
-  if (p->log10_axis && p->low_freq==0) {
-    p->low_freq = 1;
+  if (p->low_freq == -1) {
+    p->low_freq = p->log10_axis ? 1 : 0;
   }
 
   log10_low_freq = log10f((float)p->low_freq);
@@ -774,30 +785,31 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 
     for (chan = 0; chan < chans; ++chan) {
       float log_scale_factor = (log10_high_freq- log10_low_freq)/(float)p->rows;
-      float lin_scale_factor = (p->high_freq-p->low_freq)/(float)p->rows;
+      float lin_scale_factor = (p->high_freq-p->low_freq)/(float)(p->rows);
       priv_t * q = (priv_t *)(effp - effp->flow + chan)->priv;
       int row, base;
 
       if (p->normalize) {
 	int row, col;
 
-	for (row=p->rows; row >=0; row--)
-	  for (col=p->cols; col >=0; col--)
+	for (row=p->rows-1; row >=0; row--)
+	  for (col=p->cols-1; col >=0; col--)
 	    pdBfs(q, row, col) += autogain;
       }
 
       base = !p->raw * below + (chans - 1 - chan) * (p->rows + 1);
 
       for (row = 0; row < p->rows; ++row) {
-	int dBfsi, col, freq;
+	int dBfsi, col;
+	float freq;
 
 	if (p->log10_axis) {
-	  freq = (int)powf(10.0, (float)row * log_scale_factor + log10_low_freq);
+	  freq = powf(10.0f, (float)row * log_scale_factor + log10_low_freq);
 	} else {
 	  freq = (float)row * lin_scale_factor + p->low_freq;
 	}
 	/* dBfsi: index into dBfs[] corresponding to frequency at this row */
-	dBfsi = (freq * p->rows) / nyquist_freq;
+	dBfsi = lrint(freq * p->rows / nyquist_freq);
 	/* It is possible that upper freq > Nyquist freq: deal with that */
 	if (dBfsi >= p->rows) {
 	  dBfsi = p->rows - 1;
@@ -834,40 +846,34 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
     if ((int)strlen(p->comment) * font_X < cols + 1)     /* Footer comment */
       print_at(1, font_y, Text, p->comment);
 
+    /* X-axis */
     {
-      int label_width;
+      int step;
+      double dstep;
+      double limit;
+      char *prefix;
+      char text[16];
 
-      /* X-axis */
-      {
-	int step;
-	double dstep;
-	double limit;
-	char *prefix;
-	char text[16];
+      dstep = step =
+	axis(secs(p->cols), p->cols / (font_X * 9 / 2), &limit, &prefix);
+      sprintf(text, "Time (%.1ss)", prefix);               /* Axis label */
+      print_at(left + (p->cols - font_X * (int)strlen(text)) / 2, 24, Text, text);
+      { int i, di;
+	for (i = 0, di = 0; i <= limit; i += step, di += dstep) {
+	  int x = limit? di / limit * p->cols + .5 : 0;
+	  int y;
 
-	dstep = step =
-	  axis(secs(p->cols), p->cols / (font_X * 9 / 2), &limit, &prefix);
-	sprintf(text, "Time (%.1ss)", prefix);               /* Axis label */
-	print_at(left + (p->cols - font_X * (int)strlen(text)) / 2, 24, Text, text);
-	{ int i, di;
-	  for (i = 0, di = 0; i <= limit; i += step, di += dstep) {
-	    int x = limit? di / limit * p->cols + .5 : 0;
-	    int y;
-
-	    for (y = 0; y < tick_len; ++y) {                   /* Ticks */
-	      pixel(left-1+x, below-1-y) = Grid;
-	      pixel(left-1+x, below+c_rows+y) = Grid;
-	    }
-	    if (step == 5 && (i%10))
-	      continue;
-	    sprintf(text, "%g", .1 * di);     /* Tick labels */
-	    x = left + x - 3 * strlen(text);
-	    print_at(x, below - 6, Labels, text);
-	    print_at(x, below + c_rows + 14, Labels, text);
+	  for (y = 0; y < tick_len; ++y) {                   /* Ticks */
+	    pixel(left-1+x, below-1-y) = Grid;
+	    pixel(left-1+x, below+c_rows+y) = Grid;
 	  }
+	  if (step == 5 && (i%10))
+	    continue;
+	  sprintf(text, "%g", .1 * di);     /* Tick labels */
+	  x = left + x - 3 * strlen(text);
+	  print_at(x, below - 6, Labels, text);
+	  print_at(x, below + c_rows + 14, Labels, text);
 	}
-	/* Used subsequently to position the vertical text of the Y axis */
-	label_width = font_X * strlen(text);
       }
 
       /* Y-axis */
@@ -877,7 +883,8 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 	int end_decade = (int)log10_high_freq;
 	float log_scale = (float)p->rows / (log10_high_freq - log10_low_freq);
 
-	print_up(10, below + (c_rows - label_width) / 2, Text, "Frequency (Hz)");
+	sprintf(text, "Frequency (Hz)");
+	print_up(10, below + (c_rows - font_X * (int)strlen(text)) / 2, Text, text);
 
 	{
 	  int chan;
@@ -896,9 +903,9 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 
 		if (y >= 0) {
 		  char text[16];
-		  sprintf(text, i ? "%5i" : "   DC", f);  /* Tick label (left) */
+		  sprintf(text, "%5i", f);  /* Tick label (left) */
 		  print_at(left - 4 - font_X * 5, base + y + 5, Labels, text);
-		  sprintf(text, i ? "%i" : "DC",  f);     /* Tick label (right) */
+		  sprintf(text, "%i",  f);     /* Tick label (right) */
 		  print_at(left + p->cols + 6, base + y + 5, Labels, text);
 		}
 	      }
@@ -935,7 +942,7 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 			    (p->rows - 1) / ((font_y * 3 + 1) >> 1),
 			    &limit, &prefix);
 	sprintf(text, "Frequency (%.1sHz)", prefix);         /* Axis label */
-	print_up(10, below + (c_rows - font_X * strlen(text)) / 2, Text, text);
+	print_up(10, below + (c_rows - font_X * (int)strlen(text)) / 2, Text, text);
 	{ int chan;
 	  for (chan = 0; chan < chans; ++chan) {
 	    int base = below + chan * (p->rows + 1);
@@ -1065,8 +1072,8 @@ sox_effect_handler_t const * lsx_spectrogram_effect_fn(void)
 {
   static char const usage[] = "[options]";
   static char const * const extra_usage[] = {
-"-x num  X-axis size in pixels; default: derived or 800",
-"-X num  X-axis pixels/second; default: derived or 100",
+"-x num  X-axis size in pixels; default: derived from -X and -d, or 800",
+"-X num  X-axis pixels/second; default: derived from -x and -d, or 100",
 "-y num  Y-axis size in pixels per channel",
 "-Y num  Total height; default 550",
 "-z num  Z-axis range in dB; default 120",
@@ -1077,14 +1084,14 @@ sox_effect_handler_t const * lsx_spectrogram_effect_fn(void)
 "-W num  Window adjust parameter (-10-10); applies only to Kaiser/Dolph",
 "-s      Slack overlap of windows",
 "-a      Suppress axis lines",
-"-r      Raw spectrogram; no axes or legends",
+"-r      Raw spectrogram: no axes or legends",
 "-l      Light background",
 "-m      Monochrome",
 "-h      High colour",
 "-L      Plot the frequency on logarithmic axis",
 "-R L:H  Specify the frequency range (from L to H)",
-"-p num  Permute colours (1-6); default 1",
-"-A      Alternative, inferior, fixed colour-set (for compatibility only)",
+"-p num  Permute colors (1-6); default 1",
+"-A      Alternative, inferior, fixed color-set",
 "-t text Title text",
 "-c text Comment text",
 "-o text Output file name; default `spectrogram.png'",

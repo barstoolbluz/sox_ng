@@ -161,7 +161,7 @@ static int stop_write(sox_format_t * ft)
   long num_samples = ft->tell_off - HEADER_SIZE;
 
   if (num_samples & 1)
-    lsx_writeb(ft, 0);
+    lsx_writeb(ft, 0xff); /* 255 is silence in gsrt */
 
   if (ft->seekable) {
     unsigned i, file_size = ft->tell_off >> 1;

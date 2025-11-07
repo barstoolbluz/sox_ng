@@ -288,7 +288,7 @@ static int lsx_kill(sox_effect_t * effp)
 sox_effect_handler_t const * lsx_splice_effect_fn(void)
 {
   static const char usage[] =
-    "[-h|-t|-q] {position[,excess[,leeway]]}";
+    "[-h|-t|-q] {position(=)[,excess[,leeway]]}";
 
   static char const * const extra_usage[] = {
 "-h        Half sine fade (default); constant gain",

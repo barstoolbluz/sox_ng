@@ -492,7 +492,7 @@ static int start_write(sox_format_t * const ft)
     p->metadata[p->num_metadata] = FLAC__metadata_object_new(FLAC__METADATA_TYPE_VORBIS_COMMENT);
     for (i = 0; ft->oob.comments[i]; ++i) {
       static const char prepend[] = "Comment=";
-      char * text = lsx_malloc(strlen(prepend) + strlen(ft->oob.comments[i]) + 1);
+      char * text = lsx_calloc(strlen(prepend) + strlen(ft->oob.comments[i]) + 1, sizeof(*text));
       /* Prepend `Comment=' if no field-name already in the comment */
       if (!strchr(ft->oob.comments[i], '='))
         strcpy(text, prepend);
