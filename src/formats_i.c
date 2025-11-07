@@ -240,15 +240,42 @@ int lsx_padbytes(sox_format_t * ft, size_t n)
   return (SOX_SUCCESS);
 }
 
+/* See if a data buffer contains all zero bytes.
+ * There must be a faster way to do this,
+ * like memcmp against a constant zeroed buffer.
+ */
+static sox_bool is_zero(void const *buf, size_t len)
+{
+  char const *bufp = (char *)buf;
+
+  while (len > 0) {
+    if (*bufp++) return 0;
+    len--;
+  }
+  return 1;
+}
+
 /* Write a buffer of data of length bytes.
  * Returns number of bytes written.
  */
 size_t lsx_writebuf(sox_format_t * ft, void const * buf, size_t len)
 {
-  size_t ret = fwrite(buf, (size_t) 1, len, (FILE*)ft->fp);
-  if (ret != len) {
-    lsx_fail_errno(ft, errno, "error writing output file");
-    clearerr((FILE*)ft->fp); /* Allows us to seek back to write header */
+  size_t ret;
+
+  /* If writing zero bytes, use sparse files to save disk space.
+   * See sox_close() */
+  if (ft->seekable && is_zero(buf, len) &&
+      fseeko((FILE *)ft->fp, (off_t)len, SEEK_CUR) == 0) {
+      /* but if the seek fails, try a normal write */
+    ft->last_byte_was_zero = sox_true;
+    ret = len;
+  } else {
+    ret = fwrite(buf, (size_t) 1, len, (FILE*)ft->fp);
+    if (ret != len) {
+      lsx_fail_errno(ft, errno, "error writing output file");
+      clearerr((FILE*)ft->fp); /* Allows us to seek back to write header */
+    }
+    ft->last_byte_was_zero = sox_false;
   }
   ft->tell_off += ret;
   return ret;
@@ -335,7 +362,15 @@ int lsx_seeki(sox_format_t * ft, off_t offset, int whence)
                 ft->sox_errno = SOX_SUCCESS;
         }
     } else {
-        if (fseeko((FILE*)ft->fp, offset, whence) == -1)
+        /* If we are writing sparse files, actually write the last byte.
+         * See lsx_writebuf() */
+        if (ft->last_byte_was_zero) {
+          if (fseeko(ft->fp, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
+          putc('\0', (FILE *)ft->fp);
+          ft->last_byte_was_zero = sox_false;
+        }
+
+        if (fseeko((FILE*)ft->fp, offset, whence))
             lsx_fail_errno(ft,errno, "%s", strerror(errno));
         else {
             ft->tell_off = lsx_tell(ft);

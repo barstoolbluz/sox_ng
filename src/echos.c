@@ -215,7 +215,7 @@ static int sox_echos_stop(sox_effect_t * effp)
 
 const sox_effect_handler_t *lsx_echos_effect_fn(void)
 {
-  static const char usage[] = "gain-in gain-out delay decay <delay decay>";
+  static const char usage[] = "gain-in gain-out <delay decay>";
   static char const * const extra_usage[] = {
 "                                                         ___",
 " In--+--------+-------------------+-------------------->|   |",
@@ -239,7 +239,7 @@ const sox_effect_handler_t *lsx_echos_effect_fn(void)
 "decay     0-1   Proportion of delayed signal delivered to adder",
 "",
 "When decay is close to 1.0, samples can clip and the output can saturate.",
-"Hint: gain-out < 1 / (gain-in * ( 1 + decay1 + ... + decayN ))",
+"Hint: gain-out < 1 / (gain-in + decay1 + ... + decayN)",
     NULL
   };
 

@@ -187,19 +187,22 @@ static void set_default_parameters(channel_t *  chan)
 
 
 #undef NUMERIC_PARAMETER
-#define NUMERIC_PARAMETER(p, min, max) { \
+#define NUMERIC_PARAMETER(p, min, max, expecting) { \
 char * end_ptr_np; \
 double d_np = strtod(argv[argn], &end_ptr_np); \
 if (end_ptr_np == argv[argn]) \
   break; \
 if (d_np < min || d_np > max || *end_ptr_np != '\0') { \
-  lsx_fail("parameter error"); \
+  lsx_fail("%s is not a%s %s", argv[argn], isvowel(expecting[0])?"n":"", \
+           expecting); \
   return SOX_EOF; \
 } \
 chan->p = d_np / 100; /* adjust so abs(parameter) <= 1 */\
 if (++argn == argc) \
   break; \
 }
+
+#define isvowel(c) ((c)=='a'||(c)=='e'||(c)=='i'||(c)=='o'||(c)=='u')
 
 
 
@@ -235,11 +238,11 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
   create_channel(chan);
   if (argn < argc) {            /* [off [ph [p1 [p2 [p3]]]]]] */
     do { /* break-able block */
-      NUMERIC_PARAMETER(offset,-100, 100)
-      NUMERIC_PARAMETER(phase ,   0, 100)
-      NUMERIC_PARAMETER(p1,   0, 100)
-      NUMERIC_PARAMETER(p2,   0, 100)
-      NUMERIC_PARAMETER(p3,   0, 100)
+      NUMERIC_PARAMETER(offset,-100, 100, "offset or waveform")
+      NUMERIC_PARAMETER(phase ,   0, 100, "phase or waveform")
+      NUMERIC_PARAMETER(p1,   0, 100, "p1 or waveform")
+      NUMERIC_PARAMETER(p2,   0, 100, "p2 or waveform")
+      NUMERIC_PARAMETER(p3,   0, 100, "p3 or waveform")
     } while (0);
   }
 
@@ -353,11 +356,11 @@ case3:  if (!isfinite(chan->vdelay_mix)) goto vwhat;
 
     /* read rest of parameters */
     do { /* break-able block */
-      NUMERIC_PARAMETER(offset,-100, 100)
-      NUMERIC_PARAMETER(phase ,   0, 100)
-      NUMERIC_PARAMETER(p1,   0, 100)
-      NUMERIC_PARAMETER(p2,   0, 100)
-      NUMERIC_PARAMETER(p3,   0, 100)
+      NUMERIC_PARAMETER(offset,-100, 100, "offset")
+      NUMERIC_PARAMETER(phase ,   0, 100, "phase")
+      NUMERIC_PARAMETER(p1,   0, 100, "p1")
+      NUMERIC_PARAMETER(p2,   0, 100, "p2")
+      NUMERIC_PARAMETER(p3,   0, 100, "p3")
     } while (0);
   }
 

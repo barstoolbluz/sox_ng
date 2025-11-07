@@ -26,7 +26,7 @@
 
 stdenv.mkDerivation rec {
   pname = "sox_ng";
-  version = "14.6.0-custom";
+  version = "14.6.1.2-custom";
 
   # Source is the current repository
   src = ../..;
@@ -92,6 +92,8 @@ stdenv.mkDerivation rec {
 
     # 3. Increase sinc filter tap limits
     substituteInPlace src/sinc.c \
+      --replace "GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 32767)" \
+                "GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 1073741823)" \
       --replace "GETOPT_NUMERIC(optstate, 'n', num_taps[1], 11, 32767)" \
                 "GETOPT_NUMERIC(optstate, 'n', num_taps[1], 11, 1073741823)" \
       --replace '*num_taps = range_limit(n, 11, 32767);' \

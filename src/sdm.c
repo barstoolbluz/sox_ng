@@ -1095,7 +1095,7 @@ static int getopts(sox_effect_t *effp, int argc, char **argv)
     GETOPT_NUMERIC(optstate, 't', trellis_order, 3, SDM_TRELLIS_MAX_ORDER)
     GETOPT_NUMERIC(optstate, 'n', trellis_num, 4, SDM_TRELLIS_MAX_NUM)
     GETOPT_NUMERIC(optstate, 'l', trellis_lat, 100, SDM_TRELLIS_MAX_LAT)
-    default: lsx_fail("invalid option `-%c'", optstate.opt); return lsx_usage(effp);
+    default: lsx_fail("invalid option `-%c'", optstate.opt); return SOX_EOF;
   }
 
   return argc != optstate.ind ? lsx_usage(effp) : SOX_SUCCESS;
@@ -1105,7 +1105,11 @@ static int start(sox_effect_t *effp)
 {
   sdm_effect_t *p = effp->priv;
 
+  fprintf(stderr, "trellis order=%d num=%d latency=%d\n",
+                    p->trellis_order, p->trellis_num, p->trellis_lat);
   p->sdm = sdm_init(p->filter_name, effp->in_signal.rate,
+                    p->trellis_order, p->trellis_num, p->trellis_lat);
+  fprintf(stderr, "trellis order=%d num=%d latency=%d\n",
                     p->trellis_order, p->trellis_num, p->trellis_lat);
   if (!p->sdm)
     return SOX_EOF;
@@ -1138,11 +1142,11 @@ static int stop(sox_effect_t *effp)
 const sox_effect_handler_t *lsx_sdm_effect_fn(void)
 {
   static char const * const extra_usage[] = {
-    "-f       Noise-shaping filter",
-    "         Advanced options:",
-    "-t       Override trellis order",
-    "-n       Override number of trellis paths",
-    "-l       Override trellis latency",
+    "OPTION      RANGE    DESCRIPTION",
+    "-f filter            Noise-shaping filter: {clans|sdm}-[45678]",
+    "-t order     3-32    Trellis order",
+    "-n num       4-32    Number of trellis paths",
+    "-l latency 100-2048  Output latency",
     NULL
   };
   static sox_effect_handler_t handler = {

@@ -263,7 +263,7 @@ static int lsx_kill(sox_effect_t * effp)
 sox_effect_handler_t const * lsx_compand_effect_fn(void)
 {
   static const char usage[] =
-    "<attack,decay> [soft-knee-dB:]in-dB1[,out-dB1]{,in-dB2,out-dB2} [gain [initial-volume-dB [delay]]]";
+    "attack,decay{,attack,decay} [soft-knee-dB:]in-dB1[,out-dB1]{,in-dB2,out-dB2} [gain [initial-volume-dB [delay]]]";
   static char const * const extra_usage[] = {
 "dB values are floating point or -inf'; times are in seconds.",
 "",
@@ -278,7 +278,7 @@ sox_effect_handler_t const * lsx_compand_effect_fn(void)
 "           |_______|",
 "",
 "Clipping can occur if the transfer function pushes things too close to 0 dB.",
-"In that case, use negative gain or reduce level of the transfer function.",
+"In that case, use negative gain or reduce the level of the transfer function.",
     NULL
   };
 

@@ -200,16 +200,22 @@ install-exec-hook:
 			$(RM) soxi$(EXEEXT); \
 			$(LN_S) soxi_ng$(EXEEXT) soxi$(EXEEXT); \
 		fi; \
+		cd $(DESTDIR)$(libdir); \
+		if test -f libsox_ng.a; then \
+			$(RM) libsox.a; $(LN_S) libsox_ng.a libsox.a; \
+		fi; \
+		if test -f libsox_ng.la; then \
+			$(RM) libsox.la; $(LN_S) libsox_ng.la libsox.la; \
+		fi; \
+		if test -f libsox_ng.so; then \
+			$(RM) libsox.so; $(LN_S) libsox_ng.so libsox.so; \
+		fi; \
+	fi
+
+install-data-hook:
+	@if test "$(REPLACE)" = "yes"; then \
 		cd $(DESTDIR)$(includedir); \
 		$(RM) sox.h; $(LN_S) sox_ng.h sox.h; \
-		cd $(DESTDIR)$(libdir); \
-		$(RM) libsox.a; $(LN_S) libsox_ng.a libsox.a; \
-		$(RM) libsox.la; $(LN_S) libsox_ng.la libsox.la; \
-		$(RM) libsox.so; $(LN_S) libsox_ng.so libsox.so; \
-		if test "$(pkgconfigdir)"; then \
-			cd $(DESTDIR)$(pkgconfigdir); \
-			$(RM) "sox.pc"; $(LN_S) sox_ng.pc sox.pc; \
-		fi; \
 	fi
 
 uninstall-hook:
@@ -231,10 +237,6 @@ uninstall-hook:
 		cd $(DESTDIR)$(includedir); $(RM) sox.h;\
 		cd $(DESTDIR)$(libdir); \
 		$(RM) libsox.a libsox.la libsox.so; \
-		if test "$pkgconfigdir"; then \
-			cd $(DESTDIR)$(pkfconfigdir); \
-			$(RM) "sox.pc";\
-		fi; \
 	fi
 
 clean-local:

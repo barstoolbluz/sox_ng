@@ -22,6 +22,7 @@ LSX_ and lsx_ symbols should not be used by libSoX-based applications.
 #include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -375,108 +376,49 @@ Basic typedefs:
 Client API:
 Signed twos-complement 8-bit type. Typically defined as signed char.
 */
-#if SCHAR_MAX==127 && SCHAR_MIN==(-128)
-typedef signed char sox_int8_t;
-#elif CHAR_MAX==127 && CHAR_MIN==(-128)
-typedef char sox_int8_t;
-#else
-#error Unable to determine an appropriate definition for sox_int8_t.
-#endif
+typedef int8_t sox_int8_t;
 
 /**
 Client API:
 Unsigned 8-bit type. Typically defined as unsigned char.
 */
-#if UCHAR_MAX==0xff
-typedef unsigned char sox_uint8_t;
-#elif CHAR_MAX==0xff && CHAR_MIN==0
-typedef char sox_uint8_t;
-#else
-#error Unable to determine an appropriate definition for sox_uint8_t.
-#endif
+typedef uint8_t sox_uint8_t;
 
 /**
 Client API:
 Signed twos-complement 16-bit type. Typically defined as short.
 */
-#if SHRT_MAX==32767 && SHRT_MIN==(-32768)
-typedef short sox_int16_t;
-#elif INT_MAX==32767 && INT_MIN==(-32768)
-typedef int sox_int16_t;
-#else
-#error Unable to determine an appropriate definition for sox_int16_t.
-#endif
+typedef int16_t sox_int16_t;
 
 /**
 Client API:
 Unsigned 16-bit type. Typically defined as unsigned short.
 */
-#if USHRT_MAX==0xffff
-typedef unsigned short sox_uint16_t;
-#elif UINT_MAX==0xffff
-typedef unsigned int sox_uint16_t;
-#else
-#error Unable to determine an appropriate definition for sox_uint16_t.
-#endif
+typedef uint16_t sox_uint16_t;
 
 /**
 Client API:
 Signed twos-complement 32-bit type. Typically defined as int.
 */
-#if INT_MAX==2147483647 && INT_MIN==(-2147483647-1)
-typedef int sox_int32_t;
-#elif LONG_MAX==2147483647 && LONG_MIN==(-2147483647-1)
-typedef long sox_int32_t;
-#else
-#error Unable to determine an appropriate definition for sox_int32_t.
-#endif
+typedef int32_t sox_int32_t;
 
 /**
 Client API:
 Unsigned 32-bit type. Typically defined as unsigned int.
 */
-#if UINT_MAX==0xffffffff
-typedef unsigned int sox_uint32_t;
-#elif ULONG_MAX==0xffffffff
-typedef unsigned long sox_uint32_t;
-#else
-#error Unable to determine an appropriate definition for sox_uint32_t.
-#endif
+typedef uint32_t sox_uint32_t;
 
 /**
 Client API:
 Signed twos-complement 64-bit type. Typically defined as long or long long.
 */
-#if LONG_MAX==9223372036854775807 && LONG_MIN==(-9223372036854775807-1)
-typedef long sox_int64_t;
-#elif defined(_MSC_VER)
-typedef __int64 sox_int64_t;
-#else
-typedef long long sox_int64_t;
-#endif
+typedef int64_t sox_int64_t;
 
 /**
 Client API:
 Unsigned 64-bit type. Typically defined as unsigned long or unsigned long long.
 */
-#if ULONG_MAX==0xffffffffffffffff
-typedef unsigned long sox_uint64_t;
-#elif defined(_MSC_VER)
-typedef unsigned __int64 sox_uint64_t;
-#else
-typedef unsigned long long sox_uint64_t;
-#endif
-
-#ifndef _DOXYGEN_
-lsx_static_assert(sizeof(sox_int8_t)==1,   sox_int8_size);
-lsx_static_assert(sizeof(sox_uint8_t)==1,  sox_uint8_size);
-lsx_static_assert(sizeof(sox_int16_t)==2,  sox_int16_size);
-lsx_static_assert(sizeof(sox_uint16_t)==2, sox_uint16_size);
-lsx_static_assert(sizeof(sox_int32_t)==4,  sox_int32_size);
-lsx_static_assert(sizeof(sox_uint32_t)==4, sox_uint32_size);
-lsx_static_assert(sizeof(sox_int64_t)==8,  sox_int64_size);
-lsx_static_assert(sizeof(sox_uint64_t)==8, sox_uint64_size);
-#endif
+typedef uint64_t sox_uint64_t;
 
 /**
 Client API:
@@ -567,6 +509,7 @@ typedef enum sox_version_flags_t {
 Client API:
 Format of sample data.
 */
+/* Must match the entries in formats.c:s_sox_encodings_info[] */
 typedef enum sox_encoding_t {
   SOX_ENCODING_UNKNOWN   , /**< encoding has not yet been determined */
 
@@ -668,7 +611,7 @@ The API version of the sox_ng.h file. It is not meant to follow the version
 number of SoX but it has historically. Please do not count on
 SOX_LIB_VERSION_CODE staying in sync with the libSoX version.
 */
-#define SOX_LIB_VERSION_CODE   SOX_LIB_VERSION(14, 6, 0)
+#define SOX_LIB_VERSION_CODE   SOX_LIB_VERSION(14, 6, 1)
 
 /**
 Client API:
@@ -1109,10 +1052,10 @@ offset is relative to the beginning of the file.
 Forward declarations:
 *****************************************************************************/
 
-typedef struct sox_format_t sox_format_t;
-typedef struct sox_effect_t sox_effect_t;
-typedef struct sox_effect_handler_t sox_effect_handler_t;
-typedef struct sox_format_handler_t sox_format_handler_t;
+typedef struct sox_format sox_format_t;
+typedef struct sox_effect sox_effect_t;
+typedef struct sox_effect_handler sox_effect_handler_t;
+typedef struct sox_format_handler sox_format_handler_t;
 
 /*****************************************************************************
 Function pointers:
@@ -1320,7 +1263,7 @@ Client API:
 Information about a build of libSoX, returned from the sox_version_info
 function.
 */
-typedef struct sox_version_info_t {
+typedef struct sox_version_info {
     size_t       size;         /**< structure size = sizeof(sox_version_info_t) */
     sox_version_flags_t flags; /**< feature flags = popen | magic | threads | memopen */
     sox_uint32_t version_code; /**< version number = 0x140400 */
@@ -1337,7 +1280,7 @@ Client API:
 Global parameters (for effects & formats), returned from the sox_get_globals
 function.
 */
-typedef struct sox_globals_t {
+typedef struct sox_globals {
 /* public: */
   unsigned     verbosity; /**< messages are only written if globals.verbosity >= message.level */
   sox_output_message_handler_t output_message_handler; /**< client-specified message output callback */
@@ -1375,7 +1318,7 @@ typedef struct sox_globals_t {
 Client API:
 Signal parameters; members should be set to SOX_UNSPEC (= 0) if unknown.
 */
-typedef struct sox_signalinfo_t {
+typedef struct sox_signalinfo {
   sox_rate_t       rate;         /**< samples per second, 0 if unknown */
   unsigned         channels;     /**< number of sound channels, 0 if unknown */
   unsigned         precision;    /**< bits per sample, 0 if unknown */
@@ -1387,7 +1330,7 @@ typedef struct sox_signalinfo_t {
 Client API:
 Basic information about an encoding.
 */
-typedef struct sox_encodings_info_t {
+typedef struct sox_encodings_info {
   sox_encodings_flags_t flags; /**< lossy once (lossy1), lossy twice (lossy2), or lossless (none). */
   char const * name;           /**< encoding name. */
   char const * desc;           /**< encoding description. */
@@ -1397,7 +1340,7 @@ typedef struct sox_encodings_info_t {
 Client API:
 Encoding parameters.
 */
-typedef struct sox_encodinginfo_t {
+typedef struct sox_encodinginfo {
   sox_encoding_t encoding; /**< format of sample numbers */
   unsigned bits_per_sample;/**< 0 if unknown or variable; uncompressed value if lossless; compressed value if lossy */
   double compression;      /**< compression factor (where applicable) */
@@ -1433,7 +1376,7 @@ typedef struct sox_encodinginfo_t {
 Client API:
 Looping parameters (out-of-band data).
 */
-typedef struct sox_loopinfo_t {
+typedef struct sox_loopinfo {
   sox_uint64_t  start;  /**< first sample */
   sox_uint64_t  length; /**< length */
   unsigned      count;  /**< number of repeats, 0=forever */
@@ -1444,7 +1387,7 @@ typedef struct sox_loopinfo_t {
 Client API:
 Instrument information.
 */
-typedef struct sox_instrinfo_t{
+typedef struct sox_instrinfo {
   signed char MIDInote;   /**< for unity pitch playback */
   signed char MIDIlow;    /**< MIDI pitch-bend low range */
   signed char MIDIhi;     /**< MIDI pitch-bend high range */
@@ -1456,7 +1399,7 @@ typedef struct sox_instrinfo_t{
 Client API:
 File buffer info.  Holds info so that data can be read in blocks.
 */
-typedef struct sox_fileinfo_t {
+typedef struct sox_fileinfo {
   char          *buf;                 /**< Pointer to data buffer */
   size_t        size;                 /**< Size of buffer in bytes */
   size_t        count;                /**< Count read into buffer */
@@ -1467,7 +1410,7 @@ typedef struct sox_fileinfo_t {
 Client API:
 Handler structure defined by each format.
 */
-struct sox_format_handler_t {
+struct sox_format_handler {
   unsigned     sox_lib_version_code;  /**< Checked on load; must be 1st in struct*/
   char         const * description;   /**< short description of format */
   char         const * const * names; /**< null-terminated array of filename extensions that are handled by this format */
@@ -1513,7 +1456,7 @@ struct sox_format_handler_t {
 Client API:
 Comments, instrument info, loop info (out-of-band data).
 */
-typedef struct sox_oob_t{
+typedef struct sox_oob {
   /* Decoded: */
   sox_comments_t   comments;              /**< Comment strings in id=value format. */
   sox_instrinfo_t  instr;                 /**< Instrument specification */
@@ -1526,7 +1469,7 @@ typedef struct sox_oob_t{
 Client API:
 Data passed to/from the format handler
 */
-struct sox_format_t {
+struct sox_format {
   char             * filename;      /**< File name */
 
   /**
@@ -1554,6 +1497,7 @@ struct sox_format_t {
   char             * filetype;      /**< Type of file, as determined by header inspection or libmagic. */
   sox_oob_t        oob;             /**< comments, instrument info, loop info (out-of-band data) */
   sox_bool         seekable;        /**< Can seek on this file */
+  sox_bool         last_byte_was_zero;/**< The last byte written was a zero */
   char             mode;            /**< Read or write mode ('r' or 'w') */
   sox_uint64_t     olength;         /**< Samples * chans written to file */
   sox_uint64_t     clips;           /**< Incremented if clipping occurs */
@@ -1576,7 +1520,7 @@ Information about a loaded format handler, including the format name and a
 function pointer that can be invoked to get additional information about the
 format.
 */
-typedef struct sox_format_tab_t {
+typedef struct sox_format_tab {
   char *name;         /**< Name of format handler */
   sox_format_fn_t fn; /**< Function to call to get format handler's information */
 } sox_format_tab_t;
@@ -1585,7 +1529,7 @@ typedef struct sox_format_tab_t {
 Client API:
 Global parameters for effects.
 */
-typedef struct sox_effects_globals_t {
+typedef struct sox_effects_globals {
   sox_plot_t plot;         /**< To help the user choose effect & options */
   sox_globals_t * global_info; /**< Pointer to associated SoX globals */
 } sox_effects_globals_t;
@@ -1594,7 +1538,7 @@ typedef struct sox_effects_globals_t {
 Client API:
 Effect handler information.
 */
-struct sox_effect_handler_t {
+struct sox_effect_handler {
   char const * name;  /**< Effect name */
   char const * usage; /**< Short explanation of parameters accepted by effect */
   char const * const * extra_usage;           /**< Additional lines of usage */
@@ -1612,7 +1556,7 @@ struct sox_effect_handler_t {
 Client API:
 Effect information.
 */
-struct sox_effect_t {
+struct sox_effect {
   sox_effects_globals_t    * global_info; /**< global effect parameters */
   sox_signalinfo_t         in_signal;     /**< Information about the incoming data stream */
   sox_signalinfo_t         out_signal;    /**< Information about the outgoing data stream */
@@ -1634,7 +1578,7 @@ struct sox_effect_t {
 Client API:
 Chain of effects to be applied to a stream.
 */
-typedef struct sox_effects_chain_t {
+typedef struct sox_effects_chain {
   sox_effect_t **effects;                  /**< Table of effects to be applied to a stream */
   size_t length;                           /**< Number of effects to be applied */
   sox_effects_globals_t global_info;       /**< Copy of global effects settings */
@@ -1654,7 +1598,7 @@ Client API:
 Returns version number string of libSoX, for example, "14.4.0".
 @returns The version number string of libSoX, for example, "14.4.0".
 */
-LSX_RETURN_VALID_Z LSX_RETURN_PURE
+LSX_RETURN_VALID_Z
 char const *
 LSX_API
 sox_version(void);

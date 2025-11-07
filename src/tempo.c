@@ -323,10 +323,10 @@ sox_effect_handler_t const * lsx_tempo_effect_fn(void)
 "-s      Optimize segment, search and overlap for speech",
 "-l      Optimize segment, search and overlap for linear processing",
 "OPTION  RANGE DEFAULT DESCRIPTION",
-"factor          ?     Ratio of new tempo to old; >1 speeds up, <1 slows down",
-"segment        82     Segment size in milliseconds",
-"search         14.68  Audio length over which to search for overlap point",
-"overlap        12     Segment overlap length in milliseconds",
+"factor  .1-100        Ratio of new tempo to old; >1 speeds up, <1 slows down",
+"segment 10-120 82     Segment size in milliseconds",
+"search   0-30  14.68  Audio length over which to search for overlap point",
+"overlap  0-30  12     Segment overlap length in milliseconds",
     NULL
   };
 
@@ -370,9 +370,21 @@ static int pitch_start(sox_effect_t * effp)
 sox_effect_handler_t const * lsx_pitch_effect_fn(void)
 {
   static sox_effect_handler_t handler;
+  static char const * const usage = "[-q] shift [segment [search [overlap]]]";
+  static char const * const extra_usage[] = {
+"-q      Use tree searches instead of linear ones",
+"OPTION  RANGE  DFLT  DESCRIPTION",
+"shift    any         Pitch shift in cents; >0 is higher, <0 is lower",
+"segment .1-100 82    Segment size in milliseconds",
+"search   0-30  14.68 Audio length in ms in which to search for overlap point",
+"overlap  0-30  12    Segment overlap length in milliseconds",
+    NULL
+  };
+
   handler = *lsx_tempo_effect_fn();
   handler.name = "pitch";
-  handler.usage = "[-q] shift-in-cents [segment-ms [search-ms [overlap-ms]]]",
+  handler.usage = usage;
+  handler.extra_usage = extra_usage;
   handler.getopts = pitch_getopts;
   handler.start = pitch_start;
   handler.flags &= ~SOX_EFF_LENGTH;

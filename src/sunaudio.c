@@ -334,6 +334,8 @@ static int sunstartwrite(sox_format_t * ft)
     pPriv->cOutput = sox_globals.bufsiz >> pPriv->sample_shift;
     pPriv->pOutput = lsx_malloc((size_t)pPriv->cOutput << pPriv->sample_shift);
 
+    ft->fp = &pPriv->device;
+
     return (SOX_SUCCESS);
 }
 
@@ -346,6 +348,7 @@ static int sunstop(sox_format_t* ft)
     if (pPriv->pOutput) {
         free(pPriv->pOutput);
     }
+    ft->fp = NULL;
     return SOX_SUCCESS;
 }
 
@@ -441,7 +444,7 @@ static size_t sunwrite(
         size_t cbStride;
         int cbWritten;
 
-        cStride = cInput;
+        cStride = cInputRemaining;
         if (cStride > pPriv->cOutput) {
             cStride = pPriv->cOutput;
         }

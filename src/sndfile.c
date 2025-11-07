@@ -128,8 +128,11 @@ static int ft_enc(unsigned size, sox_encoding_t e)
   if (e == SOX_ENCODING_FLAC      && size == 16) return SF_FORMAT_PCM_16;
   if (e == SOX_ENCODING_FLAC      && size == 24) return SF_FORMAT_PCM_24;
   if (e == SOX_ENCODING_FLAC      && size == 32) return SF_FORMAT_PCM_32;
+#ifdef HAVE_SF_FORMAT_OGG
+  if (e == SOX_ENCODING_VORBIS)   return SF_FORMAT_VORBIS;
+#endif
 #ifdef HAVE_SF_FORMAT_MPEG
-  if (e == SOX_ENCODING_MP3       && size == 16) return SF_FORMAT_MPEG_LAYER_III;
+  if (e == SOX_ENCODING_MP3)      return SF_FORMAT_MPEG_LAYER_III;
 #endif
   return 0; /* Bad encoding */
 }
@@ -168,11 +171,12 @@ static sox_encoding_t sox_enc(int ft_encoding, unsigned * size)
     case SF_FORMAT_DWVW_24  : *size = 24; return SOX_ENCODING_DWVW;
     case SF_FORMAT_DWVW_N   : *size =  0; return SOX_ENCODING_DWVWN;
     case SF_FORMAT_GSM610   : *size =  0; return SOX_ENCODING_GSM;
-#ifdef SF_FORMAT_MPEG_LAYER_II
+#if HAVE_SF_FORMAT_OGG
+    case SF_FORMAT_VORBIS   : *size =  0; return SOX_ENCODING_VORBIS;
+#endif
+#if HAVE_SF_FORMAT_MPEG
     case SF_FORMAT_MPEG_LAYER_II
                             : *size = 16; return SOX_ENCODING_MP3;
-#endif
-#ifdef SF_FORMAT_MPEG_LAYER_III
     case SF_FORMAT_MPEG_LAYER_III
                             : *size = 16; return SOX_ENCODING_MP3;
 #endif
@@ -194,13 +198,13 @@ static struct {
   { "flac",     SF_FORMAT_FLAC },
   { "wve",      SF_FORMAT_WVE },  /* Probably broken before 1.0.18 */
 #ifdef HAVE_SF_FORMAT_OGG
-  { "ogg",      SF_FORMAT_OGG },  /* From 1.0.16 */
+  { "ogg",      SF_FORMAT_OGG | SF_FORMAT_VORBIS },  /* From 1.0.16 */
 #endif
 #ifdef HAVE_SF_FORMAT_MPC2K
   { "mpc2k",    SF_FORMAT_MPC2K },  /* From 1.0.25 */
 #endif
 #ifdef HAVE_SF_FORMAT_MPEG
-  { "mp3",      SF_FORMAT_MPEG },  /* From 1.1.0 */
+  { "mp3",      SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III },  /* From 1.1.0 */
 #endif
   { "svx",      SF_FORMAT_SVX },
   { "8svx",     SF_FORMAT_SVX },
@@ -318,9 +322,22 @@ static int start(sox_format_t * ft)
   /* Copy format info */
   if (subtype) {
     if (strcmp(ft->filetype, "sndfile") == 0)
-      sf->sf_info->format = name_to_format(ft->filename) | subtype;
+      sf->sf_info->format = name_to_format(ft->filename);
     else
-      sf->sf_info->format = name_to_format(ft->filetype) | subtype;
+      sf->sf_info->format = name_to_format(ft->filetype);
+
+    /* For linear types, name_to_format only returns the major format type
+     * and we need to OR in the bit depth */
+    switch (sf->sf_info->format) {
+    case SF_FORMAT_OGG | SF_FORMAT_VORBIS:
+#if HAVE_SF_FORMAT_MPEG
+    case SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III:
+#endif
+      break;
+    default:
+      sf->sf_info->format |= subtype;
+      break;
+    }
   }
   sf->sf_info->samplerate = (int)ft->signal.rate;
   sf->sf_info->channels = ft->signal.channels;
@@ -471,7 +488,7 @@ static int startwrite(sox_format_t * ft)
       return SOX_EOF;
     }
     if ((sf->sf_info->format & SF_FORMAT_TYPEMASK) != SF_FORMAT_RAW 
-#ifdef SF_FORMAT_MPEG
+#if HAVE_SF_FORMAT_MPEG
         && (sf->sf_info->format & SF_FORMAT_TYPEMASK) != SF_FORMAT_MPEG
 #endif
 	)

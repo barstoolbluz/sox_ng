@@ -20,7 +20,7 @@
 
 typedef struct {
   dft_filter_priv_t base;
-  double     delta, start;
+  double     gain, reference;
   int        n;
 } priv_t;
 
@@ -29,21 +29,22 @@ static int create(sox_effect_t * effp, int argc, char **argv)
   priv_t * p = (priv_t *)effp->priv;
   dft_filter_priv_t * b = &p->base;
   b->filter_ptr = &b->filter;
-  p->delta = -10;
-  p->start = 65;
+  p->gain = -10;
+  p->reference = 65;
   p->n = 1023;
   --argc, ++argv;
   do {                    /* break-able block */
-    NUMERIC_PARAMETER(delta,-50 , 15) /* FIXME expand range */
-    NUMERIC_PARAMETER(start, 50 , 75) /* FIXME expand range */
+    NUMERIC_PARAMETER(gain     ,-50 , 15) /* FIXME expand range */
+    NUMERIC_PARAMETER(reference, 50 , 75) /* FIXME expand range */
     NUMERIC_PARAMETER(n    ,127 ,2047)
   } while (0);
   p->n = 2 * p->n + 1;
   return argc? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-static double * make_filter(int n, double start, double delta, double rate)
+static double * make_filter(int n, double reference, double gain, double rate)
 {
+  /* "reference" and "gain" used to be called "delta" and "start" */
   static const struct {double f, af, lu, tf;} iso226_table[] = {
     {   20,0.532,-31.6,78.5},{   25,0.506,-27.2,68.7},{ 31.5,0.480,-23.0,59.5},
     {   40,0.455,-19.1,51.1},{   50,0.432,-15.9,44.0},{   63,0.409,-13.0,37.5},
@@ -63,10 +64,10 @@ static double * make_filter(int n, double start, double delta, double rate)
   int i, work_len;
   
   fs[0] = log(1.);
-  spl[0] = delta * .2;
+  spl[0] = gain * .2;
   for (i = 0; i < (int)LEN - 2; ++i) {
-    spl[i + 1] = SPL(start + delta, iso226_table[i]) -
-                 SPL(start        , iso226_table[i]);
+    spl[i + 1] = SPL(reference + gain, iso226_table[i]) -
+                 SPL(reference       , iso226_table[i]);
     fs[i + 1] = log(iso226_table[i].f);
   }
   fs[i + 1] = log(100000.);
@@ -85,7 +86,7 @@ static double * make_filter(int n, double start, double delta, double rate)
   lsx_safe_rdft(work_len, -1, work);
   for (i = 0; i < n; ++i)
     h[i] = work[(work_len - n / 2 + i) % work_len] * 2. / work_len;
-  lsx_apply_kaiser(h, n, lsx_kaiser_beta(40 + 2./3 * fabs(delta), .1));
+  lsx_apply_kaiser(h, n, lsx_kaiser_beta(40 + 2./3 * fabs(gain), .1));
 
   free(work);
   return h;
@@ -98,16 +99,16 @@ static int start(sox_effect_t * effp)
   priv_t * p = (priv_t *) effp->priv;
   dft_filter_t * f = p->base.filter_ptr;
 
-  if (p->delta == 0)
+  if (p->gain == 0)
     return SOX_EFF_NULL;
 
   if (!f->num_taps) {
-    double * h = make_filter(p->n, p->start, p->delta, effp->in_signal.rate);
+    double * h = make_filter(p->n, p->reference, p->gain, effp->in_signal.rate);
     if (effp->global_info->plot != sox_plot_off) {
       char title[100];
-      sprintf(title, "SoX effect: loudness %g (%g)", p->delta, p->start);
+      sprintf(title, "SoX effect: loudness %g (%g)", p->gain, p->reference);
       lsx_plot_fir(h, p->n, effp->in_signal.rate,
-          effp->global_info->plot, title, p->delta - 5, 0.);
+          effp->global_info->plot, title, p->gain - 5, 0.);
       return SOX_EOF;
     }
     lsx_set_dft_filter(f, h, p->n, p->n >> 1);
@@ -117,10 +118,18 @@ static int start(sox_effect_t * effp)
 
 sox_effect_handler_t const * lsx_loudness_effect_fn(void)
 {
+  static char const * const extra_usage[] = {
+    "OPTION     RANGE  DEFAULT  DESCRIPTION",
+    "gain      -50-15    -10    Input gain",
+    "reference  50-75     65    Equalize w.r.t. this reference level",
+    "n         127-2047  1023   Half the number of points in the FIR filter",
+    NULL
+  };
   static sox_effect_handler_t handler;
   handler = *lsx_dft_filter_effect_fn();
   handler.name = "loudness";
-  handler.usage = "[gain [ref]]";
+  handler.usage = "[gain [reference [n]]]";
+  handler.extra_usage = extra_usage;
   handler.getopts = create;
   handler.start = start;
   handler.priv_size = sizeof(priv_t);

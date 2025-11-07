@@ -36,8 +36,9 @@ int main(int argc, char * argv[])
 
   check(argc >= 1 + 2 + 1); /* Need at least 2 input files + 1 output file. */
   check(sox_init() == SOX_SUCCESS);
+  check(sox_format_init() == SOX_SUCCESS);
 
-  /* Defer openning the output file as we want to set its characteristics
+  /* Defer opening the output file as we want to set its characteristics
    * based on those of the input files. */
 
   for (i = 1; i < argc - 1; ++i) { /* For each input file... */

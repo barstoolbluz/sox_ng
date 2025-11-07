@@ -112,7 +112,7 @@ static int stop(sox_effect_t * effp)
 
 sox_effect_handler_t const * lsx_phaser_effect_fn(void)
 {
-  static const char usage[] = "gain-in gain-out delay decay speed -s|-t";
+  static const char usage[] = "[gain-in [gain-out [delay [decay [speed [-s|-t]]]]]]";
   static char const * const extra_usage[] = {
 "               ___",
 "In ---------->|   |------------> Out",
@@ -130,8 +130,7 @@ sox_effect_handler_t const * lsx_phaser_effect_fn(void)
 "delay     0-1000   3     Delay in milliseconds",
 "decay    -1-1     0.4    Proportion of delay that is fed back",
 "speed     0-192k  0.5    Modulation speed (no more than the sample rate)",
-"-s                       Sinusoidal modulation",
-"-t                       Triangular modulation",
+"-s|-t             sine   Sinusoidal or triangular modulation",
 "",
 "Hint: gain-in  < (1 - decay * decay)",
 "      gain-out < (1 - decay) / gain-in",

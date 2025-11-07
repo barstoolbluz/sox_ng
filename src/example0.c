@@ -41,6 +41,7 @@ int main(int argc, char * argv[])
 
   /* All libSoX applications must start by initialising the SoX library */
   assert(sox_init() == SOX_SUCCESS);
+  assert(sox_format_init() == SOX_SUCCESS);
 
   /* Open the input file (with default parameters) */
   in = sox_open_read(argv[1], NULL, NULL, NULL);

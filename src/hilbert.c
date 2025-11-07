@@ -92,9 +92,15 @@ static int start(sox_effect_t *effp)
 sox_effect_handler_t const *lsx_hilbert_effect_fn(void)
 {
   static sox_effect_handler_t handler;
+  static char const * const extra_usage[] = {
+    "The default number of taps is chosen for a cutoff frequency of about 75Hz.",
+    "For a cutoff frequency of about N Hz, use the sample rate divided by N.",
+    NULL
+  };
   handler = *lsx_dft_filter_effect_fn();
   handler.name = "hilbert";
   handler.usage = "[-n taps]";
+  handler.extra_usage = extra_usage;
   handler.getopts = getopts;
   handler.start = start;
   handler.priv_size = sizeof(priv_t);

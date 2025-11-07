@@ -710,7 +710,7 @@ static int stop(sox_effect_t * effp)
 sox_effect_handler_t const * lsx_rate_effect_fn(void)
 {
   static const char usage[] =
-    "[-q|-l|-m|-h|-v] [override-options] rate[k]";
+    "[-q|-l|-m|-h|-v] [override-options] frequency";
 
   static char const * const extra_usage[] = {
 "    QUALITY    BANDWIDTH  REJ dB   TYPICAL USE",
@@ -725,7 +725,7 @@ sox_effect_handler_t const * lsx_rate_effect_fn(void)
 "-a           Allow aliasing above the pass-band",
 "-b 74-99.7   Any band-width %",
 "-p 0-100     Any phase response (0 = minimum, 25 = intermediate,",
-"             50 = linear, 100 = maximum)",
+"                                50 = linear, 100 = maximum)",
     NULL
   };
 

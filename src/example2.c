@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <assert.h>
+#include "xmalloc.h"
 
 #define max(a,b) ((a) > (b) ? (a) : (b))
 
@@ -48,6 +49,7 @@ int main(int argc, char * argv[])
 
   /* All libSoX applications must start by initialising the SoX library */
   assert(sox_init() == SOX_SUCCESS);
+  assert(sox_format_init() == SOX_SUCCESS);
 
   assert(argc > 1);
   ++argv, --argc; /* Move to 1st parameter */

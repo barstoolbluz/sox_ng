@@ -56,8 +56,8 @@ static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
     p->pos /= sizeof(sox_sample_t);
   }
   p->pos -= *osamp = min((off_t)*osamp, p->pos);
-  fseeko(p->tmp_file, (off_t)(p->pos * sizeof(sox_sample_t)), SEEK_SET);
-  if (fread(obuf, sizeof(sox_sample_t), *osamp, p->tmp_file) != *osamp) {
+  if (fseeko(p->tmp_file, (off_t)(p->pos * sizeof(sox_sample_t)), SEEK_SET) ||
+      fread(obuf, sizeof(sox_sample_t), *osamp, p->tmp_file) != *osamp) {
     lsx_fail("error reading temporary file: %s", strerror(errno));
     return SOX_EOF;
   }
@@ -72,7 +72,7 @@ static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
 static int stop(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
-  fclose(p->tmp_file); /* auto-deleted by lsx_tmpfile */
+  lsx_close_tmpfile(p->tmp_file);
   return SOX_SUCCESS;
 }
 

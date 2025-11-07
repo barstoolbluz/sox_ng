@@ -18,7 +18,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
 
-AC_INIT([sox_ng], [14.6.0.2], [sox-ng@groups.io])
+AC_INIT([sox_ng], [14.6.1.2], [sox-ng@groups.io])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -145,7 +145,7 @@ dnl "yes" enables -fstack-protector or fails if it's not available.
 dnl "all" or "strong" require that flag to be available in the gcc you have.
 dnl "auto" chooses -fstack-protector-strong if it's available or
 dnl                -fstack-protector if only that is available or
-dnl                no starck protection if none is available.
+dnl                no stack protection if none is available.
 dnl "auto" is the default if no --enable-stack-protector option is given.
 
 AC_ARG_ENABLE(stack-protector,
@@ -210,13 +210,16 @@ strong)
 	AC_MSG_ERROR([gcc-$gccver does not have -fstack-protector-strong])
     fi ;;
 auto)
-    if test x"$have_ssp_strong" = x"yes"
+    if test x"$have_ssp" = x"yes"
     then
-	CFLAGS="$CFLAGS -fstack-protector-strong"
-	enable_ssp=strong	# For the final report
-    else
-	CFLAGS="$CFLAGS -fstack-protector"
-	enable_ssp=yes		# For the final report
+	if test x"$have_ssp_strong" = x"yes"
+	then
+	    CFLAGS="$CFLAGS -fstack-protector-strong"
+	    enable_ssp=strong	# For the final report
+	else
+	    CFLAGS="$CFLAGS -fstack-protector"
+	    enable_ssp=yes		# For the final report
+	fi
     fi ;;
 esac
 
@@ -244,18 +247,19 @@ AC_CHECK_INCLUDES_DEFAULT
 AC_PROG_EGREP
 
 dnl Checks for header files.
-AC_CHECK_HEADERS(fcntl.h unistd.h byteswap.h sys/select.h sys/stat.h sys/time.h sys/timeb.h sys/types.h sys/utsname.h sys/wait.h termios.h glob.h fenv.h stropts.h)
+AC_CHECK_HEADERS(fcntl.h unistd.h byteswap.h sys/ioctl.h sys/select.h sys/stat.h sys/time.h sys/timeb.h sys/types.h sys/utsname.h sys/wait.h termios.h glob.h fenv.h stropts.h)
 
 dnl Checks for library functions.
-AC_CHECK_FUNCS(strcasecmp strdup popen vsnprintf gettimeofday mkstemp fmemopen aligned_alloc)
+AC_CHECK_FUNCS(strcasecmp strdup popen vsnprintf gettimeofday mkstemp fmemopen)
 AC_CHECK_FUNCS(posix_fadvise)
+
+dnl aligned alloc required for sdm_x86.h using AVX (32-byte) or SSE2 (16-byte)
+AC_CHECK_FUNCS(aligned_alloc memalign posix_memalign)
 
 dnl Check if math library is needed.
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([lrint], [m])
-AC_SEARCH_LIBS([va_copy])
 AC_CHECK_FUNCS([lrint])
-AC_CHECK_FUNCS([va_copy])
 
 dnl Large File Support
 AC_SYS_LARGEFILE
@@ -641,15 +645,8 @@ AC_OPTIONAL_FORMAT(oggvorbis, OGG_VORBIS, [AC_CHECK_HEADER(vorbis/codec.h,
 # so we have to work round it by changing all -I dirs to */opus
 # before checking opusfile.
 
-if test x"$using_pkgconfig" = "xyes"
-then
-    PKG_CHECK_MODULES(OPUS, opus opusfile, using_opus=yes, using_opus=no)
-else
-    opus_old_cflags="$CFLAGS"
-    # Extra square brackets are required otherwise m4 mangles them
-    OPUS_CFLAGS="$(echo $CFLAGS | sed 's|\(-I[[^ ]]*\)|\1 \1/opus|g') -I/usr/local/include/opus -I/usr/include/opus"
-fi
-CFLAGS="$CFLAGS $OPUS_CFLAGS"
+# Extra square brackets are required otherwise m4 mangles them
+CFLAGS="$(echo "$CFLAGS" | sed 's|\(-I[[^ ]]*\)|\1 \1/opus|g') -I/usr/local/include/opus -I/usr/include/opus"
 
 AC_OPTIONAL_FORMAT(opus, OPUS, [AC_CHECK_HEADER(opus/opusfile.h,
   [AC_CHECK_LIB(opus, opus_decoder_create, OPUS_LIBS="$OPUS_LIBS -lopus", using_opus=no)
@@ -757,7 +754,7 @@ AC_ARG_ENABLE(dl_sndfile,
 	      AS_HELP_STRING([--enable-dl-sndfile], 
 			     [Dlopen sndfile instead of linking in.]),
 			     enable_dl_sndfile=$enableval, enable_dl_sndfile=no)
-if test "x$using_sndfile" = "xyes"; then
+if test "x$tmp_using_sndfile" = "xyes"; then
   if test "x$using_libltdl" = "xyes" -a "x$enable_dl_sndfile" = "xyes"; then
     AC_DEFINE(DL_SNDFILE, 1, [Define to dlopen() sndfile.]) 
     dnl When enable_dl_sndfile, do not let SOX_PATH_SNDFILE add libraries
@@ -932,7 +929,6 @@ echo " twolame...................$using_twolame"
 if test "x$using_twolame" = "xyes"; then
 echo " dlopen twolame............$enable_dl_twolame"
 fi
-echo " iconv support.............$using_iconv"
 echo "oggvorbis..................$using_oggvorbis"
 echo "opus.......................$using_opus"
 echo "sndfile....................$using_sndfile"

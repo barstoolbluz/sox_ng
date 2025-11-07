@@ -30,7 +30,7 @@ EXTRA_DIST = sox_ng.txt soxi_ng.txt soxformat_ng.txt libsox_ng.txt \
 	     CMakeLists.txt sox_ng.pc.in COPYING AUTHORS INSTALL \
 	     README.win32 README.osx scripts/batch-example.bat \
 	     README.md RULES.md RULES-issues.md RULES-wiki.md \
-	     README.sh FEATURES.in test issues wiki/*
+	     README.sh FEATURES.in test/* issues wiki/*
 
 if HAVE_PKGCONFIG
 pkgconfig_DATA = sox_ng.pc
@@ -153,6 +153,10 @@ install-data-hook:
 			cd $(DESTDIR)$(mandir)/man1 && $(RM) soxi.1 && \
 			    $(LN_S) soxi_ng.1 soxi.1; \
 		fi; \
+		if test "$(pkgconfigdir)"; then \
+			cd $(DESTDIR)$(pkgconfigdir); \
+			$(RM) "sox.pc"; $(LN_S) sox_ng.pc sox.pc; \
+		fi; \
 	fi
 
 uninstall-hook:
@@ -173,8 +177,29 @@ uninstall-hook:
 		if test "$(SYMLINKS)" = "yes"; then \
 			$(RM) $(DESTDIR)$(mandir)/man1/soxi.1; \
 		fi; \
+		if test "$(pkgconfigdir)"; then \
+			cd $(DESTDIR)$(pkgconfigdir); \
+			$(RM) "sox.pc"; \
+		fi; \
 	fi
 
 # Automatically update libtool script if it gets out-of-date
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status --recheck
+
+winexe-prepare:
+	test -d mxe || git clone https://github.com/mxe/mxe
+	rm -f *.tar.gz
+	$(MAKE) -s dist
+	cp sox_ng-*.tar.gz mxe/pkg/
+	sed "/_VERSION *:= /s/:=.*/:= $(PACKAGE_VERSION)/" sox_ng.mk | \
+	sed '/_CHECKSUM *:= /s/:=.*/:= '\
+"`sha256sum sox_ng-*.tar.gz | sed 's/[ \t].*//'`"/ > mxe/src/sox_ng.mk
+
+win32.exe: winexe-prepare
+	cd mxe && make MXE_TARGETS=i686-w64-mingw32.static sox_ng
+	cp mxe/usr/i686-w64-mingw32.static/bin/sox_ng.exe win32.exe
+
+win64.exe: winexe-prepare
+	cd mxe && make MXE_TARGETS=x86_64-w64-mingw32.static sox_ng
+	cp mxe/usr/x86_64-w64-mingw32.static/bin/sox_ng.exe win64.exe

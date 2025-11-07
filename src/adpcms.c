@@ -66,8 +66,11 @@ void lsx_adpcm_init(adpcm_t * p, int type, int first_sample)
 
 int lsx_adpcm_decode(int code, adpcm_t * p)
 {
-  int s = ((code & (p->setup.sign - 1)) << 1) | 1;
-  s = ((p->setup.steps[p->step_index] * s) >> (p->setup.shift + 1)) & p->setup.mask;
+  int s = 0;
+  if (code & 4) s += (p->setup.steps[p->step_index]);
+  if (code & 2) s += (p->setup.steps[p->step_index] >> 1) & p->setup.mask;
+  if (code & 1) s += (p->setup.steps[p->step_index] >> 2) & p->setup.mask;
+  s += (p->setup.steps[p->step_index] >> 3) & p->setup.mask;
   if (code & p->setup.sign)
     s = -s;
   s += p->last_output;
@@ -87,14 +90,21 @@ int lsx_adpcm_decode(int code, adpcm_t * p)
 
 int lsx_adpcm_encode(int sample, adpcm_t * p)
 {
-  int delta = sample - p->last_output;
+  int delta = (sample - p->last_output) & p->setup.mask;
   int sign = 0;
-  int code;
+  int code = 0;
+  int step;
   if (delta < 0) {
     sign = p->setup.sign;
     delta = -delta;
   }
-  code = (delta << p->setup.shift) / p->setup.steps[p->step_index];
+  step = p->setup.steps[p->step_index];
+  delta -= (step >> 3) & p->setup.mask;
+  if (delta >= step) { code |= 4; delta -= step; }
+  step = (step >> 1) & p->setup.mask;
+  if (delta >= step) { code |= 2; delta -= step; }
+  step = (step >> 1) & p->setup.mask;
+  if (delta >= step) { code |= 1; }
   code = sign | min(code, p->setup.sign - 1);
   lsx_adpcm_decode(code, p); /* Update encoder state */
   return code;

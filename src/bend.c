@@ -320,13 +320,19 @@ static int lsx_kill(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static const char usage[] =
-"[-f frame-rate(25)] [-o over-sample(16)] {start(+),cents,end(+)}";
+static char const usage[] =
+"[-f frame-rate] [-o over-sample] {start(+),cents,end(+)}";
+static char const * const extra_usage[] = {
+  "OPTION   RANGE  DEFAULT  DESCRIPTION",
+  "-f rate  10-80    25     Frame rate",
+  "-o ratio  4-32    16     Oversampling",
+  NULL
+};
 
 sox_effect_handler_t const *lsx_bend_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "bend", usage, NULL, 0,
+    "bend", usage, extra_usage, 0,
     create, start, flow, NULL, stop, lsx_kill, sizeof(priv_t)
   };
   return &handler;
