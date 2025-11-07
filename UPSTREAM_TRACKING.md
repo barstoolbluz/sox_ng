@@ -307,14 +307,24 @@ git push origin main
 - **Upstream remote**: ✅ Added
 - **Latest upstream tag**: `sox_ng-14.6.1.2`
 - **Latest upstream commit**: `c9d20325` (sox_ng-14.6.1+git20251029-32)
-- **Our version**: `14.6.0-custom` (needs update)
-- **Source files**: Unpatched (patches applied at build time)
-- **Patches**: All maintained in `.flox/pkgs/sox_ng.nix`
+- **Our version**: ✅ `14.6.1.2-custom` (updated 2025-11-06)
+- **Source files**: ✅ Unpatched (patches applied at build time)
+- **Patches**: ✅ All maintained in `.flox/pkgs/sox_ng.nix`
+- **Tested**: ✅ Large sinc filters working (50k, 500k taps verified)
 
-## Next Steps
+## Completed Initial Update (2025-11-06)
 
-1. Merge latest upstream (`sox_ng-14.6.1.2` or later)
-2. Update version string in Nix expression
-3. Test builds on both Linux and macOS if possible
-4. Update flake.lock
+The workflow has been successfully tested with an update from 14.6.0.2 → 14.6.1.2:
+1. ✅ Used selective checkout method
+2. ✅ Updated Nix expression to handle upstream code changes (GETOPT_LOCAL_NUMERIC)
+3. ✅ Both `flox build sox_ng` and `nix build .` working
+4. ✅ All patches verified working
+5. ✅ Committed and documented
+
+## Next Steps for Future Updates
+
+1. Monitor upstream for new releases (check every 3-6 months)
+2. When new version available, use the selective checkout workflow above
+3. Test builds and verify patches still apply correctly
+4. Update flake.lock if needed
 5. Commit and push
