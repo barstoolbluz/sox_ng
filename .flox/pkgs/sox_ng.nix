@@ -69,8 +69,8 @@ stdenv.mkDerivation rec {
 
   ] ++ lib.optionals stdenv.isDarwin [
     # Darwin frameworks
-    darwin.apple_sdk_11_0.frameworks.CoreFoundation
-    darwin.apple_sdk_11_0.frameworks.IOKit
+    darwin.apple_sdk.frameworks.CoreFoundation
+    darwin.apple_sdk.frameworks.IOKit
   ];
 
   postPatch = ''
