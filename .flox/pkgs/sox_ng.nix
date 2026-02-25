@@ -21,7 +21,6 @@
 , alsa-lib
 , libpulseaudio
 , ladspa-sdk
-, darwin
 }:
 
 stdenv.mkDerivation rec {
@@ -67,10 +66,6 @@ stdenv.mkDerivation rec {
     libpulseaudio
     ladspa-sdk
 
-  ] ++ lib.optionals stdenv.isDarwin [
-    # Darwin frameworks
-    darwin.apple_sdk.frameworks.CoreFoundation
-    darwin.apple_sdk.frameworks.IOKit
   ];
 
   postPatch = ''
