@@ -21,12 +21,12 @@ functions
     dfct: Cosine Transform of RDFT (Real Symmetric DFT)
     dfst: Sine Transform of RDFT (Real Anti-symmetric DFT)
 function prototypes
-    void cdft(int, int, double *, int *, double *);
-    void rdft(int, int, double *, int *, double *);
-    void ddct(int, int, double *, int *, double *);
-    void ddst(int, int, double *, int *, double *);
-    void dfct(int, double *, double *, int *, double *);
-    void dfst(int, double *, double *, int *, double *);
+    void cdft(size_t, int, double *, int *, double *);
+    void rdft(size_t, int, double *, int *, double *);
+    void ddct(size_t, int, double *, int *, double *);
+    void ddst(size_t, int, double *, int *, double *);
+    void dfct(size_t, double *, double *, int *, double *);
+    void dfst(size_t, double *, double *, int *, double *);
 
 
 -------- Complex DFT (Discrete Fourier Transform) --------
@@ -307,23 +307,23 @@ Appendix :
   #define dfst  lsx_dfst
 #endif
 
-static void bitrv2conj(int n, int *ip, double *a);
-static void bitrv2(int n, int *ip, double *a);
-static void cft1st(int n, double *a, double const *w);
-static void cftbsub(int n, double *a, double const *w);
-static void cftfsub(int n, double *a, double const *w);
-static void cftmdl(int n, int l, double *a, double const *w);
+static void bitrv2conj(size_t n, unsigned *ip, double *a);
+static void bitrv2(size_t n, unsigned *ip, double *a);
+static void cft1st(size_t n, double *a, double const *w);
+static void cftbsub(size_t n, double *a, double const *w);
+static void cftfsub(size_t n, double *a, double const *w);
+static void cftmdl(size_t n, unsigned l, double *a, double const *w);
 #ifndef SOX_H
-static void dctsub(int n, double *a, int nc, double const *c);
-static void dstsub(int n, double *a, int nc, double const *c);
+static void dctsub(size_t n, double *a, int nc, double const *c);
+static void dstsub(size_t n, double *a, int nc, double const *c);
 #endif
-static void makect(int nc, int *ip, double *c);
-static void makewt(int nw, int *ip, double *w);
-static void rftbsub(int n, double *a, int nc, double const *c);
-static void rftfsub(int n, double *a, int nc, double const *c);
+static void makect(size_t nc, unsigned *ip, double *c);
+static void makewt(size_t nw, unsigned *ip, double *w);
+static void rftbsub(size_t n, double *a, unsigned nc, double const *c);
+static void rftfsub(size_t n, double *a, unsigned nc, double const *c);
 
 
-void cdft(int n, int isgn, double *a, int *ip, double *w)
+void cdft(size_t n, int isgn, double *a, unsigned *ip, double *w)
 {
     if (n > FFT4G_MAX_SIZE) {
         lsx_fail("FFT size is too large");
@@ -347,9 +347,9 @@ void cdft(int n, int isgn, double *a, int *ip, double *w)
 }
 
 
-void rdft(int n, int isgn, double *a, int *ip, double *w)
+void rdft(size_t n, int isgn, double *a, unsigned *ip, double *w)
 {
-    int nw, nc;
+    unsigned nw, nc;
     double xi;
     
     if (n > FFT4G_MAX_SIZE) {
@@ -392,9 +392,9 @@ void rdft(int n, int isgn, double *a, int *ip, double *w)
 }
 
 #ifndef SOX_H
-void ddct(int n, int isgn, double *a, int *ip, double *w)
+void ddct(size_t n, int isgn, double *a, unsigned *ip, double *w)
 {
-    int j, nw, nc;
+    unsigned j, nw, nc;
     double xr;
     
     if (n > FFT4G_MAX_SIZE) {
@@ -448,9 +448,9 @@ void ddct(int n, int isgn, double *a, int *ip, double *w)
 }
 
 
-void ddst(int n, int isgn, double *a, int *ip, double *w)
+void ddst(size_t n, int isgn, double *a, unsigned *ip, double *w)
 {
-    int j, nw, nc;
+    unsigned j, nw, nc;
     double xr;
     
     if (n > FFT4G_MAX_SIZE) {
@@ -504,9 +504,9 @@ void ddst(int n, int isgn, double *a, int *ip, double *w)
 }
 
 
-void dfct(int n, double *a, double *t, int *ip, double *w)
+void dfct(size_t n, double *a, double *t, unsigned *ip, double *w)
 {
-    int j, k, l, m, mh, nw, nc;
+    unsigned j, k, l, m, mh, nw, nc;
     double xr, xi, yr, yi;
     
     if (n > FFT4G_MAX_SIZE) {
@@ -599,9 +599,9 @@ void dfct(int n, double *a, double *t, int *ip, double *w)
 }
 
 
-void dfst(int n, double *a, double *t, int *ip, double *w)
+void dfst(size_t n, double *a, double *t, unsigned *ip, double *w)
 {
-    int j, k, l, m, mh, nw, nc;
+    unsigned j, k, l, m, mh, nw, nc;
     double xr, xi, yr, yi;
     
     if (n > FFT4G_MAX_SIZE) {
@@ -689,9 +689,9 @@ void dfst(int n, double *a, double *t, int *ip, double *w)
 /* -------- initializing routines -------- */
 
 
-static void makewt(int nw, int *ip, double *w)
+static void makewt(size_t nw, unsigned *ip, double *w)
 {
-    int j, nwh;
+    unsigned j, nwh;
     double delta, x, y;
     
     ip[0] = nw;
@@ -718,9 +718,9 @@ static void makewt(int nw, int *ip, double *w)
 }
 
 
-static void makect(int nc, int *ip, double *c)
+static void makect(size_t nc, unsigned *ip, double *c)
 {
-    int j, nch;
+    unsigned j, nch;
     double delta;
     
     ip[1] = nc;
@@ -740,9 +740,10 @@ static void makect(int nc, int *ip, double *c)
 /* -------- child routines -------- */
 
 
-static void bitrv2(int n, int *ip0, double *a)
+static void bitrv2(size_t n, unsigned *ip0, double *a)
 {
-    int j, j1, k, k1, l, m, m2, ip[256];
+    unsigned j, j1, k, k1, l, m, m2;
+    unsigned ip[16384];
     double xr, xi, yr, yi;
     
     (void)ip0;
@@ -841,9 +842,10 @@ static void bitrv2(int n, int *ip0, double *a)
 }
 
 
-static void bitrv2conj(int n, int *ip0, double *a)
+static void bitrv2conj(size_t n, unsigned *ip0, double *a)
 {
-    int j, j1, k, k1, l, m, m2, ip[256];
+    unsigned j, j1, k, k1, l, m, m2;
+    unsigned ip[16384];
     double xr, xi, yr, yi;
     
     (void)ip0;
@@ -951,9 +953,9 @@ static void bitrv2conj(int n, int *ip0, double *a)
 }
 
 
-static void cftfsub(int n, double *a, double const *w)
+static void cftfsub(size_t n, double *a, double const *w)
 {
-    int j, j1, j2, j3, l;
+    unsigned j, j1, j2, j3, l;
     double x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
     
     l = 2;
@@ -1001,9 +1003,9 @@ static void cftfsub(int n, double *a, double const *w)
 }
 
 
-static void cftbsub(int n, double *a, double const *w)
+static void cftbsub(size_t n, double *a, double const *w)
 {
-    int j, j1, j2, j3, l;
+    unsigned j, j1, j2, j3, l;
     double x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
     
     l = 2;
@@ -1051,9 +1053,9 @@ static void cftbsub(int n, double *a, double const *w)
 }
 
 
-static void cft1st(int n, double *a, double const *w)
+static void cft1st(size_t n, double *a, double const *w)
 {
-    int j, k1, k2;
+    unsigned j, k1, k2;
     double wk1r, wk1i, wk2r, wk2i, wk3r, wk3i;
     double x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
     
@@ -1156,9 +1158,9 @@ static void cft1st(int n, double *a, double const *w)
 }
 
 
-static void cftmdl(int n, int l, double *a, double const *w)
+static void cftmdl(size_t n, unsigned l, double *a, double const *w)
 {
-    int j, j1, j2, j3, k, k1, k2, m, m2;
+    unsigned j, j1, j2, j3, k, k1, k2, m, m2;
     double wk1r, wk1i, wk2r, wk2i, wk3r, wk3i;
     double x0r, x0i, x1r, x1i, x2r, x2i, x3r, x3i;
     
@@ -1283,9 +1285,9 @@ static void cftmdl(int n, int l, double *a, double const *w)
 }
 
 
-static void rftfsub(int n, double *a, int nc, double const *c)
+static void rftfsub(size_t n, double *a, unsigned nc, double const *c)
 {
-    int j, k, kk, ks, m;
+    unsigned j, k, kk, ks, m;
     double wkr, wki, xr, xi, yr, yi;
     
     m = n >> 1;
@@ -1308,9 +1310,9 @@ static void rftfsub(int n, double *a, int nc, double const *c)
 }
 
 
-static void rftbsub(int n, double *a, int nc, double const *c)
+static void rftbsub(size_t n, double *a, unsigned nc, double const *c)
 {
-    int j, k, kk, ks, m;
+    unsigned j, k, kk, ks, m;
     double wkr, wki, xr, xi, yr, yi;
     
     a[1] = -a[1];
@@ -1336,9 +1338,9 @@ static void rftbsub(int n, double *a, int nc, double const *c)
 
 
 #ifndef SOX_H
-static void dctsub(int n, double *a, int nc, double const *c)
+static void dctsub(size_t n, double *a, unsigned nc, double const *c)
 {
-    int j, k, kk, ks, m;
+    unsigned j, k, kk, ks, m;
     double wkr, wki, xr;
     
     m = n >> 1;
@@ -1357,9 +1359,9 @@ static void dctsub(int n, double *a, int nc, double const *c)
 }
 
 
-static void dstsub(int n, double *a, int nc, double const *c)
+static void dstsub(size_t n, double *a, unsigned nc, double const *c)
 {
-    int j, k, kk, ks, m;
+    unsigned j, k, kk, ks, m;
     double wkr, wki, xr;
     
     m = n >> 1;

@@ -19,7 +19,7 @@
 
 #include "sox_i.h"
 
-static char const ID1[18] = "ALawSoundFile**\0\017\020";
+static char const ID1[18] = {'A','L','a','w','S','o','u','n','d','F','i','l','e','*','*','\0','\017','\020'};
 static char const ID2[] = {0,0,0,1,0,0,0,0,0,0}; /* pad & repeat info: ignore */
 
 static int start_read(sox_format_t * ft)

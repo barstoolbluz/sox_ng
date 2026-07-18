@@ -23,7 +23,7 @@ static double difference(
   double diff = 0;
   size_t i = 0;
 
-  #define _ diff += sqr((double)a[i] - b[i]), ++i; /* Loop optimisation */
+  #define _ diff += sqr((double)a[i] - b[i]), ++i; /* Loop optimization */
   do {_ _ _ _ _ _ _ _} while (i < length); /* N.B. length ≡ 0 (mod 8) */
   #undef _
   return diff;
@@ -134,37 +134,55 @@ static int parse(sox_effect_t * effp, char * * argv, sox_rate_t rate)
 
     next = lsx_parseposition(rate, p->splices[i].str,
              argv ? NULL : &p->splices[i].start, last_seen, in_length, '=');
-    if (next == NULL) break;
+    if (next == NULL) {
+      lsx_fail("cannot parse position `%s'", p->splices[i].str);
+      return SOX_EOF;
+    }
     last_seen = p->splices[i].start;
 
     if (*next == ',') {
+      char const *failing_next = next + 1;
       next = lsx_parsesamples(rate, next + 1, &p->splices[i].overlap, 't');
-      if (next == NULL) break;
+      if (next == NULL) {
+        lsx_fail("cannot parse excess `%s'", failing_next);
+        return SOX_EOF;
+      }
       p->splices[i].overlap *= 2;
       if (*next == ',') {
+	failing_next = next + 1;
         next = lsx_parsesamples(rate, next + 1, &p->splices[i].search, 't');
-        if (next == NULL) break;
+        if (next == NULL) {
+          lsx_fail("cannot parse leeway `%s'", failing_next);
+          return SOX_EOF;
+        }
         p->splices[i].search *= 2;
       }
     }
-    if (*next != '\0') break;
+    if (*next != '\0') {
+      lsx_fail("trailing garbage `%s'", next);
+      return SOX_EOF;
+    }
     p->splices[i].overlap = max(p->splices[i].overlap + 4, 16);
-    p->splices[i].overlap &= ~7; /* Make divisible by 8 for loop optimisation */
+    p->splices[i].overlap &= ~7; /* Make divisible by 8 for loop optimization */
 
     if (!argv) {
-      if (i > 0 && p->splices[i].start <= p->splices[i-1].start) break;
-      if (p->splices[i].start < p->splices[i].overlap) break;
+      if (i > 0 && p->splices[i].start <= p->splices[i-1].start) {
+        lsx_fail("starts must be in increasing order");
+        return SOX_EOF;
+      }
+      if (p->splices[i].start < p->splices[i].overlap) {
+        lsx_fail("excess is longer than the start position");
+        return SOX_EOF;
+      }
       p->splices[i].start -= p->splices[i].overlap;
       buffer_size = 2 * p->splices[i].overlap + p->splices[i].search;
       p->max_buffer_size = max(p->max_buffer_size, buffer_size);
     }
   }
-  if (i < p->nsplices)
-    return lsx_usage(effp);
   return SOX_SUCCESS;
 }
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_splice(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   --argc, ++argv;
@@ -178,12 +196,14 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   return parse(effp, argv, 1e5); /* No rate yet; parse with dummy */
 }
 
-static int start(sox_effect_t * effp)
+static int start_splice(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
 
-  parse(effp, 0, effp->in_signal.rate); /* Re-parse now rate is known */
+  /* Re-parse now rate is known */
+  if (parse(effp, 0, effp->in_signal.rate)) return SOX_EOF;
+
   lsx_vcalloc(p->buffer, p->max_buffer_size * effp->in_signal.channels);
   p->in_pos = p->buffer_pos = p->splices_pos = 0;
   p->state = p->splices_pos != p->nsplices && p->in_pos == p->splices[p->splices_pos].start;
@@ -197,7 +217,7 @@ static int start(sox_effect_t * effp)
   return SOX_EFF_NULL;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_splice(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -260,22 +280,22 @@ flushing:
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+static int drain_splice(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 {
   size_t isamp = 0;
-  return flow(effp, 0, obuf, &isamp, osamp);
+  return flow_splice(effp, 0, obuf, &isamp, osamp);
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_splice(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   if (p->splices_pos != p->nsplices)
-    lsx_warn("Input audio too short; splices not made: %u", p->nsplices - p->splices_pos);
+    lsx_warn("input audio is too short; splices not made: %u", p->nsplices - p->splices_pos);
   free(p->buffer);
   return SOX_SUCCESS;
 }
 
-static int lsx_kill(sox_effect_t * effp)
+static int kill_splice(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
@@ -301,9 +321,11 @@ sox_effect_handler_t const * lsx_splice_effect_fn(void)
   };
 
   static sox_effect_handler_t handler = {
-    "splice", usage, extra_usage,
+    "splice", usage,
     SOX_EFF_MCHAN | SOX_EFF_LENGTH,
-    create, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    create_splice, start_splice, flow_splice, drain_splice,
+    stop_splice, kill_splice,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
   return &handler;
 }

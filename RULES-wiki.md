@@ -4,9 +4,9 @@ The "master copy" of the sox_ng wiki lives on Codeberg.
 You can browse it online at
 [`http://codeberg.org/sox_ng/sox_ng/wiki`](http://codeberg.org/sox_ng/sox_ng/wiki)
 and fetch a copy by
-```
-git clone https://codeberg.org/sox_ng/sox_ng.wiki wiki
-```
+
+    git clone https://codeberg.org/sox_ng/sox_ng.wiki wiki
+
 One usually clones it into the `wiki` subdirectory of a clone of `sox_ng`.
 
 The preferred way to edit the wiki pages is to
@@ -29,6 +29,9 @@ that makes it easier to search for them with precision.
 
 [Semantic line breaks](https://sembr.org) and less-than-80-column lines
 are preferred to long lines so that the `.md` version is more readable.
+
+The same wiki is included in all release tarballs, so if content only applies
+to some versions of `sox_ng`, say which.
 
 ## Markdown style
 
@@ -72,30 +75,28 @@ converted to four at the moment. Issue #139.
 Line breaks inside list items should be done with a blank line.
 
 Instead of
-```
-* mansr's 2015 post says
-  When I recently decided to take a closer look at the DSD phenomenon
-```
-you should write
-```
-* mansr's 2015 post says
 
-  When I recently decided to take a closer look at the DSD phenomenon
-```
+    * mansr's 2015 post says
+      When I recently decided to take a closer look at the DSD phenomenon
+
+you should write
+
+    * mansr's 2015 post says
+    
+      When I recently decided to take a closer look at the DSD phenomenon
+
 though Forgejo renders it with a blank line between the two lines of text.
 
 If you really need a plain like break instead of a paragraph break
 you must use an inline `<BR>` with no newline on either side:
-```
-* mansr's 2015 post says<BR>When I recently decided to take a closer look at the DSD phenomenon
-```
+
+    * mansr's 2015 post says<BR>When I recently decided to take a closer look at the DSD phenomenon
+
 but a paragraph break is preferred to make the `.md` file more readable.
 
 #### Code blocks
 
-Enclose paragraphs of code with a line of three grave quotes
-before and after them.
+`multimarkdown` seems not to recognize code blocks surrounded by
+lines consisting of three grave quotes so indent code blocks by
+four spaces, which works for both `multimarkdown` and Forgejo's wiki.
 
-Markdown also allows code blocks indented with spaces
-but the two-space-to-four-space conversion for lists
-may mess the indentation up.

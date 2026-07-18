@@ -18,7 +18,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.62])
 
-AC_INIT([sox_ng], [14.6.1.2], [sox-ng@groups.io])
+AC_INIT([sox_ng], [14.8.0.1], [sox-ng@groups.io])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -241,9 +241,9 @@ AM_CONDITIONAL(HAVE_DISTRO, test x$have_distro = xyes)
 dnl Check for system dependent features.
 AC_C_BIGENDIAN
 AC_C_INLINE
+AC_C_CONST
 
-dnl Two lines suggested by autoupdate
-AC_CHECK_INCLUDES_DEFAULT
+dnl Suggested by autoupdate
 AC_PROG_EGREP
 
 dnl Checks for header files.
@@ -251,6 +251,7 @@ AC_CHECK_HEADERS(fcntl.h unistd.h byteswap.h sys/ioctl.h sys/select.h sys/stat.h
 
 dnl Checks for library functions.
 AC_CHECK_FUNCS(strcasecmp strdup popen vsnprintf gettimeofday mkstemp fmemopen)
+AC_CHECK_FUNCS(getenv setenv execvp)
 AC_CHECK_FUNCS(posix_fadvise)
 
 dnl aligned alloc required for sdm_x86.h using AVX (32-byte) or SSE2 (16-byte)
@@ -306,7 +307,7 @@ fi
 if test "$using_libltdl" = yes; then
   AC_DEFINE([HAVE_LIBLTDL], 1, [Define to 1 if you have libltdl])
 fi
-AM_CONDITIONAL(HAVE_LIBLTDL, test x$using_libltdl = xyes -a x$using_win32_ltdl = xno)
+AM_CONDITIONAL(HAVE_LIBLTDL, test x$using_libltdl = xyes && test x$using_win32_ltdl = xno)
 AM_CONDITIONAL(HAVE_WIN32_LTDL, test x$using_win32_ltdl = xyes)
 AC_SUBST(LIBLTDL)
 
@@ -342,7 +343,7 @@ if test "$with_magic" != "no"; then
     AC_CHECK_HEADER(magic.h,
         [AC_CHECK_LIB(magic, magic_open, MAGIC_LIBS="-lmagic",using_magic=no)],
         using_magic=no)
-    if test "$with_magic" = "yes" -a "$using_magic" = "no"; then
+    if test "$with_magic" = "yes" && test "$using_magic" = "no"; then
         AC_MSG_FAILURE([cannot find magic])
     fi
 fi
@@ -367,7 +368,7 @@ if test "$with_png" != "no"; then
 		      PNG_LIBS="$PNG_LIBS -lpng12 -lz", 
 		      using_png=no, -lz)], -lz)
     fi
-    if test "$with_png" = "yes" -a "$using_png" = "no"; then
+    if test "$with_png" = "yes" && test "$using_png" = "no"; then
         AC_MSG_FAILURE([cannot find png])
     fi
 fi
@@ -405,16 +406,28 @@ AC_ARG_WITH(speexdsp,
     AS_HELP_STRING([--without-speexdsp],
         [Don't try to use libspeexdsp]))
 using_speexdsp=no
-AS_IF([test "x$with_speexdsp" != xno], [
+if test "x$with_speexdsp" != xno; then
+    using_speexdsp=yes
     AC_CHECK_HEADERS(speex/speex_types.h speex/speex_preprocess.h,
 	[using_speexdsp=yes])
-    AS_IF([test "x$using_speexdsp" = xyes],
-        [ AC_CHECK_LIB([speexdsp], [speex_preprocess_run],
-			[SPEEXDSP_LIBS="$SPEEXDSP_LIBS -lspeexdsp"], [using_speexdsp=no]) ])
-
-    AS_IF([test "x$with_speexdsp" = xyes && test "x$using_speexdsp" = xno],
-        [ AC_MSG_FAILURE([cannot find libspeexdsp]) ])
-])
+    AC_MSG_CHECKING([whether to dlopen speexdsp])
+    AC_ARG_ENABLE(dl_speexdsp,
+      AS_HELP_STRING([--enable-dl-speexdsp], [Dlopen speexdsp instead of linking in.]),
+      enable_dl_speexdsp=$enableval, enable_dl_speexdsp=no)
+    AC_MSG_RESULT($enable_dl_speexdsp)
+    if test "x$using_libltdl" = "xyes" && test "x$enable_dl_speexdsp" = "xyes"; then
+      AC_DEFINE(DL_SPEEXDSP, 1, [Define to dlopen() speexdsp.])
+    else
+      enable_dl_speexdsp=no
+      AC_CHECK_LIB(speexdsp, speex_preprocess_run, SPEEXDSP_LIBS="$SPEEXDSP_LIBS -lspeexdsp", using_speexdsp=no)
+      if test "x$using_speexdsp" = "xyes"; then
+        AC_DEFINE(HAVE_SPEEXDSP, 1, [Define if the speexdsp library was found.])
+      fi
+      if test "x$with_speexdsp" = "xyes" && test "x$using_speexdsp" = "xno"; then
+        AC_MSG_FAILURE([cannot find libspeexdsp])
+      fi
+    fi
+fi
 AS_IF([test "x$using_speexdsp" = xyes],
    [ AC_DEFINE(HAVE_SPEEXDSP, 1, [Define to 1 if you have libspeexdsp.]) ])
 AM_CONDITIONAL(HAVE_SPEEXDSP, test x"$using_speexdsp" = xyes)
@@ -426,7 +439,7 @@ dnl Test for LADSPA
 AC_ARG_WITH(ladspa,
     AS_HELP_STRING([--without-ladspa], [Don't try to use LADSPA]))
 using_ladspa=no
-if test "$with_ladspa" != "no" -a "$using_libltdl" = "yes"; then
+if test "$with_ladspa" != "no" && test "$using_libltdl" = "yes"; then
     using_ladspa=yes
     AC_DEFINE(HAVE_LADSPA_H, 1, [1 if should enable LADSPA])
 fi
@@ -471,28 +484,30 @@ fi
 
 dnl Check for MP3-reading libraries
 
+dnl Check for MAD libraries
 AC_ARG_WITH(mad,
     AS_HELP_STRING([--without-mad],
         [Don't try to use MAD (MP3 Audio Decoder)]))
-
-dnl Check for MAD libraries
 using_mad=no
-if test "$with_mad" != "no"; then
+if test "x$with_mad" != "xno"; then
     using_mad=yes
-    AC_CHECK_HEADERS(mad.h,, using_mad=no)
     AC_MSG_CHECKING([whether to dlopen mad])
     AC_ARG_ENABLE(dl_mad,
       AS_HELP_STRING([--enable-dl-mad], [Dlopen mad instead of linking in.]),
       enable_dl_mad=$enableval, enable_dl_mad=no)
     AC_MSG_RESULT($enable_dl_mad)
-    if test "x$using_libltdl" = "xyes" -a "x$enable_dl_mad" = "xyes"; then
+    if test "x$using_libltdl" = "xyes" && test "x$enable_dl_mad" = "xyes"; then
       AC_DEFINE(DL_MAD, 1, [Define to dlopen() mad.])
     else
-      enable_dl_mad="no"
-      AC_CHECK_LIB(mad, mad_stream_buffer, MP3_LIBS="$MP3_LIBS -lmad",using_mad=no)
-      if test "$with_mad" = "yes" -a "$using_mad" = "no"; then
-        AC_MSG_FAILURE([cannot find libmad])
-      fi
+      enable_dl_mad=no
+      AC_CHECK_HEADERS(mad.h,, using_mad=no)
+      AC_CHECK_LIB(mad, mad_stream_buffer, MP3_LIBS="$MP3_LIBS -lmad", using_mad=no)
+    fi
+    if test "x$using_mad" = "xyes"; then
+      AC_DEFINE(HAVE_MAD, 1, [Define if the MAD library was found.])
+    fi
+    if test "x$with_mad" = "xyes" && test "x$using_mad" = "xno"; then
+      AC_MSG_FAILURE([cannot find libmad])
     fi
 fi
 
@@ -508,7 +523,7 @@ if test "$with_id3tag" != "no"; then
     AC_CHECK_HEADER(id3tag.h,
         [AC_CHECK_LIB(id3tag, id3_file_open, ID3_LIBS="-lid3tag -lz", using_id3tag=no, -lz)],
         using_id3tag=no)
-    if test "$with_id3tag" = "yes" -a "$using_id3tag" = "no"; then
+    if test "$with_id3tag" = "yes" && test "$using_id3tag" = "no"; then
         AC_MSG_FAILURE([cannot find id3tag])
     fi
 fi
@@ -532,20 +547,24 @@ if test "$with_lame" != "no"; then
       AS_HELP_STRING([--enable-dl-lame], [Dlopen lame instead of linking in.]),
       enable_dl_lame=$enableval, enable_dl_lame=no)
     AC_MSG_RESULT($enable_dl_lame)
-    if test "x$using_libltdl" = "xyes" -a "x$enable_dl_lame" = "xyes"; then
+    if test "x$using_libltdl" = "xyes" && test "x$enable_dl_lame" = "xyes"; then
       AC_DEFINE(DL_LAME, 1, [Define to dlopen() lame.])
     else
-      enable_dl_lame="no"
-      AC_CHECK_HEADERS(lame/lame.h,,
+      enable_dl_lame=no
+      AC_CHECK_HEADERS(lame/lame.h, [],
         [AC_CHECK_HEADERS(lame.h, [], using_lame=no)])
       AC_CHECK_LIB(mp3lame, lame_get_lametag_frame, MP3_LIBS="$MP3_LIBS -lmp3lame", using_lame=no)
-      AC_CHECK_LIB(mp3lame, id3tag_set_fieldvalue, using_lame=$using_lame)
-      if test x"$ac_cv_lib_mp3lame_id3tag_set_fieldvalue" = "xyes"; then
-        AC_DEFINE(HAVE_LAME_ID3TAG, 1, [Define to 1 if lame supports optional ID3 tags.])
-      fi
-      if test x"$with_lame" = "xyes" -a x"$using_lame" = "xno"; then
-        AC_MSG_FAILURE([cannot find LAME])
-      fi
+    fi
+    if test "x$using_lame" = "xyes"; then
+      AC_DEFINE(HAVE_LAME, 1, [Define to 1 if the lame library was found.])
+    fi
+    # See if it includes ID3tag support
+    AC_CHECK_LIB(mp3lame, id3tag_set_fieldvalue)
+    if test "x$ac_cv_lib_mp3lame_id3tag_set_fieldvalue" = "xyes"; then
+      AC_DEFINE(HAVE_LAME_ID3TAG, 1, [Define to 1 if lame supports optional ID3 tags.])
+    fi
+    if test "x$with_lame" = "xyes" && test "x$using_lame" = "xno"; then
+      AC_MSG_FAILURE([cannot find LAME])
     fi
 fi
 
@@ -556,39 +575,78 @@ AC_ARG_WITH(twolame,
     AS_HELP_STRING([--without-twolame],
         [Don't try to use Twolame (MP2 Audio Encoder)]))
 using_twolame=no
-if test "$with_twolame" != "no"; then
+if test "x$with_twolame" != "xno"; then
     using_twolame=yes
-    AC_CHECK_HEADERS(twolame.h,, using_twolame=no)
     AC_MSG_CHECKING([whether to dlopen twolame])
     AC_ARG_ENABLE(dl_twolame,
       AS_HELP_STRING([--enable-dl-twolame], [Dlopen twolame instead of linking in.]),
       enable_dl_twolame=$enableval, enable_dl_twolame=no)
     AC_MSG_RESULT($enable_dl_twolame)
-    if test "x$using_libltdl" = "xyes" -a "x$enable_dl_twolame" = "xyes"; then
+    if test "x$using_libltdl" = "xyes" && test "x$enable_dl_twolame" = "xyes"; then
       AC_DEFINE(DL_TWOLAME, 1, [Define to dlopen() libtwolame.])
     else
-      enable_dl_twolame="no"
+      enable_dl_twolame=no
+      AC_CHECK_HEADERS(twolame.h,, using_twolame=no)
       AC_CHECK_LIB(twolame, twolame_init, MP3_LIBS="$MP3_LIBS -ltwolame",using_twolame=no)
-      if test "$with_twolame" = "yes" -a "$using_twolame" = "no"; then
-        AC_MSG_FAILURE([cannot find libtwolame])
-      fi
+    fi
+    if test "x$using_twolame" = "xyes"; then
+      AC_DEFINE(HAVE_TWOLAME, 1, [Define to 1 if the lame library was found.])
+    fi
+    if test "x$with_twolame" = "xyes" && test "x$using_twolame" = "xno"; then
+      AC_MSG_FAILURE([cannot find libtwolame])
     fi
 fi
 
-# Check for libdolbyb
-found_libdolbyb=yes
-AC_CHECK_HEADERS(dolbyb.h, ,
-    [AC_CHECK_HEADERS(dolbyb.h, ,found_libdolbyb=no)])
-    AC_CHECK_LIB(dolbyb, dolbyb_init, DOLBYB_LIBS="$DOLBYB_LIBS -ldolbyb", found_libdolbyb=no)
-if test "$found_libdolbyb" = yes; then
-    AC_DEFINE(EXTERNAL_DOLBYB, 1, [Define if you are using an external dolbyb library])
-else
-    LIBDOLBYB_LIBADD=../libdolbyb/libdolbyb.la
-fi
-AM_CONDITIONAL(EXTERNAL_DOLBYB, test x$found_libdolbyb = xyes)
-AC_SUBST(LIBDOLBYB_LIBADD)
-AC_SUBST(DOLBYB_LIBS)
 
+
+# Check for libdolbyb
+AC_ARG_WITH(dolbyb,
+    AS_HELP_STRING([--without-dolbyb],
+        [Don't try to use libdolbyb]))
+if test "x$with_dolbyb" != xno
+then
+    AC_CHECK_HEADERS(dolbyb.h,
+        [AC_CHECK_LIB(dolbyb, dolbyb_restart, found_libdolbyb=yes; DOLBYB_LIBS="$DOLBYB_LIBS -ldolbyb", found_libdolbyb=no)])
+    if test "x$found_libdolbyb" = xyes; then
+	AC_DEFINE(EXTERNAL_DOLBYB, 1, [Define if you are using an external dolbyb library])
+    else
+	LIBDOLBYB_LIBADD=../libdolbyb/libdolbyb.la
+        AC_DEFINE(HAVE_DOLBYB_H, 1, [Define if including dolbyb support])
+    fi
+    AM_CONDITIONAL(EXTERNAL_DOLBYB, test x$found_libdolbyb = xyes)
+    AC_SUBST(LIBDOLBYB_LIBADD)
+    AC_SUBST(DOLBYB_LIBS)
+    using_dolbyb=yes
+else
+    # Don't compile libdolbyb but do distribute its sources
+    AM_CONDITIONAL(EXTERNAL_DOLBYB, true)
+    using_dolbyb=no
+fi
+
+
+
+# Check for libebur128
+AC_ARG_WITH(ebur128,
+    AS_HELP_STRING([--without-ebur128], [Don't try to use libebur128]))
+if test "x$with_ebur128" != xno
+then
+    AC_CHECK_HEADERS(ebur128.h,
+        [AC_CHECK_LIB(ebur128, ebur128_init, found_elibbur128=yes; EBUR128_LIBS="$EBUR128_LIBS -lebur128", found_elibbur128=no)])
+    if test "x$found_elibbur128" = xyes; then
+        AC_DEFINE(EXTERNAL_EBUR128, 1, [Define if you are using an external ebur128 library])
+    else
+      LIBEBUR128_LIBADD=../libebur128/libebur128.la
+      AC_DEFINE(HAVE_EBUR128_H, 1, [Define if including ebur128 support])
+    fi
+    AM_CONDITIONAL(EXTERNAL_EBUR128, test "x$found_libebur128" = xyes)
+    AC_SUBST(LIBEBUR128_LIBADD)
+    AC_SUBST(EBUR128_LIBS)
+    using_ebur128=yes
+else
+    # Don't compile libebur128 but do distribute its sources
+    AM_CONDITIONAL(EXTERNAL_EBUR128, true)
+    using_ebur128=no
+fi
 
 
 # Check for libgsm
@@ -650,7 +708,7 @@ CFLAGS="$(echo "$CFLAGS" | sed 's|\(-I[[^ ]]*\)|\1 \1/opus|g') -I/usr/local/incl
 
 AC_OPTIONAL_FORMAT(opus, OPUS, [AC_CHECK_HEADER(opus/opusfile.h,
   [AC_CHECK_LIB(opus, opus_decoder_create, OPUS_LIBS="$OPUS_LIBS -lopus", using_opus=no)
-   AC_CHECK_LIB(opusfile, op_open_callbacks, OPUS_LIBS="$OPUS_LIBS -lopusfile", using_opus=no, $OPUS_LIBS)],
+   AC_CHECK_LIB(opusfile, op_open_callbacks, OPUS_LIBS="$OPUS_LIBS -lopusfile", using_opus=no, $OPUS_LIBS $OGG_VORBIS_LIBS)],
   using_opus=no)])
 
 # Check for FLAC libraries
@@ -666,8 +724,6 @@ esac
 AC_OPTIONAL_FORMAT(flac, FLAC, [AC_CHECK_HEADER(FLAC/all.h, [AC_CHECK_DECL(FLAC_API_VERSION_CURRENT, [AC_CHECK_LIB(FLAC, FLAC__stream_encoder_new, FLAC_LIBS="-lFLAC $FLAC_LIBS $OGG_VORBIS_LIBS",using_flac=no, $FLAC_LIBS $OGG_VORBIS_LIBS)], using_flac=no, [#include <FLAC/all.h>])], using_flac=no)], using_flac=no)
 
 
-dnl When enable_dl_amrbw, do not let add libraries to be linked in
-dnl since they will be dlopen()'ed instead.
 ac_sox_save_AMRWB_LIBS="$AMRWB_LIBS"
 tmp_using_amrwb=$opt_default
 AC_CHECK_HEADERS(opencore-amrwb/dec_if.h,
@@ -681,7 +737,7 @@ AC_ARG_ENABLE(dl_amrwb,
 	      AS_HELP_STRING([--enable-dl-amrwb], 
 			     [Dlopen amrbw instead of linking in.]),
 			     enable_dl_amrwb=$enableval, enable_dl_amrwb=no)
-if test "x$using_libltdl" = "xyes" -a "x$enable_dl_amrwb" = "xyes"; then
+if test "x$using_libltdl" = "xyes" && test "x$enable_dl_amrwb" = "xyes"; then
   AC_DEFINE(DL_AMRWB, 1, [Define to dlopen() amrwb.]) 
   dnl When enable_dl_amrwb, do not let SOX_PATH_AMRWB add libraries
   dnl to be linked in (since they will be dlopen()'ed instead).
@@ -693,8 +749,6 @@ else
 fi
 AC_OPTIONAL_FORMAT(amrwb, AMRWB, [if test "x$tmp_using_amrwb" = "xno"; then using_amrwb=no; fi])
 
-dnl When enable_dl_amrnb, do not let add libraries to be linked in
-dnl since they will be dlopen()'ed instead.
 ac_sox_save_AMRNB_LIBS="$AMRNB_LIBS"
 tmp_using_amrnb=$opt_default
 AC_CHECK_HEADERS(opencore-amrnb/interf_dec.h, 
@@ -708,7 +762,7 @@ AC_ARG_ENABLE(dl_amrnb,
 	      AS_HELP_STRING([--enable-dl-amrnb], 
 			     [Dlopen amrnb instead of linking in.]),
 			     enable_dl_amrnb=$enableval, enable_dl_amrnb=no)
-if test "x$using_libltdl" = "xyes" -a "x$enable_dl_amrnb" = "xyes"; then
+if test "x$using_libltdl" = "xyes" && test "x$enable_dl_amrnb" = "xyes"; then
   AC_DEFINE(DL_AMRNB, 1, [Define to dlopen() amrnb.]) 
   dnl When enable_dl_amrnb, do not let SOX_PATH_AMRNB add libraries
   dnl to be linked in (since they will be dlopen()'ed instead).
@@ -722,7 +776,9 @@ AC_OPTIONAL_FORMAT(amrnb, AMRNB, [if test "x$tmp_using_amrnb" = "xno"; then usin
 
 
 AC_OPTIONAL_FORMAT(wavpack, WAVPACK, [AC_CHECK_HEADER(wavpack/wavpack.h, [AC_CHECK_LIB(wavpack, WavpackGetSampleRate, WAVPACK_LIBS="$WAVPACK_LIBS -lwavpack",using_wavpack=no)], using_wavpack=no)])
-
+if test "$using_wavpack" = yes; then
+  AC_CHECK_LIB(wavpack, WavpackOpenFileInputEx64, [AC_DEFINE([HAVE_LIBWAVPACK5], 1, [Define if libwavpack >= 5.0])])
+fi
 
 
 AC_OPTIONAL_FORMAT(sndio, SNDIO, [AC_CHECK_HEADER(sndio.h, [AC_CHECK_LIB(sndio, sio_open, SNDIO_LIBS="$SNDIO_LIBS -lsndio",using_sndio=no)], using_sndio=no)])
@@ -746,8 +802,6 @@ AC_OPTIONAL_FORMAT(pulseaudio, PULSEAUDIO, [AC_CHECK_HEADER(pulse/simple.h, [AC_
 
 AC_OPTIONAL_FORMAT(waveaudio, WAVEAUDIO, [AC_CHECK_HEADER(mmsystem.h, [WAVEAUDIO_LIBS="$WAVEAUDIO_LIBS -lwinmm"], using_waveaudio=no, [[#include <windows.h>]])])
 
-dnl When enable_dl_sndfile, do not let SOX_PATH_SNDFILE add libraries
-dnl to be linked in (since they will be dlopen()'ed instead).
 ac_sox_save_SNDFILE_LIBS="$SNDFILE_LIBS"
 SOX_PATH_SNDFILE(tmp_using_sndfile=$opt_default, tmp_using_sndfile=no)
 AC_ARG_ENABLE(dl_sndfile,
@@ -755,7 +809,7 @@ AC_ARG_ENABLE(dl_sndfile,
 			     [Dlopen sndfile instead of linking in.]),
 			     enable_dl_sndfile=$enableval, enable_dl_sndfile=no)
 if test "x$tmp_using_sndfile" = "xyes"; then
-  if test "x$using_libltdl" = "xyes" -a "x$enable_dl_sndfile" = "xyes"; then
+  if test "x$using_libltdl" = "xyes" && test "x$enable_dl_sndfile" = "xyes"; then
     AC_DEFINE(DL_SNDFILE, 1, [Define to dlopen() sndfile.]) 
     dnl When enable_dl_sndfile, do not let SOX_PATH_SNDFILE add libraries
     dnl to be linked in (since they will be dlopen()'ed instead).
@@ -777,14 +831,19 @@ dnl AC_SUBST(OSS_LIBS)
 
 
 
-AC_OPTIONAL_FORMAT(sunaudio, SUN_AUDIO, [AC_CHECK_HEADERS(sys/audioio.h,,
-      [AC_CHECK_HEADERS(sun/audioio.h,, using_sunaudio=no)])])
+# There is a <sys/audioio.h> on OpenBSD that doesn't define AUDIO_GETINFO
+# and a load of other things SoX uses.
+AC_OPTIONAL_FORMAT(sunaudio, SUN_AUDIO,
+                   [AC_CHECK_HEADERS(sys/audioio.h,
+                     [AC_CHECK_DECL(AUDIO_GETINFO,[],using_sunaudio=no,
+                       [#include <sys/audioio.h>])],
+                     [AC_CHECK_HEADERS(sun/audioio.h,, using_sunaudio=no)])])
 
 
 
 # MP2/MP3 format depends on libmad || LAME || twolame
 AC_OPTIONAL_FORMAT(mp3, MP3, [
-  if test "$using_mad" != yes -a "$using_lame" != yes -a "$using_twolame" != yes; then
+  if test "$using_mad" != yes && test "$using_lame" != yes -a "$using_twolame" != yes; then
     using_mp3=no
   fi])
 
@@ -841,10 +900,10 @@ if test "$enable_replace" = "yes"; then
 fi
 AC_SUBST(REPLACE)
 
-AM_CONDITIONAL(STATIC_LIBSOX_ONLY, test "$enable_shared" = "no" -a "$enable_static" = "yes")
+AM_CONDITIONAL(STATIC_LIBSOX_ONLY, test "$enable_shared" = "no" && test "$enable_static" = "yes")
 
 dnl Generate output files.
-AC_CONFIG_FILES(Makefile src/Makefile libdolbyb/Makefile libgsm/Makefile lpc10/Makefile test/Makefile msvc9/Makefile msvc10/Makefile sox_ng.pc)
+AC_CONFIG_FILES(Makefile src/Makefile libdolbyb/Makefile libebur128/Makefile libgsm/Makefile lpc10/Makefile test/Makefile sox_ng.pc)
 AC_OUTPUT
 
 if test "$using_dolbyb" != "no"; then
@@ -852,6 +911,14 @@ if test "$using_dolbyb" != "no"; then
     dolbyb_option="(external)"
   else
     dolbyb_option="(in-tree)"
+  fi
+fi
+
+if test "$using_ebur128" != "no"; then
+  if test "$found_libebur128" = "yes"; then
+    ebur128_option="(external)"
+  else
+    ebur128_option="(in-tree)"
   fi
 fi
 
@@ -909,10 +976,9 @@ if test "x$using_amrwb" = "xyes"; then
 echo " dlopen amrwb..............$enable_dl_amrwb"
 fi
 echo "flac.......................$using_flac"
-echo "dolbyb.....................$using_dolbyb $dolbyb_option"
 echo "gsm........................$using_gsm $gsm_option"
 echo "lpc10......................$using_lpc10 $lpc10_option"
-echo "mp2/mp3....................$using_mp3"
+echo "mp1/mp2/mp3................$using_mp3"
 echo " id3tag....................$using_id3tag"
 echo " lame......................$using_lame"
 if test "x$using_lame" = "xyes"; then
@@ -939,12 +1005,17 @@ echo "wavpack....................$using_wavpack"
 echo
 echo "OTHER OPTIONS"
 echo "prefer curl to wget........$using_curl"
+echo "dolbyb support.............$using_dolbyb $dolbyb_option"
+echo "ebur128 support............$using_ebur128 $ebur128_option"
 echo "ffmpeg support.............$using_ffmpeg"
 echo "ladspa effects.............$using_ladspa"
 echo "magic support..............$using_magic"
 echo "png support................$using_png"
 echo "FFTW support...............$using_fftw"
 echo "speexdsp support...........$using_speexdsp"
+if test "x$using_speexdsp" = "xyes"; then
+echo " dlopen speexdsp...........$enable_dl_speexdsp"
+fi
 if test "x$OPENMP_CFLAGS" = "x"; then
 echo "OpenMP support.............no"
 else

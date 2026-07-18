@@ -44,20 +44,32 @@ typedef struct {
 static int sox_dcshift_getopts(sox_effect_t * effp, int argc, char **argv)
 {
     priv_t * dcs = (priv_t *) effp->priv;
+    char dummy;
+
     dcs->dcshift = 1.0; /* default is no change */
     dcs->uselimiter = 0; /* default is no limiter */
 
-  --argc, ++argv;
-    if (argc < 1)
-      return lsx_usage(effp);
+    --argc, ++argv;
+    if (argc < 1 || argc > 2)
+        return lsx_usage(effp);
 
-    if (argc && (!sscanf(argv[0], "%lf", &dcs->dcshift)))
-      return lsx_usage(effp);
+    if (argc > 0) {
+        if (sscanf(argv[0], "%lf %c", &dcs->dcshift, &dummy) != 1) {
+            lsx_fail("cannot parse the DC shift `%s'", argv[0]);
+	    return SOX_EOF;
+        }
+        if (dcs->dcshift < -2.0 || dcs->dcshift > 2.0) {
+            lsx_fail("shift must be from -2 to +2");
+	    return SOX_EOF;
+	}
+    }
 
-    if (argc>1)
+    if (argc > 1)
     {
-        if (!sscanf(argv[1], "%lf", &dcs->limitergain))
-          return lsx_usage(effp);
+        if (sscanf(argv[1], "%lf %c", &dcs->limitergain, &dummy) != 1) {
+          lsx_fail("cannot parse the limiter gain `%s'", argv[1]);
+	  return SOX_EOF;
+        }
 
         dcs->uselimiter = 1; /* ok, we'll use it */
         /* The following equation is derived so that there is no
@@ -173,14 +185,18 @@ static char const * const extra_usage[] = {
 
 static sox_effect_handler_t sox_dcshift_effect = {
    "dcshift",
-   usage, extra_usage,
+   usage,
    SOX_EFF_MCHAN | SOX_EFF_GAIN,
    sox_dcshift_getopts,
    sox_dcshift_start,
    sox_dcshift_flow,
    NULL,
    sox_dcshift_stop,
-  NULL, sizeof(priv_t)
+   NULL,
+   sizeof(priv_t),
+   extra_usage,
+   NULL,
+   NULL,
 };
 
 const sox_effect_handler_t *lsx_dcshift_effect_fn(void)

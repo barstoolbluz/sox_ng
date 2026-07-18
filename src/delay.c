@@ -27,7 +27,7 @@ typedef struct {
   sox_bool drain_started;
 } priv_t;
 
-static int lsx_kill(sox_effect_t * effp)
+static int kill_delay(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
@@ -39,7 +39,7 @@ static int lsx_kill(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_delay(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
@@ -52,21 +52,22 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   for (i = 0; i < p->argc; ++i) {
     char const * next = lsx_parseposition(0., p->args[i].str = lsx_strdup(argv[i]), NULL, (uint64_t)0, (uint64_t)0, '=');
     if (!next || *next) {
-      lsx_kill(effp);
-      return lsx_usage(effp);
+      lsx_fail("cannot parse position `%s'", argv[i]);
+      kill_delay(effp);
+      return SOX_EOF;
     }
   }
   return SOX_SUCCESS;
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_delay(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   free(p->buffer);
   return SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static int start_delay(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   uint64_t max_delay = 0, last_seen = 0, delay;
@@ -108,7 +109,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_delay(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -129,7 +130,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+static int drain_delay(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
   size_t len;
@@ -161,8 +162,10 @@ sox_effect_handler_t const * lsx_delay_effect_fn(void)
   };
 
   static sox_effect_handler_t handler = {
-    "delay", "{position}", extra_usage, SOX_EFF_LENGTH | SOX_EFF_MODIFY,
-    create, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    "delay", "{position(=)}", SOX_EFF_LENGTH | SOX_EFF_MODIFY,
+    create_delay, start_delay, flow_delay, drain_delay,
+    stop_delay, kill_delay,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
 
   return &handler;

@@ -14,9 +14,9 @@ dnl You should have received a copy of the GNU General Public License along
 dnl with this program; if not, write to the Free Software Foundation, Inc.,
 dnl 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-dnl $1 package name                  e.g. flac 
-dnl $2 package name in conditionals  e.g. FLAC 
-dnl $3 using check
+dnl $[1] package name                  e.g. flac
+dnl $[2] package name in conditionals  e.g. FLAC
+dnl $[3] using check
 
 AC_DEFUN([AC_OPTIONAL_FORMAT],
   [AC_ARG_WITH($1, AS_HELP_STRING([--with-$1=dyn], [load $1 dynamically]))
@@ -27,12 +27,12 @@ AC_DEFUN([AC_OPTIONAL_FORMAT],
     fi
   elif test "_$with_$1" = _; then
     using_$1=$opt_default
-  elif test "_$with_$1" != _yes -a "_$with_$1" != _no; then
+  elif test "_$with_$1" != _yes && test "_$with_$1" != _no; then
     AC_MSG_FAILURE([invalid selection --with-$1=$with_$1])
   fi
   if test _$with_$1 != _no; then
     $3
-    if test _$with_$1 != _ -a $using_$1 = no; then
+    if test _$with_$1 != _ && test $using_$1 = no; then
       AC_MSG_FAILURE([cannot find $1])
     fi
   fi

@@ -6,11 +6,11 @@
 # You have to compile it with the address sanitizer to see the failure.
 # ./configure CFLAGS=-fsanitize=address LDFLAGS=-lasan
 
-rm -f core out.*
+rm -f core core.* out.*
 
 ${sox:-sox} crash-gbo-voc out.wav
 status=$?
 
-rm -f core out.*
+rm -f core core.* out.*
 
 exit $status

@@ -129,7 +129,7 @@ FILE * lsx_tmpfile(void)
       /* We tack new ones on the head of the list
        * and then delete them in reverse order. */
       cell_t *new = lsx_malloc(sizeof(cell_t));
-      new->name = strdup(name);
+      new->name = lsx_strdup(name);
       new->fd = fildes;
       new->next = tmpfiles;
       tmpfiles = new;

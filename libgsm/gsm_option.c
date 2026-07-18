@@ -4,13 +4,14 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/* $Header: /cvsroot/sox/sox/libgsm/gsm_option.c,v 1.2 2008/02/16 18:30:03 robs Exp $ */
+/* $Header: /tmp_amd/presto/export/kbs/jutta/src/gsm/RCS/gsm_option.c,v 1.3 1996/07/02 09:59:05 jutta Exp $ */
 
 #include "private.h"
 
 #include "gsm.h"
+#include "proto.h"
 
-int gsm_option (gsm r, int opt, int * val)
+int gsm_option P3((r, opt, val), gsm r, int opt, int * val)
 {
 	int 	result = -1;
 
@@ -55,14 +56,13 @@ int gsm_option (gsm r, int opt, int * val)
 
 	case GSM_OPT_WAV49:
 
-#ifdef WAV49 
+#ifdef WAV49
 		result = r->wav_fmt;
 		if (val) r->wav_fmt = !!*val;
 #endif
 		break;
 
 	default:
-                (void)r, (void)val;
 		break;
 	}
 	return result;

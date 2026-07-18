@@ -53,7 +53,7 @@ int main(int argc, char * argv[])
 
   assert(argc == 3);
 
-  /* All libSoX applications must start by initialising the SoX library */
+  /* All libSoX applications must start by initializing the SoX library */
   assert(sox_init() == SOX_SUCCESS);
   assert(sox_format_init() == SOX_SUCCESS);
 

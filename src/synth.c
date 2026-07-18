@@ -126,7 +126,7 @@ typedef struct {
 static void create_channel(channel_t *  chan)
 {
   memset(chan, 0, sizeof(*chan));
-  chan->freq2 = chan->freq = 440;
+  chan->freq2 = chan->freq = sox_globals.A4;
   chan->p3 = chan->p2 = chan->p1 = -1;
 }
 
@@ -186,52 +186,87 @@ static void set_default_parameters(channel_t *  chan)
 
 
 
+/* A version of sox_i.h's NUMERIC_PARAMETER()
+ * that works with argn instead of modifying argc and argv,
+ * that knows the name of the parameter it was expecting
+ * and which scales all values from 0-100 to 0.0-1.0
+ */
 #undef NUMERIC_PARAMETER
 #define NUMERIC_PARAMETER(p, min, max, expecting) { \
-char * end_ptr_np; \
-double d_np = strtod(argv[argn], &end_ptr_np); \
-if (end_ptr_np == argv[argn]) \
-  break; \
-if (d_np < min || d_np > max || *end_ptr_np != '\0') { \
-  lsx_fail("%s is not a%s %s", argv[argn], isvowel(expecting[0])?"n":"", \
-           expecting); \
-  return SOX_EOF; \
-} \
-chan->p = d_np / 100; /* adjust so abs(parameter) <= 1 */\
-if (++argn == argc) \
-  break; \
+  char * end_ptr; \
+  double d = strtod(argv[argn], &end_ptr); \
+  if (end_ptr == argv[argn]) break; \
+  if (*end_ptr != '\0') { \
+    /* Say "not a phase" or "not an offset" */ \
+    lsx_fail("%s is not a%s %s", argv[argn], isvowel(expecting[0])?"n":"", \
+             expecting); \
+    return SOX_EOF; \
+  } \
+  if (d < min || d > max) { \
+    lsx_fail("%s `%s' must be from %g to %g", expecting, argv[argn], \
+             (double)min, (double)max); \
+    return SOX_EOF; \
+  } \
+  chan->p = d / 100; /* adjust so abs(parameter) <= 1 */\
+  if (++argn == argc) break; \
 }
 
 #define isvowel(c) ((c)=='a'||(c)=='e'||(c)=='i'||(c)=='o'||(c)=='u')
 
 
 
-static int getopts(sox_effect_t * effp, int argc, char **argv)
+static int getopts_synth(sox_effect_t * effp, int argc, char **argv)
 {
   priv_t * p = (priv_t *) effp->priv;
   channel_t master, * chan = &master;
-  int key = INT_MAX, argn = 0;
+  int key = INT_MAX;
+  tuning_t tuning = tuning_equal;
+  int argn = 1;
   char dummy, * end_ptr;
   const char *n;
-  --argc, ++argv;
 
-  if (argc && !strcmp(*argv, "-n")) p->no_headroom = sox_true, ++argv, --argc;
+  while (argn < argc && argv[argn][0] == '-') {
+    char ch = argv[argn][1];
 
-  if (argc > 1 && !strcmp(*argv, "-j") && (
-        sscanf(argv[1], "%i %c", &key, &dummy) == 1 || (
-          (key = lsx_parse_note(argv[1], &end_ptr)) != INT_MAX &&
-          !*end_ptr))) {
-    argc -= 2;
-    argv += 2;
+    switch (ch) {
+    case 'n':
+      if (argv[argn][2] != '\0') goto invalid_option;
+      p->no_headroom = sox_true;
+      break;
+
+    case 'j':
+    case 'p':
+      if (argv[argn][2] != '\0') goto invalid_option;
+      if (++argn >= argc ||
+          (sscanf(argv[argn], "%i %c", &key, &dummy) != 1 &&
+           ((key = lsx_parse_note(argv[argn], &end_ptr)) == INT_MAX || *end_ptr))) {
+        lsx_fail("-%c wants a number of semitones above A or a note name", ch);
+        return SOX_EOF;
+      }
+      switch (ch) {
+      case 'j': tuning = tuning_just;        break;
+      case 'p': tuning = tuning_pythagorean; break;
+      }
+      break;
+
+    default:
+    invalid_option:
+      lsx_fail("invalid option `%s'", argv[argn]);
+      return SOX_EOF;
+    }
+    argn++;
   }
 
   /* Get duration if given (if first arg starts with digit) */
-  if (argc && (isdigit((int)argv[argn][0]) || argv[argn][0] == '.')) {
+  if (argn < argc && (isdigit((int)argv[argn][0]) || argv[argn][0] == '.')) {
     p->length_str = lsx_strdup(argv[argn]);
     /* Do a dummy parse of to see if it will fail */
     n = lsx_parsesamples(0., p->length_str, &p->samples_to_do, 't');
-    if (!n || *n)
-      return lsx_usage(effp);
+    if (!n || *n) {
+      lsx_fail("cannot parse length `%s'", p->length_str);
+      free(p->length_str);
+      return SOX_EOF;
+    }
     argn++;
   }
 
@@ -250,7 +285,19 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
     lsx_enum_item const * enum_p = lsx_find_enum_text(argv[argn], synth_type, lsx_find_enum_item_case_sensitive);
 
     if (enum_p == NULL) {
-      lsx_fail("no type given");
+      if (argv[argn][0] == '-') {
+        lsx_fail("invalid option 2 `%s'", argv[argn]);
+        lsx_usage(effp);
+      } else {
+        /* We could get here for a misspelled effect name,
+	 * a misspelled synth wave name or junk that doesn't start with '-'.
+	 * Malformed numbers that start with a digit
+	 * are probably taken as numeric parameters and rejected there
+	 * and malformed numbers that start with '-', who knows?
+	 */
+        lsx_fail("unknown type `%s'", argv[argn]);
+        lsx_fail("sine square saw triangle trapezium exp white tpdf pink brown pluck");
+      }
       return SOX_EOF;
     }
     lsx_revalloc(p->getopts_channels, p->getopts_nchannels + 1);
@@ -268,19 +315,21 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
         break;
     }
 
-    /* Combine type vdelay it followed by a three-part parameter giving the
+    /* Combine type vdelay is followed by a three-part parameter giving the
      * fixed delay, extra delay (effect depth) and mix.
      */
     if (chan->combine == synth_vdelay) {
+      char dummy;
+
       if (argn == argc) {
 vwhat:  lsx_fail("vdelay what?");
         return SOX_EOF;
       }
 
       /* Scan the arg and give default values to missing parameters */
-      switch (sscanf(argv[argn], "%f,%f,%f", &chan->vdelay_fixed,
+      switch (sscanf(argv[argn], "%f,%f,%f%c", &chan->vdelay_fixed,
                                              &chan->vdelay_extra,
-                                             &chan->vdelay_mix)) {
+                                             &chan->vdelay_mix, &dummy)) {
       case 0: goto vwhat;
       case 1:
 	if (!isfinite(chan->vdelay_fixed)) goto vwhat;
@@ -305,6 +354,9 @@ case3:  if (!isfinite(chan->vdelay_mix)) goto vwhat;
           return SOX_EOF;
 	}
         break;
+      case 4: /* Trailing garbage */
+        lsx_fail("trailing garbage on `%s'", argv[argn]);
+	return SOX_EOF;
       }
       if (++argn == argc)
         break;
@@ -319,10 +371,11 @@ case3:  if (!isfinite(chan->vdelay_mix)) goto vwhat;
         argv[argn][0] != '-') {
       static const char sweeps[] = ":+/-";
 
-      chan->freq2 = chan->freq = lsx_parse_frequency_k(argv[argn], &end_ptr, key);
+      chan->freq2 = chan->freq = lsx_parse_frequency_k(argv[argn], &end_ptr,
+                                                       key, tuning);
       if (chan->freq < (chan->type == synth_pluck? 27.5 : 0) ||
           (chan->type == synth_pluck && chan->freq > 4220)) {
-        lsx_fail("invalid freq");
+        lsx_fail("invalid freq `%s'", argv[argn]);
         return SOX_EOF;
       }
       if (*end_ptr && strchr(sweeps, *end_ptr)) {         /* freq2 given? */
@@ -331,9 +384,10 @@ case3:  if (!isfinite(chan->vdelay_mix)) goto vwhat;
           return SOX_EOF;
         }
         chan->sweep = strchr(sweeps, *end_ptr) - sweeps;
-        chan->freq2 = lsx_parse_frequency_k(end_ptr + 1, &end_ptr, key);
+        chan->freq2 = lsx_parse_frequency_k(end_ptr + 1, &end_ptr,
+                                            key, tuning);
         if (chan->freq2 < 0) {
-          lsx_fail("invalid freq2");
+          lsx_fail("invalid freq2 `%s'", argv[argn]);
           return SOX_EOF;
         }
         if (p->length_str == NULL) {
@@ -379,7 +433,7 @@ case3:  if (!isfinite(chan->vdelay_mix)) goto vwhat;
 
 
 
-static int start(sox_effect_t * effp)
+static int start_synth(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   sox_rate_t sr = effp->in_signal.rate;
@@ -388,8 +442,10 @@ static int start(sox_effect_t * effp)
   p->samples_done = 0;
 
   if (p->length_str) {
-    if (lsx_parsesamples(effp->in_signal.rate, p->length_str, &p->samples_to_do, 't') == NULL)
-      return lsx_usage(effp);
+    if (lsx_parsesamples(effp->in_signal.rate, p->length_str, &p->samples_to_do, 't') == NULL) {
+      lsx_fail("cannot parse length `%s'", p->length_str);
+      return SOX_EOF;
+    }
   } else
     p->samples_to_do = effp->in_signal.length != SOX_UNKNOWN_LEN ?
         effp->in_signal.length / effp->in_signal.channels : 0;
@@ -445,13 +501,13 @@ static int start(sox_effect_t * effp)
       /* Exitation: */
       lsx_vcalloc(chan->buffer, chan->buffer_len);
       for (k = 0, p2 = chan->p2; k < 2 && p2 >= 0; ++k, p2 = chan->p3) {
-        double d1 = 0, d2, colour = pow(2., 4 * (p2 - 1));
+        double d1 = 0, d2, color = pow(2., 4 * (p2 - 1));
         int32_t r = p2 * 100 + .5;
         for (j = 0; j < chan->buffer_len; ++j) {
-          do d2 = d1 + (chan->phase? DRANQD1:dranqd1(r)) * colour;
+          do d2 = d1 + (chan->phase? DRANQD1:dranqd1(r)) * color;
           while (fabs(d2) > 1);
           chan->buffer[j] += d2 * (1 - .3 * k);
-          d1 = d2 * (colour != 1);
+          d1 = d2 * (color != 1);
 #ifdef TEST_PLUCK
           chan->buffer[j] = sin(2 * M_PI * j / chan->buffer_len);
 #endif
@@ -473,7 +529,7 @@ static int start(sox_effect_t * effp)
         max = max(max, chan->buffer[j]);
       }
 
-      /* Normalise: */
+      /* Normalize: */
       for (j = 0, d = 0; j < chan->buffer_len; ++j) {
         chan->buffer[j] = (2 * chan->buffer[j] - max - min) / (max - min);
         d += sqr(chan->buffer[j]);
@@ -516,8 +572,8 @@ static int start(sox_effect_t * effp)
 
 #define elapsed_time_s p->samples_done / effp->in_signal.rate
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf, sox_sample_t * obuf,
-    size_t * isamp, size_t * osamp)
+static int flow_synth(sox_effect_t * effp, const sox_sample_t * ibuf,
+                      sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *) effp->priv;
   unsigned len = min(*isamp, *osamp) / effp->in_signal.channels;
@@ -646,7 +702,8 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf, sox_sample_t * o
           break;
 
         case synth_tpdfnoise:
-          synth_out = .5 * (DRANQD1 + DRANQD1);
+          synth_out = DRANQD1;
+          synth_out = .5 * (synth_out + DRANQD1);
           break;
 
         case synth_pinknoise: { /* "Paul Kellet's refined method" */
@@ -744,7 +801,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf, sox_sample_t * o
         }
         break;
       }
-      *obuf++ = synth_out < 0? synth_out * p->gain - .5 : synth_out * p->gain + .5;
+      *obuf++ = SOX_ROUND_CLIP_COUNT(synth_out * p->gain, effp->clips);
     }
     if (++p->samples_done == p->samples_to_do)
       result = SOX_EOF;
@@ -755,7 +812,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf, sox_sample_t * o
 
 
 
-static int stop(sox_effect_t * effp)
+static int stop_synth(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *) effp->priv;
   size_t i;
@@ -771,7 +828,7 @@ static int stop(sox_effect_t * effp)
 
 
 
-static int lsx_kill(sox_effect_t * effp)
+static int kill_synth(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *) effp->priv;
   free(p->getopts_channels);
@@ -786,38 +843,36 @@ const sox_effect_handler_t *lsx_synth_effect_fn(void)
   static const char usage[] =
     "[-j key] [-n] [length [offset [phase [p1 [p2 [p3]]]]]] {type [combine [fixed[,extra[,mix]]]] [freq[:|+|/|-freq2] [offset [phase [p1 [p2 [p3]]]]]]}";
   static const char * const extra_usage[] = {
-"-j key  Retune scientific note names to `key' semitones higher",
+"-j key  Use just intonation in the given key (semitones above A or a note)",
+"-p key  Use Pythagorean intonation in the given key",
 "-n      Don't normalize the output volume",
-"length  How many seconds of audio to make? Default: input length; 0: infinite",
-"offset  DC offset -100-100; the rest is normalized to a max of +/-1",
-"types:       phase  p1                  p2                 p3",
+"length  How many seconds of audio to make. Default: input length, 0=infinite",
+"offset  DC offset -100-100; the amplitude is adjusted to give a max of +/-1",
+"type:        phase  p1                  p2                 p3",
 "  sine       0-100  -                   -                  -",
 "  square     0-100  High % (50)         -                  -",
 "  triangle   0-100  Rising % (50)       -                  -",
 "  sawtooth   0-100  -                   -                  -",
 "  trapezium  0-100  Start high (10)     End high (50)      Start low (60)",
 "  exp        0-100  Peak position (50)  Range in 2dB (50)  -",
-"  white        -    -                   -                  -",
-"  tpdf         -    -                   -                  -",
-"  pink         -    -                   -                  -",
-"  brown        -    -                   -                  -",
-"  pluck       (*)   sustain (40)        Tone control 1     Tone control 2",
-"  (*) If non-zero, uses a different kind of random number generator",
-"combine:",
+"  pluck       (*)   sustain (40)        Tone ctrl 1 (20)   Tone ctrl 2 (90)",
+"  white, tpdf, pink and brown noises ignore all parameters",
+"combine:   (*) If non-zero, uses a different kind of random number generator",
 "  create  Add a new channel (the default)",
 "  mix     Mix 50:50 with the input",
 "  amod    Multiply input by synth wave considered as being 0 to 1",
 "  fmod    Multiply input by synth wave considered as being -1 to 1",
-"  vdelay  fixed[,extra[,mix]] Synth wave offsets into a delay from",
-"          fixed to fixed+extra(0) ms. mix=0: all input; mix=100: all delay",
+"  vdelay fixed[,extra(0)[,mix(50)]]  Synth wave offsets into a delay from",
+"          fixed to fixed+extra ms. mix=0: all input; mix=100: all delay",
 "freq?freq2  : = linear sweep; + = frequency is proportional to time squared;",
-"            / = exponential;  - = stepped exponential",
+"            / = exponential;  - = stepped exponential starting at phase 0",
     NULL
   };
 
   static sox_effect_handler_t handler = {
-    "synth", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_GAIN,
-    getopts, start, flow, 0, stop, lsx_kill, sizeof(priv_t)
+    "synth", usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_GAIN,
+    getopts_synth, start_synth, flow_synth, NULL, stop_synth, kill_synth,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
   return &handler;
 }

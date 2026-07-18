@@ -339,41 +339,32 @@ static int start(sox_effect_t * effp)
       break;
 
     case filter_riaa: /* http://www.dsprelated.com/showmessage/73300/3.php */
-      if (effp->in_signal.rate == 44100) {
-        static const double zeros[] = {-0.2014898, 0.9233820};
-        static const double poles[] = {0.7083149, 0.9924091};
+      {
+        const double *zeros, *poles;
+        switch (lrint(effp->in_signal.rate)) {
+          static const double zeros44[] = {-0.2014898, 0.9233820};
+          static const double poles44[] = {0.7083149, 0.9924091};
+          static const double zeros48[] = {-0.1766069, 0.9321590};
+          static const double poles48[] = {0.7396325, 0.9931330};
+          static const double zeros88[] = {-0.1168735, 0.9648312};
+          static const double poles88[] = {0.8590646, 0.9964002};
+          static const double zeros96[] = {-0.1141486, 0.9676817};
+          static const double poles96[] = {0.8699137, 0.9966946};
+          static const double zeros192[] = {-0.1040610965, 0.9837523263};
+          static const double poles192[] = {0.9328992971, 0.9983633125};
+        case 44100: zeros = zeros44; poles = poles44; break;
+        case 48000: zeros = zeros48; poles = poles48; break;
+        case 88200: zeros = zeros88; poles = poles88; break;
+        case 96000: zeros = zeros96; poles = poles96; break;
+        case 192000: zeros = zeros192; poles = poles192; break;
+        default:
+          lsx_fail("sample rate must be 44.1k, 48k, 88.2k, 96k, or 192k");
+          return SOX_EOF;
+        }
         make_poly_from_roots(zeros, (size_t)2, &p->b0);
         make_poly_from_roots(poles, (size_t)2, &p->a0);
       }
-      else if (effp->in_signal.rate == 48000) {
-        static const double zeros[] = {-0.1766069, 0.9321590};
-        static const double poles[] = {0.7396325, 0.9931330};
-        make_poly_from_roots(zeros, (size_t)2, &p->b0);
-        make_poly_from_roots(poles, (size_t)2, &p->a0);
-      }
-      else if (effp->in_signal.rate == 88200) {
-        static const double zeros[] = {-0.1168735, 0.9648312};
-        static const double poles[] = {0.8590646, 0.9964002};
-        make_poly_from_roots(zeros, (size_t)2, &p->b0);
-        make_poly_from_roots(poles, (size_t)2, &p->a0);
-      }
-      else if (effp->in_signal.rate == 96000) {
-        static const double zeros[] = {-0.1141486, 0.9676817};
-        static const double poles[] = {0.8699137, 0.9966946};
-        make_poly_from_roots(zeros, (size_t)2, &p->b0);
-        make_poly_from_roots(poles, (size_t)2, &p->a0);
-      }
-      else if (effp->in_signal.rate == 192000) {
-        static const double zeros[] = {-0.1040610965, 0.9837523263};
-        static const double poles[] = {0.9328992971, 0.9983633125};
-        make_poly_from_roots(zeros, (size_t)2, &p->b0);
-        make_poly_from_roots(poles, (size_t)2, &p->a0);
-      }
-      else {
-        lsx_fail("sample rate must be 44.1k, 48k, 88.2k, 96k, or 192k");
-        return SOX_EOF;
-      }
-      { /* Normalise to 0dB at 1kHz (Thanks to Glenn Davis) */
+      { /* Normalize to 0dB at 1kHz (Thanks to Glenn Davis) */
         double y = 2 * M_PI * 1000 / effp->in_signal.rate;
         double b_re = p->b0 + p->b1 * cos(-y) + p->b2 * cos(-2 * y);
         double a_re = p->a0 + p->a1 * cos(-y) + p->a2 * cos(-2 * y);
@@ -395,8 +386,9 @@ static int start(sox_effect_t * effp)
 #define BIQUAD_EFFECT(name,group,usage,flags) \
 sox_effect_handler_t const * lsx_##name##_effect_fn(void) { \
   static sox_effect_handler_t handler = { \
-    #name, usage, name##_extra, flags, \
-    group##_getopts, start, lsx_biquad_flow, 0, 0, 0, sizeof(biquad_t)\
+    #name, usage, flags, \
+    group##_getopts, start, lsx_biquad_flow, 0, 0, 0, \
+    sizeof(biquad_t), name##_extra, NULL, NULL,\
   }; \
   return &handler; \
 }
@@ -406,7 +398,7 @@ sox_effect_handler_t const * lsx_##name##_effect_fn(void) { \
 static char const one_two[] =
   "-1/-2  Use a 1-pole or 2-pole filter instead of width";
 
-static char const * const highpass_extra[] = { NULL };
+static char const * const highpass_extra[] = { one_two, NULL };
 static char const * const lowpass_extra[] = { one_two, NULL };
 static char const * const bandpass_extra[] = {
   "-c  Use a constant skirt gain instead of a constant 0dB peak gain", NULL };

@@ -38,7 +38,7 @@ static int stopwrite(sox_format_t * ft)
 
 LSX_FORMAT_HANDLER(cdr)
 {
-  static char const * const names[] = {"cdda", "cdr", NULL};
+  static char const * const names[] = {"cdda", "cda", "cdr", NULL};
   static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 16, 0, 0};
   static sox_rate_t const write_rates[] = {44100, 0};
   static sox_format_handler_t handler = {SOX_LIB_VERSION_CODE,

@@ -25,7 +25,7 @@
 
 stdenv.mkDerivation rec {
   pname = "sox_ng";
-  version = "14.6.1.2-custom";
+  version = "14.8.0.1-custom";
 
   # Source is the current repository
   src = ../..;
@@ -70,142 +70,38 @@ stdenv.mkDerivation rec {
 
   postPatch = ''
     # ========================================================================
-    # PHASE 1: Large Sinc Filter Patches
+    # PHASE 1: Large Sinc Filter Support — UPSTREAM as of sox_ng 14.7.x
     # ========================================================================
+    # The large-sinc feature this fork used to patch in (up to ~1 billion taps,
+    # larger FFT4G_MAX_SIZE) is now native in upstream. Instead of patching, we
+    # ASSERT the capability is present so a future upstream regression fails the
+    # build loudly rather than silently shipping 32767-tap filters.
 
-    echo "Applying large sinc filter support patches..."
+    echo "Verifying upstream large sinc filter support..."
 
-    # 1. Increase FFT4G_MAX_SIZE in fft4g.h
-    substituteInPlace src/fft4g.h \
-      --replace '#define FFT4G_MAX_SIZE 262144' \
-                '#define FFT4G_MAX_SIZE 1073741824'
+    grep -q '11, 1073741823' src/sinc.c \
+      || { echo "ERROR: expected large-tap sinc limit (1073741823) missing from src/sinc.c"; exit 1; }
 
-    # 2. Increase ip array sizes in fft4g.c
-    substituteInPlace src/fft4g.c \
-      --replace 'int j, j1, k, k1, l, m, m2, ip[256];' \
-                'int j, j1, k, k1, l, m, m2, ip[16384];'
+    # FFT4G_MAX_SIZE must be well above the old 262144 default (upstream: 1U << 31).
+    grep -q 'FFT4G_MAX_SIZE' src/fft4g.h && ! grep -q 'FFT4G_MAX_SIZE 262144' src/fft4g.h \
+      || { echo "ERROR: FFT4G_MAX_SIZE appears to have regressed to the small default in src/fft4g.h"; exit 1; }
 
-    # 3. Increase sinc filter tap limits
-    substituteInPlace src/sinc.c \
-      --replace "GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 32767)" \
-                "GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 1073741823)" \
-      --replace "GETOPT_NUMERIC(optstate, 'n', num_taps[1], 11, 32767)" \
-                "GETOPT_NUMERIC(optstate, 'n', num_taps[1], 11, 1073741823)" \
-      --replace '*num_taps = range_limit(n, 11, 32767);' \
-                '*num_taps = range_limit(n, 11, 1073741823);'
-
-    echo "Large sinc filter patches applied successfully!"
+    echo "Upstream large sinc filter support confirmed."
 
     # ========================================================================
-    # PHASE 2: sox_ng → sox Rebranding
+    # PHASE 2: sox_ng → sox Rebranding — UPSTREAM via --enable-replace
     # ========================================================================
-
-    echo "Renaming sox_ng to sox throughout the codebase..."
-
-    # A. Build System Files
-    substituteInPlace configure.ac \
-      --replace 'sox_ng' 'sox'
-
-    substituteInPlace CMakeLists.txt \
-      --replace 'sox_ng' 'sox'
-
-    substituteInPlace src/CMakeLists.txt \
-      --replace 'sox_ng' 'sox'
-
-    substituteInPlace Makefile.am \
-      --replace 'sox_ng' 'sox' \
-      --replace 'soxi_ng' 'soxi' \
-      --replace 'soxformat_ng' 'soxformat' \
-      --replace 'libsox_ng' 'libsox' \
-      --replace 'play_ng' 'play' \
-      --replace 'rec_ng' 'rec'
-
-    substituteInPlace src/Makefile.am \
-      --replace 'sox_ng' 'sox' \
-      --replace 'libsox_ng' 'libsox'
-
-    # Optional formats file (if exists)
-    if [ -f src/optional-fmts.am ]; then
-      substituteInPlace src/optional-fmts.am \
-        --replace 'sox_ng' 'sox' \
-        --replace 'libsox_ng' 'libsox'
-    fi
-
-    # pkg-config file (rename + patch)
-    if [ -f sox_ng.pc.in ]; then
-      mv sox_ng.pc.in sox.pc.in
-      substituteInPlace sox.pc.in \
-        --replace 'sox_ng' 'sox' \
-        --replace 'libsox_ng' 'libsox'
-    fi
-
-    # B. Source File Renaming
-    if [ -f src/sox_ng.h ]; then
-      mv src/sox_ng.h src/sox.h
-    fi
-    if [ -f src/sox_ng.c ]; then
-      mv src/sox_ng.c src/sox.c
-    fi
-    if [ -f src/libsox_ng.c ]; then
-      mv src/libsox_ng.c src/libsox.c
-    fi
-
-    # Update all includes in source files
-    find src -type f \( -name "*.c" -o -name "*.h" \) -exec \
-      sed -i 's/sox_ng\.h/sox.h/g; s/libsox_ng/libsox/g' {} +
-
-    # C. Documentation File Renaming
-    if [ -f sox_ng.1 ]; then
-      mv sox_ng.1 sox.1
-      substituteInPlace sox.1 \
-        --replace 'sox_ng' 'sox' \
-        --replace 'play_ng' 'play' \
-        --replace 'rec_ng' 'rec'
-    fi
-
-    if [ -f soxi_ng.1 ]; then
-      mv soxi_ng.1 soxi.1
-      substituteInPlace soxi.1 \
-        --replace 'sox_ng' 'sox' \
-        --replace 'soxi_ng' 'soxi'
-    fi
-
-    if [ -f soxformat_ng.7 ]; then
-      mv soxformat_ng.7 soxformat.7
-      substituteInPlace soxformat.7 \
-        --replace 'sox_ng' 'sox' \
-        --replace 'soxformat_ng' 'soxformat'
-    fi
-
-    if [ -f libsox_ng.3 ]; then
-      mv libsox_ng.3 libsox.3
-      substituteInPlace libsox.3 \
-        --replace 'sox_ng' 'sox' \
-        --replace 'libsox_ng' 'libsox'
-    fi
-
-    # D. Test Files
-    find test -type f \( -name "*.sh" -o -name "*.test" \) -exec \
-      sed -i 's/sox_ng/sox/g; s/soxi_ng/soxi/g; s/play_ng/play/g; s/rec_ng/rec/g' {} + \
-      2>/dev/null || true
-
-    # E. Build Scripts
-    for script in mingwbuild osxbuild release.sh; do
-      if [ -f "$script" ]; then
-        substituteInPlace "$script" \
-          --replace 'sox_ng' 'sox' \
-          --replace 'soxi_ng' 'soxi' \
-          --replace 'libsox_ng' 'libsox' \
-          --replace 'play_ng' 'play' \
-          --replace 'rec_ng' 'rec'
-      fi
-    done
-
-    echo "Renaming complete!"
+    # Upstream now ships a first-class `--enable-replace` configure flag (see
+    # configureFlags) that installs compatibility symlinks: sox->sox_ng,
+    # play/rec/soxi, libsox.{a,la,so}, sox.h, sox.pc, and all man pages. This
+    # replaces the fragile brute-force mv/sed renaming the fork used to do, which
+    # broke every time upstream restructured the build. No source edits here.
 
     # ========================================================================
-    # PHASE 3: Platform-Specific Fixes
+    # PHASE 3: Platform-Specific Fixes (Darwin, defensive)
     # ========================================================================
+    # Upstream already fixed lsx_rawseek to sox_uint64_t; the remaining sed
+    # passes are defensive no-ops that can never fail the build.
 
     ${lib.optionalString stdenv.isDarwin ''
       echo "Applying Darwin-specific type compatibility fixes..."
@@ -214,10 +110,6 @@ stdenv.mkDerivation rec {
       find src -name "*.c" -exec grep -l "uint64_t.*offset" {} \; | while read file; do
         sed -i 's/uint64_t \([A-Z_]*\) offset/sox_uint64_t \1 offset/g' "$file" || true
       done
-
-      # Fix lsx_rawseek signatures (defensive - may already be correct)
-      sed -i 's/int lsx_rawseek(sox_format_t \* ft, uint64_t offset)/int lsx_rawseek(sox_format_t * ft, sox_uint64_t offset)/g' \
-        src/sox_i.h src/raw.c 2>/dev/null || true
 
       # Fix function pointer types (defensive)
       find src -name "*.c" -exec grep -l "uint64_t" {} \; | while read file; do
@@ -237,20 +129,23 @@ stdenv.mkDerivation rec {
     "--enable-shared"
     "--enable-static"
     "--with-ffmpeg"
+    # Install `sox`/`play`/`rec`/`soxi`, libsox.*, sox.h and sox.pc compatibility
+    # symlinks alongside the sox_ng originals (upstream's supported rebranding
+    # mechanism; replaces the fork's old brute-force renaming in postPatch).
+    "--enable-replace"
   ];
 
   enableParallelBuilding = true;
 
   postInstall = ''
-    echo "Fixing symlinks in $out/bin..."
-    cd $out/bin
-
-    # Remove any remaining *_ng symlinks and create correct ones
-    for prog in play rec soxi; do
-      rm -f ''${prog}_ng
-      if [ ! -e $prog ]; then
-        ln -s sox $prog
-      fi
+    # With --enable-replace, `make install` already creates the sox/play/rec/soxi
+    # (and libsox.*, sox.h, sox.pc) compatibility symlinks pointing at the sox_ng
+    # originals. As a cross-platform safety net — play/rec are only auto-linked
+    # when an audio backend is enabled — ensure the core aliases exist, pointing
+    # at the real sox_ng binary. Idempotent: never clobbers existing symlinks.
+    cd "$out/bin"
+    for alias in sox play rec soxi; do
+      [ -e "$alias" ] || ln -s sox_ng "$alias"
     done
 
     echo "Build complete!"
@@ -259,15 +154,16 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "sox_ng with large sinc filter support (up to 1 billion taps)";
     longDescription = ''
-      Custom build of sox_ng with enhanced sinc filter support and renamed
-      to 'sox' for drop-in replacement of legacy SoX. Supports up to
-      approximately 1 billion filter taps for extreme resampling scenarios.
+      Custom build of sox_ng exposed as 'sox' for drop-in replacement of
+      legacy SoX. Supports up to approximately 1 billion filter taps for
+      extreme resampling scenarios.
 
       This build includes:
-      - Large sinc filter patches (FFT size up to 2^30)
+      - Large sinc filter support (up to ~1 billion taps; native upstream
+        since sox_ng 14.7.x, FFT4G_MAX_SIZE 1<<31)
       - Full codec support via ffmpeg-full
       - DSD (Direct Stream Digital) audio support for high-resolution formats
-      - Renamed binaries: sox, play, rec, soxi
+      - 'sox'/'play'/'rec'/'soxi' compatibility symlinks via --enable-replace
     '';
     homepage = "https://github.com/barstoolbluz/sox_ng";
     license = with licenses; [ gpl2Plus lgpl21Plus ];

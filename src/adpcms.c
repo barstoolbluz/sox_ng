@@ -141,7 +141,7 @@ void lsx_adpcm_reset(adpcm_io_t * state, sox_encoding_t type)
 
 /******************************************************************************
  * Function   : lsx_adpcm_start
- * Description: Initialises the file parameters and ADPCM codec state.
+ * Description: Initializes the file parameters and ADPCM codec state.
  * Parameters : ft  - file info structure
  *              state - ADPCM state structure
  *              type - SOX_ENCODING_OKI_ADPCM or SOX_ENCODING_IMA_ADPCM

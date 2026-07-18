@@ -46,6 +46,16 @@ void dolbyb_init(dolbyb_t *Param)
   Param->FETGVt = 75000*(int64_t)100000;
 }
 
+/* Update things that depend on changed values of the
+ * settable parameters ThGndB, DecAdB, UpSamp, AllHig, FltTyp.
+ * It will also readjust for changed BDepth and SmpSec but
+ * I'm not sure what that means in the context of a session.
+ */
+char *dolbyb_restart(dolbyb_t *Param)
+{
+  return dolbyb_start(Param);
+}
+
 static char *SecondInit(dolbyb_t *Param)
 {
   char *err;
@@ -146,21 +156,21 @@ char *dolbyb_encode(dolbyb_t *Param, void *in, void *out, size_t nframes)
 
   for (SmpCnt = 0; SmpCnt < nframes; SmpCnt++) {
     for (Chn = 1; Chn <= Param->NumChn; Chn++) {
-      int64_t SmpVal;
+      int64_t SmpVal = 0; /* Shut compiler warning up */
+      union {
+        unsigned char c[4];
+	signed int i;
+      } u;
 
       /* Get input */
       switch (NumByt) {
       case 1: SmpVal = (int64_t)(inp[0]);
               break;
-#ifndef WORDS_BIGENDIAN
-      case 2: SmpVal = (int64_t)((int32_t)inp[0] | ((int32_t)inp[1] << 8));
+      case 2: u.i = 0;  u.c[0] = inp[0]; u.c[1] = inp[1];
+              SmpVal = u.i;
               break;
-      case 3: SmpVal = (int64_t)((int32_t)inp[0] | ((int32_t)inp[1] << 8) | ((int32_t)inp[2] << 16));
-#else
-      case 2: SmpVal = (int64_t)((int32_t)inp[1] | ((int32_t)inp[0] << 8));
-              break;
-      case 3: SmpVal = (int64_t)((int32_t)inp[2] | ((int32_t)inp[1] << 8) | ((int32_t)inp[0] << 16));
-#endif
+      case 3: u.i = 0;  u.c[0] = inp[0]; u.c[1] = inp[1]; u.c[2] = inp[2];
+              SmpVal = u.i;
               break;
       }
       inp += NumByt;

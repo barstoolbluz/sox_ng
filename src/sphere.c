@@ -102,7 +102,7 @@ static int start_read(sox_format_t * ft)
     }
 
     if (lsx_reads(ft, buf, header_size) == SOX_EOF) {
-      lsx_fail_errno(ft, SOX_EHDR, "error reading Sphere header");
+      lsx_fail_errno(ft, SOX_EHDR, "error reading header");
       free(buf);
       return (SOX_EOF);
     }

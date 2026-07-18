@@ -20,11 +20,11 @@
 # Check whether sox was compiled with the spectrogram effect
 ${sox:-sox} 2>&1 | grep -q '^EFFECTS:.*spectrogram' || exit 254
 
-rm -f core spectrogram.png
+rm -f core core.* spectrogram.png
 
 ${sox:-sox} int8-linear-pcm.au -n rate 3k spectrogram
 status=$?
 
-rm -f core spectrogram.png
+rm -f core core.* spectrogram.png
 
 exit $status

@@ -107,6 +107,10 @@ main(int argc, char *argv[])
     fprintf(stderr, "%s: %s\n", progname, errmsg);
     exit(1);
   }
+  if ((errmsg = dolbyb_restart(&dolbyb))) {
+    fprintf(stderr, "%s: %s\n", progname, errmsg);
+    exit(1);
+  }
 
   while ((n_read = sf_readf_short(sf_in, buf_in, (sf_count_t)HANDFUL)) > 0) {
     if (Encode) errmsg = dolbyb_encode(&dolbyb, buf_in, buf_out, (size_t)n_read);

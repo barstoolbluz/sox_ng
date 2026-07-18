@@ -24,6 +24,11 @@
 
 #include "Param.h"
 
+#include <math.h>
+
+/* This is not declared when compiling -ansi (C90) */
+extern double round(double x);
+
 void DiodeClipInit(dolbyb_t *Param)
 {
   double DioVal = ParamDioClp;

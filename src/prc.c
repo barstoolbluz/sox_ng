@@ -121,7 +121,7 @@ static const char read_error_msg[] = "file is truncated";
   return SOX_EOF; \
 }
 
-static int startread(sox_format_t * ft)
+static int startread_prc(sox_format_t * ft)
 {
   priv_t * p = (priv_t *)ft->priv;
   char head[sizeof(prc_header)];
@@ -168,7 +168,7 @@ static int startread(sox_format_t * ft)
   else if (encoding == 0x100001a1)
     ft->encoding.encoding = SOX_ENCODING_IMA_ADPCM;
   else {
-    lsx_fail_errno(ft, SOX_EHDR, "unrecognised encoding");
+    lsx_fail_errno(ft, SOX_EHDR, "unrecognized encoding");
     return SOX_EOF;
   }
 
@@ -180,7 +180,7 @@ static int startread(sox_format_t * ft)
     read_error();
   lsx_debug("Volume: %d", (unsigned)volume);
   if (volume < 1 || volume > 5)
-    lsx_warn("Volume %d outside range 1..5", volume);
+    lsx_warn("volume %d outside range 1..5", volume);
 
   if (lsx_readb(ft, &byte) ||  /* Unused and seems always zero */
       lsx_readdw(ft, &repgap)) /* Time between repeats in usec */
@@ -192,11 +192,11 @@ static int startread(sox_format_t * ft)
   lsx_debug("Number of bytes in samples list: %u", listlen);
 
   if (ft->signal.rate != 0 && ft->signal.rate != 8000)
-    lsx_report("PRC only supports 8 kHz; overriding.");
+    lsx_report("PRC only supports 8 kHz; overriding");
   ft->signal.rate = 8000;
 
   if (ft->signal.channels != 1 && ft->signal.channels != 0)
-    lsx_report("PRC only supports 1 channel; overriding.");
+    lsx_report("PRC only supports 1 channel; overriding");
   ft->signal.channels = 1;
 
   p->data_start = lsx_tell(ft);
@@ -248,7 +248,7 @@ static unsigned read_cardinal(sox_format_t * ft)
   return a;
 }
 
-static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t samp)
+static size_t read_samples_prc(sox_format_t * ft, sox_sample_t *buf, size_t samp)
 {
   priv_t * p = (priv_t *)ft->priv;
 
@@ -289,7 +289,7 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t samp)
   }
 }
 
-static int stopread(sox_format_t * ft)
+static int stopread_prc(sox_format_t * ft)
 {
   priv_t * p = (priv_t *)ft->priv;
 
@@ -314,7 +314,7 @@ static const char write_error_msg[] = "write error";
   return SOX_EOF; \
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_prc(sox_format_t * ft)
 {
   priv_t * p = (priv_t *)ft->priv;
 
@@ -377,7 +377,7 @@ static int write_cardinal(sox_format_t * ft, unsigned a)
   return SOX_SUCCESS;
 }
 
-static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t nsamp)
+static size_t write_samples_prc(sox_format_t * ft, const sox_sample_t *buf, size_t nsamp)
 {
   priv_t * p = (priv_t *)ft->priv;
   /* Psion Record seems not to be able to handle frames > 800 samples */
@@ -415,22 +415,33 @@ static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t n
   return written;
 }
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_prc(sox_format_t * ft)
 {
   priv_t * p = (priv_t *)ft->priv;
 
   p->nbytes = lsx_tell(ft) - p->data_start;
 
   if (!ft->seekable) {
-      lsx_warn("Header will have invalid file length since file is not seekable");
+      lsx_warn("header will have invalid file length since file is not seekable");
       return SOX_SUCCESS;
   }
 
-  if (lsx_seeki(ft, (off_t)0, 0) != 0) {
+  /* Seeking in a memopened file truncates it at the seek position when it's
+   * closed and fseek(SEEK:END) doesn't work either so remember the length
+   * and seek back to it after rewriting the header.
+   */
+  {
+    off_t o = ftell(ft->fp);
+    int result;
+
+    if (lsx_seeki(ft, (off_t)0, 0) != 0) {
       lsx_fail_errno(ft,errno,"can't rewind output file to rewrite header");
       return(SOX_EOF);
+    }
+    result = prcwriteheader(ft);
+    fseek(ft->fp, o, SEEK_SET);
+    return result;
   }
-  return prcwriteheader(ft);
 }
 
 static int prcwriteheader(sox_format_t * ft)
@@ -478,8 +489,8 @@ LSX_FORMAT_HANDLER(prc)
     SOX_LIB_VERSION_CODE,
     "Psion Record; used in EPOC devices (Series 5, Revo and similar)",
     names, SOX_FILE_LIT_END | SOX_FILE_MONO,
-    startread, read_samples, stopread,
-    startwrite, write_samples, stopwrite,
+    startread_prc, read_samples_prc, stopread_prc,
+    startwrite_prc, write_samples_prc, stopwrite_prc,
     seek, write_encodings, write_rates, sizeof(priv_t)
   };
   return &handler;

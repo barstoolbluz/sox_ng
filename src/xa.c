@@ -125,19 +125,19 @@ static int startread(sox_format_t * ft)
     if (!ft->encoding.bits_per_sample || ft->encoding.bits_per_sample == xa->header.bits) {
         ft->encoding.bits_per_sample = xa->header.bits;
     } else {
-        lsx_report("User options overriding size read in .xa header");
+        lsx_report("user options are overriding the size in the file header");
     }
 
     if (ft->signal.channels == 0 || ft->signal.channels == xa->header.channels) {
         ft->signal.channels = xa->header.channels;
     } else {
-        lsx_report("User options overriding channels read in .xa header");
+        lsx_report("user options are overriding the number of channels in the file header");
     }
 
     if (ft->signal.rate == 0 || ft->signal.rate == xa->header.sampleRate) {
         ft->signal.rate = xa->header.sampleRate;
     } else {
-        lsx_report("User options overriding rate read in .xa header");
+        lsx_report("user options are overriding the rate in the file header");
     }
 
     if (ft->signal.channels == 0 || ft->signal.channels > UINT16_MAX) {
@@ -153,19 +153,21 @@ static int startread(sox_format_t * ft)
         return SOX_EOF;
     }
 
+    ft->data_start = lsx_tell(ft);
+
     /* Validate the header */
     if (xa->header.bits != ft->encoding.bits_per_sample) {
-        lsx_report("Invalid sample resolution %d bits.  Assuming %d bits.",
+        lsx_report("invalid sample resolution of %d bits; assuming %d",
             xa->header.bits, ft->encoding.bits_per_sample);
         xa->header.bits = ft->encoding.bits_per_sample;
     }
     if (xa->header.align != (ft->encoding.bits_per_sample >> 3) * xa->header.channels) {
-        lsx_report("Invalid sample alignment value %d.  Assuming %d.",
+        lsx_report("invalid sample alignment value %d; assuming %d",
             xa->header.align, (ft->encoding.bits_per_sample >> 3) * xa->header.channels);
         xa->header.align = (ft->encoding.bits_per_sample >> 3) * xa->header.channels;
     }
     if (xa->header.avgByteRate != (xa->header.align * xa->header.sampleRate)) {
-        lsx_report("Invalid dwAvgByteRate value %d.  Assuming %d.",
+        lsx_report("invalid dwAvgByteRate value %d; assuming %d",
             xa->header.avgByteRate, xa->header.align * xa->header.sampleRate);
         xa->header.avgByteRate = xa->header.align * xa->header.sampleRate;
     }
@@ -208,11 +210,11 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
                     if (done > 0) {
                         return done;
                     }
-                    lsx_fail_errno(ft,SOX_EOF,"premature EOF on input file");
+                    lsx_fail_errno(ft,SOX_EOF,"premature EOF on input");
                     return 0;
                 } else {
                     /* error */
-                    lsx_fail_errno(ft,SOX_EOF,"read error on input stream");
+                    lsx_fail_errno(ft,SOX_EOF,"read error on input");
                     return 0;
                 }
             }

@@ -16,13 +16,13 @@
 # sox: rate.c:303: void rate_init(rate_t *, rate_shared_t *, double, double, double, double, double, rolloff_t, sox_bool, sox_bool, int, int, sox_bool): Assertion `factor > 0' failed.
 # Aborted (core dumped)
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} poc_assert_rate_init -t aiff /dev/null
 
 status=$?
 
-rm -f core
+rm -f core core.*
 
 case $status in
 2) status=0;;

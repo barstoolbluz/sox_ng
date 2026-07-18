@@ -39,7 +39,7 @@ typedef struct {
   char *arg2;
 } priv_t;
 
-static int getopts(sox_effect_t * effp, int argc, char * * argv)
+static int getopts_compand(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * l = (priv_t *) effp->priv;
   char * s;
@@ -47,8 +47,14 @@ static int getopts(sox_effect_t * effp, int argc, char * * argv)
   unsigned pairs, i, j, commas;
 
   --argc, ++argv;
-  if (argc < 2 || argc > 5)
-    return lsx_usage(effp);
+  if (argc < 2) {
+    lsx_fail("attack,decay and in-dB1[,out_dB] are required");
+    return SOX_EOF;
+  }
+  if (argc > 5) {
+    lsx_fail("too many arguments");
+    return SOX_EOF;
+  }
 
   l->arg0 = lsx_strdup(argv[0]);
   l->arg1 = lsx_strdup(argv[1]);
@@ -64,7 +70,7 @@ static int getopts(sox_effect_t * effp, int argc, char * * argv)
   lsx_vcalloc(l->channels, pairs);
   l->expectedChannels = pairs;
 
-  /* Now tokenise the rates string and set up these arrays.  Keep
+  /* Now tokenize the rates string and set up these arrays.  Keep
      them in seconds at the moment: we don't know the sample rate yet. */
   for (i = 0, s = strtok(l->arg0, ","); s != NULL; ++i) {
     for (j = 0; j < 2; ++j) {
@@ -109,7 +115,7 @@ static int getopts(sox_effect_t * effp, int argc, char * * argv)
   return SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static int start_compand(sox_effect_t * effp)
 {
   priv_t * l = (priv_t *) effp->priv;
   unsigned i, j;
@@ -157,8 +163,8 @@ static void doVolume(double *v, double samp, priv_t * l, int chan)
     *v += delta * l->channels[chan].attack_times[1];
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
-                    size_t *isamp, size_t *osamp)
+static int flow_compand(sox_effect_t * effp, const sox_sample_t *ibuf,
+                        sox_sample_t *obuf, size_t *isamp, size_t *osamp)
 {
   priv_t * l = (priv_t *) effp->priv;
   int len =  (*isamp > *osamp) ? *osamp : *isamp;
@@ -218,7 +224,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obu
   return (SOX_SUCCESS);
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
+static int drain_compand(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
 {
   priv_t * l = (priv_t *) effp->priv;
   size_t chan, done = 0;
@@ -240,7 +246,7 @@ static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
   return l->delay_buf_cnt > 0 ? SOX_SUCCESS : SOX_EOF;
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_compand(sox_effect_t * effp)
 {
   priv_t * l = (priv_t *) effp->priv;
 
@@ -248,7 +254,7 @@ static int stop(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int lsx_kill(sox_effect_t * effp)
+static int kill_compand(sox_effect_t * effp)
 {
   priv_t * l = (priv_t *) effp->priv;
 
@@ -265,7 +271,7 @@ sox_effect_handler_t const * lsx_compand_effect_fn(void)
   static const char usage[] =
     "attack,decay{,attack,decay} [soft-knee-dB:]in-dB1[,out-dB1]{,in-dB2,out-dB2} [gain [initial-volume-dB [delay]]]";
   static char const * const extra_usage[] = {
-"dB values are floating point or -inf'; times are in seconds.",
+"dB values are floating point or -inf; times are in seconds.",
 "",
 "Flow diagram for one channel:",
 "         ____________      _______________",
@@ -283,8 +289,10 @@ sox_effect_handler_t const * lsx_compand_effect_fn(void)
   };
 
   static sox_effect_handler_t handler = {
-    "compand", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_GAIN,
-    getopts, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    "compand", usage, SOX_EFF_MCHAN | SOX_EFF_GAIN,
+    getopts_compand, start_compand, flow_compand, drain_compand,
+    stop_compand, kill_compand,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
 
   return &handler;

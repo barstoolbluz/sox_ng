@@ -24,6 +24,7 @@
   EFFECT(bass)
   EFFECT(bend)
   EFFECT(biquad)
+  EFFECT(centercut)
   EFFECT(channels)
   EFFECT(chorus)
   EFFECT(compand)
@@ -33,7 +34,9 @@
   EFFECT(delay)
   EFFECT(dft_filter) /* abstract */
   EFFECT(dither)
+#if HAVE_DOLBYB_H
   EFFECT(dolbyb)
+#endif
   EFFECT(dop)
   EFFECT(downsample)
   EFFECT(earwax)
@@ -69,6 +72,7 @@
   EFFECT(reverb)
   EFFECT(reverse)
   EFFECT(riaa)
+  EFFECT(saturation)
   EFFECT(sdm)
   EFFECT(silence)
   EFFECT(sinc)

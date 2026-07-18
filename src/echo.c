@@ -8,6 +8,7 @@
  */
 
 #include "sox_i.h"
+#include <ctype.h>   /* for isdigit() */
 
 /*
  * It's faster to use floats that sox_sample_t because the
@@ -17,13 +18,13 @@
 
 /* Private data */
 typedef struct {
-        int     counter;
-        int     num_delays;
+        int      counter;
+        unsigned num_delays;
         float   *delay_buf;
-        float   gain_in, gain_out;
+        float    gain_in, gain_out;
         float   *delay, *decay;
         ptrdiff_t *samples, maxsamples;
-        size_t fade_out;
+        size_t   fade_out;
 } priv_t;
 
 /*
@@ -38,8 +39,14 @@ static int sox_echo_getopts(sox_effect_t * effp, int argc, char **argv)
         echo->delay = echo->decay = NULL;
 
         --argc, ++argv;
-        if ((argc < 4) || (argc % 2))
-          return lsx_usage(effp);
+        if (argc < 4) {
+	  lsx_fail("gain_in, gain_out and one delay decay pair are required");
+          return SOX_EOF;
+	}
+	if (argc % 2) {
+	  lsx_fail("each delay requires a decay");
+          return SOX_EOF;
+	}
 
         i = 0;
         if (sscanf(argv[i], "%f", &echo->gain_in) != 1) {
@@ -79,13 +86,103 @@ static int sox_echo_getopts(sox_effect_t * effp, int argc, char **argv)
         return (SOX_SUCCESS);
 }
 
+static char *
+get_echo(sox_effect_t *effp, char *name)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+
+  if (!strcmp(name, "gain_in")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->gain_in);
+  }
+  if (!strcmp(name, "gain_out")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->gain_out);
+  }
+
+  /* An array-based parameter */
+  if (!strncmp(name, "decay", 5)) {
+    unsigned i;
+    unsigned nth = 0; /* 0 for "decay", non-zero for "decay1" etc. */
+
+    if (isdigit((unsigned char)name[5])) {
+      nth = atoi(name + 5);
+      if (nth == 0) {
+        lsx_warn("keymaps for individual decays start at 1");
+        return NULL;
+      }
+    }
+
+    for (i=0; i < p->num_delays; i++) {
+      if (nth == 0 || nth == i+1) {
+       /* If they ask for "decay" and there are several,
+        * return the first one */
+        s = lsx_malloc(16);
+        sprintf(s, "%g", p->decay[i]);
+        return s;
+      }
+    }
+  }
+
+  return s;
+}
+
+static char *
+set_echo(sox_effect_t *effp, char *name, char *value)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+  char *endptr = value;
+  double v = lsx_strtod(value, &endptr);
+
+  if (endptr == value || *endptr != '\0') return NULL;
+
+  if (!strcmp(name, "gain_in")) {
+    p->gain_in = v;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+  if (!strcmp(name, "gain_out")) {
+    p->gain_out = v;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+
+  /* An array-based parameter */
+  if (!strncmp(name, "decay", 5)) {
+    unsigned i;
+    unsigned nth = 0; /* 0 for "decay", non-zero for "decay1" etc. */
+
+    if (isdigit((unsigned char)name[5])) {
+      nth = atoi(name + 5);
+      if (nth == 0) {
+        lsx_warn("keymaps for individual decays start at 1");
+        return NULL;
+      }
+    }
+    for (i=0; i < p->num_delays; i++) {
+      if (nth == 0 || nth == i+1) {
+        p->decay[i] = v;
+
+        /* If we adjust several, return the last one,
+         * after all, they'll all be the same */
+        if (!s) s = lsx_malloc(16);
+        sprintf(s, "%g", v);
+      }
+    }
+  }
+
+  return s;
+}
+
 /*
  * Prepare for processing.
  */
 static int sox_echo_start(sox_effect_t * effp)
 {
         priv_t * echo = (priv_t *) effp->priv;
-        int i;
+        unsigned i;
         float sum_in_volume;
 
         echo->maxsamples = 0;
@@ -110,7 +207,10 @@ static int sox_echo_start(sox_effect_t * effp)
         echo->counter = 0;
         echo->fade_out = echo->maxsamples;
 
-  effp->out_signal.length = SOX_UNKNOWN_LEN; /* TODO: calculate actual length */
+        if (effp->in_signal.length == SOX_UNKNOWN_LEN)
+            effp->out_signal.length = SOX_UNKNOWN_LEN;
+        else
+            effp->out_signal.length = effp->in_signal.length + echo->fade_out;
 
         return (SOX_SUCCESS);
 }
@@ -123,7 +223,7 @@ static int sox_echo_flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_samp
                  size_t *isamp, size_t *osamp)
 {
         priv_t * echo = (priv_t *) effp->priv;
-        int j;
+        unsigned j;
         float d_in, d_out;
         size_t len = min(*isamp, *osamp);
         *isamp = *osamp = len;
@@ -133,7 +233,7 @@ static int sox_echo_flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_samp
                 /* Compute output first */
                 d_out = d_in * echo->gain_in;
 		if (echo->maxsamples == 0) {
-			for ( j = 0; j < echo->num_delays; j++ ) {
+			for (j = 0; j < echo->num_delays; j++ ) {
 				d_out += d_in * echo->decay[j];
 			}
 		} else {
@@ -164,7 +264,7 @@ static int sox_echo_drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp
 {
         priv_t * echo = (priv_t *) effp->priv;
         float d_in, d_out;
-        int j;
+        unsigned j;
         size_t done;
 
         done = 0;
@@ -173,7 +273,7 @@ static int sox_echo_drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp
                 d_in = 0;
                 d_out = 0;
 		if (echo->maxsamples > 0) {
-		    for ( j = 0; j < echo->num_delays; j++ ) {
+		    for (j = 0; j < echo->num_delays; j++ ) {
 			    d_out += echo->delay_buf[
     (echo->counter + echo->maxsamples - echo->samples[j]) % echo->maxsamples]
 			    * echo->decay[j];
@@ -241,17 +341,22 @@ const sox_effect_handler_t *lsx_echo_effect_fn(void)
 "gain-out -inf-inf  Final volume adjustment",
 "delay       0-inf  Delay in milliseconds",
 "decay    -inf-inf  Proportion of delayed signal delivered to adder",
+"Keymaps: echo.(gain_in|gain_out)",
     NULL
   };
 
   static sox_effect_handler_t handler = {
-    "echo", usage, extra_usage, SOX_EFF_LENGTH | SOX_EFF_GAIN,
+    "echo", usage, SOX_EFF_LENGTH | SOX_EFF_GAIN,
     sox_echo_getopts,
     sox_echo_start,
     sox_echo_flow,
     sox_echo_drain,
     sox_echo_stop,
-    sox_echo_kill, sizeof(priv_t)
+    sox_echo_kill,
+    sizeof(priv_t),
+    extra_usage,
+    get_echo,
+    set_echo,
   };
 
   return &handler;

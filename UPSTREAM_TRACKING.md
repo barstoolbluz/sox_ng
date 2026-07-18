@@ -212,20 +212,35 @@ git tag -l 'sox_ng-*' --sort=-version:refname | head -5
 
 ## Patch Maintenance
 
-All patches are maintained in `.flox/pkgs/sox_ng.nix` in the `postPatch` section:
+As of the 14.8.0.1 update, the fork carries **almost no patches** — both of its
+historical reasons to exist were absorbed upstream. The `postPatch` /
+`configureFlags` in `.flox/pkgs/sox_ng.nix` now consist of:
 
-### Phase 1: Large Sinc Filter Patches
-- `src/fft4g.h`: FFT4G_MAX_SIZE 262144 → 1073741824
-- `src/fft4g.c`: ip[256] → ip[16384]
-- `src/sinc.c`: max taps 32767 → 1073741823
+### Phase 1: Large Sinc Filter Support — UPSTREAM (since sox_ng 14.7.x)
+- The large-tap sinc limit (`11 … 1073741823`) and a large `FFT4G_MAX_SIZE`
+  (`1U << 31`) are now native in upstream. **No patching needed.**
+- `postPatch` instead **asserts** these are present (`grep` guards) so a future
+  upstream regression fails the build loudly instead of silently shipping
+  32767-tap filters.
+- The old `src/fft4g.c` `ip[256]→ip[16384]` patch is obsolete — upstream
+  rewrote `fft4g.c` and its work arrays.
 
-### Phase 2: sox_ng → sox Rebranding
-- Comprehensive renaming across build files, source, docs, tests
+### Phase 2: sox_ng → sox Rebranding — UPSTREAM via `--enable-replace`
+- Upstream ships a first-class `--enable-replace` configure flag that installs
+  `sox`/`play`/`rec`/`soxi`, `libsox.{a,la,so}`, `sox.h`, `sox.pc` and all man
+  page compatibility symlinks alongside the `sox_ng` originals.
+- We simply pass `--enable-replace` in `configureFlags`. The old brute-force
+  `mv`/`sed`/`substituteInPlace` renaming has been **removed** (it broke on
+  every upstream build restructure).
+- `sox_ng` remains the real binary; `sox` is a symlink to it (functionally a
+  drop-in replacement; `mainProgram = "sox"`).
 
-### Phase 3: Platform-Specific Fixes
-- Darwin: uint64_t → sox_uint64_t type fixes
+### Phase 3: Platform-Specific Fixes (Darwin, defensive)
+- `uint64_t → sox_uint64_t` offset/function-pointer `sed` passes, Darwin-only.
+- The old `lsx_rawseek` fix was removed — upstream already uses `sox_uint64_t`.
 
-If upstream changes affect these files, the Nix expression patches may need adjustment. The `substituteInPlace` commands use `--replace` with exact string matching, so upstream changes to those strings will cause build failures (which is good - it alerts us to review the patches).
+If a future upstream release removes the large-sinc support, the Phase-1
+assertions will fail the build — that is the intended signal to review.
 
 ## Troubleshooting
 
@@ -304,22 +319,26 @@ git push origin main
 
 ## Current Status
 
-- **Upstream remote**: ✅ Added
-- **Latest upstream tag**: `sox_ng-14.6.1.2`
-- **Latest upstream commit**: `c9d20325` (sox_ng-14.6.1+git20251029-32)
-- **Our version**: ✅ `14.6.1.2-custom` (updated 2025-11-06)
-- **Source files**: ✅ Unpatched (patches applied at build time)
-- **Patches**: ✅ All maintained in `.flox/pkgs/sox_ng.nix`
-- **Tested**: ✅ Large sinc filters working (50k, 500k taps verified)
+- **Upstream remote**: ✅ Added (`https://codeberg.org/sox_ng/sox_ng.git`)
+- **Latest upstream tag**: `sox_ng-14.8.0.1`
+- **Our version**: ✅ `14.8.0.1-custom` (updated 2026-07-18)
+- **Source files**: ✅ Unpatched (matches the 14.8.0.1 tag exactly, minus fork-only files)
+- **Patches**: ✅ Minimal — large-sinc + rebranding are now upstream (see Patch Maintenance)
+- **Tested**: ✅ `flox build sox_ng` and `nix build .` both build; large sinc filters (50k/200k/500k taps) verified; over-max errors at 1.07e9
 
-## Completed Initial Update (2025-11-06)
+## Completed Update (2026-07-18): 14.6.1.2 → 14.8.0.1
 
-The workflow has been successfully tested with an update from 14.6.0.2 → 14.6.1.2:
-1. ✅ Used selective checkout method
-2. ✅ Updated Nix expression to handle upstream code changes (GETOPT_LOCAL_NUMERIC)
-3. ✅ Both `flox build sox_ng` and `nix build .` working
-4. ✅ All patches verified working
-5. ✅ Committed and documented
+A large jump (two minor versions, ~726 upstream commits). Key outcomes:
+1. ✅ Selective source sync to the `sox_ng-14.8.0.1` tag (fork files preserved)
+2. ✅ Retired the Phase-1 large-sinc patches — the feature is now native upstream
+3. ✅ Replaced brute-force rebranding with upstream's `--enable-replace` flag
+4. ✅ Removed the obsolete `sox_ng-linux` / `sox_ng-darwin` manifest build recipes
+5. ✅ Both `flox build sox_ng` and `nix build .` working; functionality verified
+
+### Earlier: 14.6.0.2 → 14.6.1.2 (2025-11-06)
+
+The selective-checkout workflow was first validated updating 14.6.0.2 → 14.6.1.2
+(handling the upstream `GETOPT_LOCAL_NUMERIC` change), with both build paths working.
 
 ## Post-Update Verification Checklist
 

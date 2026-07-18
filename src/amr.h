@@ -209,6 +209,7 @@ static int startread(sox_format_t * ft)
   ft->signal.channels = 1;
   ft->signal.length = ft->signal.length != SOX_IGNORE_LENGTH && ft->seekable?
     (size_t)(amr_duration_frames(ft) * .02 * ft->signal.rate +.5) : SOX_UNSPEC;
+  ft->data_start = sizeof(amr_magic) - 1;
   return SOX_SUCCESS;
 }
 
@@ -235,12 +236,10 @@ static int stopread(sox_format_t * ft)
   return SOX_SUCCESS;
 }
 
+#if defined(AMR_GP3) || AMR_OPENCORE_ENABLE_ENCODE
+
 static int startwrite(sox_format_t * ft)
 {
-#if !defined(AMR_GP3) && !AMR_OPENCORE_ENABLE_ENCODE
-  lsx_fail_errno(ft, SOX_EOF, "SoX was compiled without AMR-WB encoding support.");
-  return SOX_EOF;
-#else
   priv_t * p = (priv_t *)ft->priv;
   int open_library_result;
 
@@ -270,10 +269,7 @@ static int startwrite(sox_format_t * ft)
   lsx_writes(ft, amr_magic);
   p->pcm_index = 0;
   return SOX_SUCCESS;
-#endif
 }
-
-#if defined(AMR_GP3) || AMR_OPENCORE_ENABLE_ENCODE
 
 static sox_bool encode_1_frame(sox_format_t * ft)
 {
@@ -323,6 +319,7 @@ static int stopwrite(sox_format_t * ft)
 
 #else
 
+#define startwrite NULL
 #define write_samples NULL
 #define stopwrite NULL
 

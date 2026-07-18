@@ -46,7 +46,7 @@ lsx_adjust_softvol(int delta)
  * initialization now: effp->in_signal & effp->out_signal are not
  * yet filled in.
  */
-static int getopts(sox_effect_t * effp, int argc, char UNUSED **argv)
+static int getopts_softvol(sox_effect_t * effp, int argc, char UNUSED **argv)
 {
   priv_t *p = (priv_t *)effp->priv;
   float headroom = 0.0;
@@ -92,17 +92,75 @@ static int getopts(sox_effect_t * effp, int argc, char UNUSED **argv)
   return SOX_SUCCESS;
 }
 
+static char *
+get_softvol(sox_effect_t *effp, char *name)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+
+  if (!strcmp(name, "volume")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->softvol);
+  }
+  if (!strcmp(name, "double_time")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->softvol);
+  }
+  if (!strcmp(name, "headroom")) {
+    double headroom = -linear_to_dB((double)p->max_amp / SOX_SAMPLE_MAX);
+    s = lsx_malloc(16);
+    sprintf(s, "%g", headroom);
+  }
+
+  return s;
+}
+
+static char *
+set_softvol(sox_effect_t *effp, char *name, char *value)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+  char *endptr = value;
+  double v = lsx_strtod(value, &endptr);
+
+  if (endptr == value || *endptr != '\0') return NULL;
+
+  if (!strcmp(name, "volume")) {
+    if (v < 0) v = 0;
+    p->softvol = v;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+  if (!strcmp(name, "double_time")) {
+    if (v < 0) v = 0;
+    p->double_time = v;
+    if (p->double_time != 0.0f)
+      p->mult_per_sample = powf(2.0f, 1.0f /
+                               (p->double_time * (float)effp->in_signal.rate));
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+  if (!strcmp(name, "headroom")) {
+    if (v < 0) v = 0;
+    p->max_amp = SOX_SAMPLE_MAX * dB_to_linear(-v);
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+
+  return s;
+}
+
 /*
  * Prepare processing.
  * Do all initializations.
  */
-static int start(sox_effect_t * effp)
+static int start_softvol(sox_effect_t * effp)
 {
   priv_t *p = (priv_t *)effp->priv;
 
-  if (p->double_time != 0)
-    p->mult_per_sample = pow(2.0, 1.0 /
-                             (p->double_time * effp->in_signal.rate));
+  if (p->double_time != 0.0f)
+    p->mult_per_sample = powf(2.0f, 1.0f /
+                             (p->double_time * (float)effp->in_signal.rate));
 
   return SOX_SUCCESS;
 }
@@ -112,7 +170,7 @@ static int start(sox_effect_t * effp)
  * in obuf.  Write back the actual numbers of samples to *isamp and *osamp.
  * Return SOX_SUCCESS or, if error occurs, SOX_EOF.
  */
-static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
+static int flow_softvol(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
                            size_t *isamp, size_t *osamp)
 {
   priv_t *p = (priv_t *)effp->priv;
@@ -137,9 +195,8 @@ static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obu
     }
 
     /* If it would exceed maximum volume, lower softvol so that it doesn't. */
-    if (maxamp * p->softvol > p->max_amp) {
-      p->softvol = p->max_amp / maxamp;
-    }
+    if (maxamp * p->softvol > p->max_amp)
+      p->softvol = (float)p->max_amp / (float)maxamp;
 
     for (chan = 0; chan < chans; chan++)
       *optr++ = *iptr++ * p->softvol;
@@ -156,7 +213,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obu
 /*
  * Drain out remaining samples if the effect generates any.
  */
-static int drain(sox_effect_t UNUSED * effp, sox_sample_t UNUSED *obuf, size_t *osamp)
+static int drain_softvol(sox_effect_t UNUSED * effp, sox_sample_t UNUSED *obuf, size_t *osamp)
 {
   *osamp = 0;
   /* Return SOX_EOF when drain
@@ -164,24 +221,6 @@ static int drain(sox_effect_t UNUSED * effp, sox_sample_t UNUSED *obuf, size_t *
    * *osamp == 0 also indicates that.
    */
   return SOX_EOF;
-}
-
-/*
- * Do anything required when you stop reading samples.
- */
-static int stop(sox_effect_t UNUSED * effp)
-{
-  return SOX_SUCCESS;
-}
-
-/*
- * Do anything required when you kill an effect.
- *      (free allocated memory, etc.)
- */
-static int lsx_kill(sox_effect_t UNUSED * effp)
-{
-  softvol_priv = NULL;
-  return SOX_SUCCESS;
 }
 
 /*
@@ -196,11 +235,13 @@ const sox_effect_handler_t *lsx_softvol_effect_fn(void)
     "volume    0-     1.0    Set the initial volume multiplier",
     "2bl-time  0-      0     In how many seconds the volume should double",
     "headroom  0-      0     Limit the maximum output in dB below full range",
+    "Keymaps: softvol.(volume|double_time|headroom)",
     NULL
   };
   static sox_effect_handler_t handler = {
-    "softvol", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_GAIN,
-    getopts, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    "softvol", usage, SOX_EFF_MCHAN | SOX_EFF_GAIN,
+    getopts_softvol, start_softvol, flow_softvol, drain_softvol, NULL, NULL,
+    sizeof(priv_t), extra_usage, get_softvol, set_softvol,
   };
   return &handler;
 }

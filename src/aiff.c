@@ -109,9 +109,10 @@ int lsx_aiffstartread(sox_format_t * ft)
         if (lsx_reads(ft, buf, (size_t)4))
 	  read_error();
         chunksize -= 4;
-        if (strncmp(buf, "sowt", (size_t)4) == 0) {
-          /* CD audio as read on Mac OS machines */
-          /* Need to endian swap all the data */
+        if (strncmp(buf, "sowt", (size_t)4) == 0 ||
+            strncmp(buf, "42ni", (size_t)4) == 0 ||
+            strncmp(buf, "23ni", (size_t)4) == 0) {
+          /* Little-endian signed integer format */
           is_sowt = 1;
         }
         else if (strncmp(buf, "fl32", (size_t)4) == 0 ||
@@ -153,7 +154,9 @@ int lsx_aiffstartread(sox_format_t * ft)
 	  bits = 8;
         }
         else if (strncmp(buf, "NONE", (size_t)4) != 0 &&
-            strncmp(buf, "twos", (size_t)4) != 0) {
+            strncmp(buf, "twos", (size_t)4) != 0 &&
+            strncmp(buf, "in24", (size_t)4) != 0 &&
+            strncmp(buf, "in32", (size_t)4) != 0) {
           buf[4] = 0;
           lsx_fail_errno(ft, SOX_EHDR, "unsupported AIFC compression type `%s'", buf);
           return(SOX_EOF);
@@ -424,8 +427,8 @@ int lsx_aiffstartread(sox_format_t * ft)
         || (ft->signal.rate == SOX_UNSPEC)
         || (ft->encoding.encoding == SOX_ENCODING_UNKNOWN)
         || (ft->encoding.bits_per_sample == 0)) {
-      lsx_report("You must specify # channels, sample rate, signed/unsigned,");
-      lsx_report("and -b 8/16 on the command line.");
+      lsx_report("you must specify the number of channels, sample rate, signed/unsigned,");
+      lsx_report("and -b 8/16 on the command line");
       lsx_fail_errno(ft,SOX_EFMT,"bogus file: no COMM section");
       return(SOX_EOF);
     }
@@ -433,12 +436,12 @@ int lsx_aiffstartread(sox_format_t * ft)
 OK:
   ssndsize /= bits >> 3;
 
-  /* Cope with 'sowt' CD tracks as read on Macs */
+  /* Cope with little-endian AIFC formats (sowt, 42ni, 23ni) */
   if (is_sowt)
     ft->encoding.reverse_bytes = !ft->encoding.reverse_bytes;
 
   if (!foundmark && foundinstr) {
-    lsx_warn("Ignoring INST chunk since no MARKs found.");
+    lsx_warn("ignoring INST chunk since no MARKs found.");
     foundinstr = 0;
   }
   if (foundmark && foundinstr) {
@@ -497,7 +500,7 @@ static void reportInstrument(sox_format_t * ft)
     lsx_report("AIFF Loop markers:");
   for(loopNum  = 0; loopNum < ft->oob.instr.nloops; loopNum++) {
     if (ft->oob.loops[loopNum].count) {
-      lsx_report("Loop %d: start: %6lu", loopNum, (unsigned long)ft->oob.loops[loopNum].start);
+      lsx_report("loop %d: start: %6lu", loopNum, (unsigned long)ft->oob.loops[loopNum].start);
       lsx_report(" end:   %6lu",
               (unsigned long)(ft->oob.loops[loopNum].start + ft->oob.loops[loopNum].length));
       lsx_report(" count: %6d", ft->oob.loops[loopNum].count);
@@ -563,13 +566,13 @@ static int commentChunk(char **text, char *chunkDescription, sox_format_t * ft)
   uint32_t timeStamp;
   unsigned short markerId;
   unsigned short totalCommentLength = 0;
-  unsigned int totalReadLength = 0;
+  unsigned int totalReadLength = 2; /* chunksize doesn't count */
   unsigned int commentIndex;
 
   if (lsx_readdw(ft, &chunksize) ||
       lsx_readw(ft, &numComments))
     return SOX_EOF;
-  totalReadLength += 2; /* chunksize doesn't count */
+  *text = NULL;
   for(commentIndex = 0; commentIndex < numComments; commentIndex++) {
     unsigned short commentLength;
 
@@ -583,12 +586,7 @@ static int commentChunk(char **text, char *chunkDescription, sox_format_t * ft)
     }
     totalCommentLength += commentLength;
     /* allocate enough memory to hold the text including a terminating \0 */
-    if(commentIndex == 0) {
-      *text = lsx_malloc((size_t) totalCommentLength + 1);
-    }
-    else {
-      *text = lsx_realloc(*text, (size_t) totalCommentLength + 1);
-    }
+    *text = lsx_realloc(*text, (size_t) totalCommentLength + 1);
 
     if (lsx_readbuf(ft, *text + totalCommentLength - commentLength, (size_t) commentLength) != commentLength) {
         lsx_fail_errno(ft,SOX_EOF,"unexpected EOF in %s header", chunkDescription);
@@ -635,7 +633,7 @@ int lsx_aiffstopread(sox_format_t * ft)
                     lsx_eof(ft))
                         break;
                 buf[4] = '\0';
-                lsx_warn("Ignoring AIFF tail chunk: `%s', %u bytes long",
+                lsx_warn("ignoring AIFF tail chunk: `%s', %u bytes long",
                         buf, chunksize);
                 if (! strcmp(buf, "MARK") || ! strcmp(buf, "INST"))
                         lsx_warn("       You're stripping MIDI/loop info!");
@@ -697,12 +695,28 @@ int lsx_aiffstopwrite(sox_format_t * ft)
             lsx_fail_errno(ft,SOX_EOF,"non-seekable file");
             return(SOX_EOF);
         }
-        if (lsx_seeki(ft, (off_t)0, SEEK_SET) != 0)
         {
+          /* When using open_memstream(), seeking back and closing truncates
+           * the buffer to the new offset and fseek(SEEK_END) doesn't work so
+           * remember the actual length, rewrite the header and then seek back
+           * to where we were.
+           */
+          off_t o = ftell(ft->fp);
+          int result;
+
+          if (lsx_seeki(ft, (off_t)0, SEEK_SET) != 0)
+          {
                 lsx_fail_errno(ft,errno,"can't rewind output file to rewrite header");
                 return(SOX_EOF);
+          }
+          result = aiffwriteheader(ft, ft->olength / ft->signal.channels);
+          if (lsx_seeki(ft, o, SEEK_SET) != SOX_SUCCESS)
+          {
+                lsx_fail_errno(ft,errno,"can't seek back to proper place after rewriting header");
+                return(SOX_EOF);
+          }
+          return result;
         }
-        return(aiffwriteheader(ft, ft->olength / ft->signal.channels));
 }
 
 static int write_mark_and_inst_chunks(sox_format_t * ft)
@@ -904,12 +918,29 @@ int lsx_aifcstopwrite(sox_format_t * ft)
             lsx_fail_errno(ft,SOX_EOF,"non-seekable file");
             return(SOX_EOF);
         }
-        if (lsx_seeki(ft, (off_t)0, SEEK_SET) != 0)
+
+        /* When using open_memstream(), seeking back and closing truncates
+         * the buffer to the new offset and fseek(SEEK_END) doesn't work either
+         * so remember the actual length, rewrite the header and then seek back
+         * to where we were.
+         */
         {
+          off_t o = ftell(ft->fp);
+          int result;
+
+          if (lsx_seeki(ft, (off_t)0, SEEK_SET) != 0)
+          {
                 lsx_fail_errno(ft,errno,"can't rewind output file to rewrite header");
                 return(SOX_EOF);
+          }
+          result = aifcwriteheader(ft, ft->olength / ft->signal.channels);
+          if (lsx_seeki(ft, o, SEEK_SET) != SOX_SUCCESS)
+          {
+                lsx_fail_errno(ft,errno,"can't seek back to proper place after rewriting header");
+                return(SOX_EOF);
+          }
+          return result;
         }
-        return(aifcwriteheader(ft, ft->olength / ft->signal.channels));
 }
 
 static int aifcwriteheader(sox_format_t * ft, uint64_t nframes)
@@ -953,8 +984,27 @@ static int aifcwriteheader(sox_format_t * ft, uint64_t nframes)
         /* calculate length of COMM chunk (without header) */
         switch (ft->encoding.encoding) {
           case SOX_ENCODING_SIGN2:
-            ctype = "NONE";
-            cname = "not compressed";
+            if (bits == 8) {
+              ctype = "NONE"; cname = "8-bit signed integer";
+            } else if (ft->encoding.reverse_bytes != MACHINE_IS_BIGENDIAN) {
+              switch (bits) {
+                case 16: ctype = "twos"; cname = "16-bit big-endian signed integer"; break;
+                case 24: ctype = "in24"; cname = "24-bit big-endian signed integer"; break;
+                case 32: ctype = "in32"; cname = "32-bit big-endian signed integer"; break;
+                default:
+                  lsx_fail_errno(ft, SOX_EFMT, "unsupported output sample size %u", bits);
+                  return SOX_EOF;
+              }
+            } else {
+              switch (bits) {
+                case 16: ctype = "sowt"; cname = "16-bit little-endian signed integer"; break;
+                case 24: ctype = "42ni"; cname = "24-bit little-endian signed integer"; break;
+                case 32: ctype = "23ni"; cname = "32-bit little-endian signed integer"; break;
+                default:
+                  lsx_fail_errno(ft, SOX_EFMT, "unsupported output sample size %u", bits);
+                  return SOX_EOF;
+              }
+            }
             break;
           case SOX_ENCODING_FLOAT:
             if (bits == 32) {

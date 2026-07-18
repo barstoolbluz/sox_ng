@@ -209,6 +209,7 @@ leftover_copy:
 static int start_read(sox_format_t * const ft)
 {
   priv_t * p = (priv_t *)ft->priv;
+
   lsx_debug("API version %u", FLAC_API_VERSION_CURRENT);
   p->decoder = FLAC__stream_decoder_new();
   if (p->decoder == NULL) {
@@ -248,6 +249,12 @@ static int start_read(sox_format_t * const ft)
   ft->encoding.bits_per_sample = p->bits_per_sample;
   ft->signal.channels = p->channels;
   ft->signal.length = p->total_samples * p->channels;
+  {
+    FLAC__uint64 position;
+    if (FLAC__stream_decoder_get_decode_position(p->decoder, &position))
+      ft->data_start = position;
+  }
+
   return SOX_SUCCESS;
 }
 
@@ -491,11 +498,11 @@ static int start_write(sox_format_t * const ft)
 
     p->metadata[p->num_metadata] = FLAC__metadata_object_new(FLAC__METADATA_TYPE_VORBIS_COMMENT);
     for (i = 0; ft->oob.comments[i]; ++i) {
-      static const char prepend[] = "Comment=";
-      char * text = lsx_calloc(strlen(prepend) + strlen(ft->oob.comments[i]) + 1, sizeof(*text));
-      /* Prepend `Comment=' if no field-name already in the comment */
+      static const char prefix[] = "Comment=";
+      char * text = lsx_calloc(strlen(prefix) + strlen(ft->oob.comments[i]) + 1, sizeof(*text));
+      /* Prefix `Comment=' if no field-name already in the comment */
       if (!strchr(ft->oob.comments[i], '='))
-        strcpy(text, prepend);
+        strcpy(text, prefix);
       entry.entry = (FLAC__byte *) strcat(text, ft->oob.comments[i]);
       entry.length = strlen(text);
       FLAC__metadata_object_vorbiscomment_append_comment(p->metadata[p->num_metadata], entry, /*copy= */ sox_true);

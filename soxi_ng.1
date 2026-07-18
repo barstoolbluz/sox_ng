@@ -19,6 +19,8 @@
 .if n .ds d .
 '\"
 '\" Enclosure macro for examples
+'\" From groff-1.23 CW is undeclared by default but nroff is CW anyway
+.if n .ftr CW R
 .de EX
 .SP
 .nf
@@ -29,9 +31,9 @@
 .SP
 .fi
 ..
-.TH SoXI_ng 1 "September 12, 2024" "soxi_ng" "Sound eXchange_ng"
+.TH SOXI_NG 1 "September 12, 2024" SoX "Sound eXchange_ng"
 .SH NAME
-SoXI_ng \- Sound eXchange Information, display sound file metadata
+soxi_ng \- Sound eXchange Information, display sound file metadata
 .SH SYNOPSIS
 \fBsoxi_ng\fR [\fB\-V\fR[\fIlevel\fR]] [\fB\-T\fR] [\fB\-t\fR\^|\^\fB\-r\fR\^|\^\fB\-c\fR\^|\^\fB\-s\fR\^|\^\fB\-d\fR\^|\^\fB\-D\fR\^|\^\fB\-b\fR\^|\^\fB\-B\fR\^|\^\fB\-p\fR\^|\^\fB\-e\fR\^|\^\fB\-a\fR] \fIinfile1\fR ...
 .SH DESCRIPTION
@@ -44,7 +46,7 @@ is intended for use only with audio files with a self-describing header.
 .SP
 By default, as much information as is available is shown.
 An option may be given to select just a single piece of information
-(perhaps for use in a script or batch-file).
+(perhaps for use in a script or batch file).
 .SH OPTIONS
 .TP
 \fB\-V\fR
@@ -53,7 +55,7 @@ Set verbosity. See
 for details.
 .TP
 \fB\-T\fR
-Used with multiple files; changes the behaviour of
+Used with multiple files; changes the behavior of
 .BR \-s ,
 .B \-d
 and
@@ -64,7 +66,7 @@ Note that when used with
 with files with different sampling rates, this is of questionable value.
 .TP
 \fB\-t\fR
-Show detected file-type.
+Show detected file type.
 .TP
 \fB\-r\fR
 Show sample-rate.
@@ -86,7 +88,9 @@ Show duration in seconds (0 if unavailable).
 Show number of bits per sample (0 if not applicable).
 .TP
 \fB\-B\fR
-Show the bitrate averaged over the whole file (0 if unavailable).
+Show the average bitrate of the audio data (0 if unavailable).
+For Ogg and Opus files, it will be slightly higher than reality
+as the size of the file header is not easily discovered.
 .TP
 \fB\-p\fR
 Show estimated sample precision in bits.

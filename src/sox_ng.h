@@ -19,10 +19,11 @@ LSX_ and lsx_ symbols should not be used by libSoX-based applications.
 #ifndef SOX_H
 #define SOX_H /**< Client API: This macro is defined if sox_ng.h has been included. */
 
-#include <limits.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
+#include <stdarg.h>  /* For va_list */
+#include <stddef.h>  /* To define size_t */
+#include <stdint.h>  /* To automatically determine appropriate
+                      * 8, 16, 32 and 64 bit types */
+#include <limits.h>  /* For UINT_MAX etc. to help with the above */
 
 #if defined(__cplusplus)
 extern "C" {
@@ -482,15 +483,19 @@ Client API:
 The libSoX-specific error codes.
 libSoX functions may return these codes or others that map from errno codes.
 */
+/* The order of the entries from SOX_EHDR onward must correspond to
+ * the entries in sox_strerror()'s errors[] array. */
 enum sox_error_t {
   SOX_SUCCESS = 0,     /**< Function succeeded = 0 */
   SOX_EOF = -1,        /**< End Of File or other error = -1 */
   SOX_EHDR = 2000,     /**< Invalid Audio Header = 2000 */
   SOX_EFMT,            /**< Unsupported data format = 2001 */
-  SOX_ENOMEM,          /**< Can't alloc memory = 2002 */
+  SOX_ENOMEM,          /**< Can't allocate memory = 2002 */
   SOX_EPERM,           /**< Operation not permitted = 2003 */
   SOX_ENOTSUP,         /**< Operation not supported = 2004 */
-  SOX_EINVAL           /**< Invalid argument = 2005 */
+  SOX_EINVAL,          /**< Invalid argument = 2005 */
+  SOX_ENOKEYMAP,       /**< No such keymap = 2006 */
+  SOX_ENOEFFECT,       /**< No such effect = 2007 */
 };
 
 /**
@@ -534,7 +539,9 @@ typedef enum sox_encoding_t {
   SOX_ENCODING_DWVW      , /**< Delta Width Variable Word */
   SOX_ENCODING_DWVWN     , /**< Delta Width Variable Word N-bit */
   SOX_ENCODING_GSM       , /**< GSM 6.10 33byte frame lossy compression */
-  SOX_ENCODING_MP3       , /**< MP3 compression */
+  SOX_ENCODING_MP1       , /**< MPEG 1 Layer 1 compression */
+  SOX_ENCODING_MP2       , /**< MPEG 1 Layer 2 compression */
+  SOX_ENCODING_MP3       , /**< MPEG 1 Layer 3 compression */
   SOX_ENCODING_VORBIS    , /**< Vorbis compression */
   SOX_ENCODING_AMR_WB    , /**< AMR-WB compression */
   SOX_ENCODING_AMR_NB    , /**< AMR-NB compression */
@@ -611,7 +618,7 @@ The API version of the sox_ng.h file. It is not meant to follow the version
 number of SoX but it has historically. Please do not count on
 SOX_LIB_VERSION_CODE staying in sync with the libSoX version.
 */
-#define SOX_LIB_VERSION_CODE   SOX_LIB_VERSION(14, 6, 1)
+#define SOX_LIB_VERSION_CODE   SOX_LIB_VERSION(14, 8, 0)
 
 /**
 Client API:
@@ -837,6 +844,7 @@ Converts signed 32-bit integer to sox_sample_t.
 @returns SoX native sample value.
 */
 #define SOX_SIGNED_32BIT_TO_SAMPLE(d,clips) (sox_sample_t)(d)
+#define SOX_SIGNED_32BIT_TO_SAMPLE_NOCLIPS(d) (sox_sample_t)(d)
 
 /**
 Client API:
@@ -855,6 +863,8 @@ Converts 64-bit float to sox_sample_t.
 @returns SoX native sample value.
 */
 #define SOX_FLOAT_64BIT_TO_SAMPLE(d,clips) (sox_sample_t)(LSX_USE_VAR(sox_macro_temp_sample),sox_macro_temp_double=(d)*(SOX_SAMPLE_MAX+1.),sox_macro_temp_double<0?sox_macro_temp_double<=SOX_SAMPLE_MIN-.5?++(clips),SOX_SAMPLE_MIN:sox_macro_temp_double-.5:sox_macro_temp_double>=SOX_SAMPLE_MAX+.5?sox_macro_temp_double>SOX_SAMPLE_MAX+1.?++(clips),SOX_SAMPLE_MAX:SOX_SAMPLE_MAX:sox_macro_temp_double+.5)
+
+#define SOX_FLOAT_64BIT_TO_SAMPLE_NOCLIPS(d) (sox_sample_t)(LSX_USE_VAR(sox_macro_temp_sample),sox_macro_temp_double=(d)*(SOX_SAMPLE_MAX+1.),sox_macro_temp_double<0?sox_macro_temp_double<=SOX_SAMPLE_MIN-.5?SOX_SAMPLE_MIN:sox_macro_temp_double-.5:sox_macro_temp_double>=SOX_SAMPLE_MAX+.5?sox_macro_temp_double>SOX_SAMPLE_MAX+1.?SOX_SAMPLE_MAX:SOX_SAMPLE_MAX:sox_macro_temp_double+.5)
 
 /**
 Client API:
@@ -911,6 +921,7 @@ Converts SoX native sample to an unsigned 32-bit integer.
 @param clips The parameter is not used.
 */
 #define SOX_SAMPLE_TO_UNSIGNED_32BIT(d,clips) (sox_uint32_t)((d)^SOX_SAMPLE_NEG)
+#define SOX_SAMPLE_TO_UNSIGNED_32BIT_NOCLIPS(d) (sox_uint32_t)((d)^SOX_SAMPLE_NEG)
 
 /**
 Client API:
@@ -919,6 +930,7 @@ Converts SoX native sample to a signed 32-bit integer.
 @param clips The parameter is not used.
 */
 #define SOX_SAMPLE_TO_SIGNED_32BIT(d,clips) (sox_int32_t)(d)
+#define SOX_SAMPLE_TO_SIGNED_32BIT_NOCLIPS(d) (sox_int32_t)(d)
 
 /**
 Client API:
@@ -928,6 +940,8 @@ Converts SoX native sample to a 32-bit float.
 */
 #define SOX_SAMPLE_TO_FLOAT_32BIT(d,clips) (LSX_USE_VAR(sox_macro_temp_double),sox_macro_temp_sample=(d),sox_macro_temp_sample>SOX_SAMPLE_MAX-64?++(clips),1:(((sox_macro_temp_sample+64)&~127)*(1./(SOX_SAMPLE_MAX+1.))))
 
+#define SOX_SAMPLE_TO_FLOAT_32BIT_NOCLIPS(d) (LSX_USE_VAR(sox_macro_temp_double),sox_macro_temp_sample=(d),sox_macro_temp_sample>SOX_SAMPLE_MAX-64?1:(((sox_macro_temp_sample+64)&~127)*(1./(SOX_SAMPLE_MAX+1.))))
+
 /**
 Client API:
 Converts SoX native sample to a 64-bit float.
@@ -935,6 +949,7 @@ Converts SoX native sample to a 64-bit float.
 @param clips The parameter is not used.
 */
 #define SOX_SAMPLE_TO_FLOAT_64BIT(d,clips) ((d)*(1./(SOX_SAMPLE_MAX+1.)))
+#define SOX_SAMPLE_TO_FLOAT_64BIT_NOCLIPS(d) ((d)*(1./(SOX_SAMPLE_MAX+1.)))
 
 /**
 Client API:
@@ -1025,7 +1040,7 @@ if clipping occurs.
 #define SOX_FILE_STEREO  0x0200 /**< Client API: Do channel restrictions allow stereo? */
 #define SOX_FILE_QUAD    0x0400 /**< Client API: Do channel restrictions allow quad? */
 
-#define SOX_FILE_CHANS   (SOX_FILE_MONO | SOX_FILE_STEREO | SOX_FILE_QUAD) /**< Client API: No channel restrictions */
+#define SOX_FILE_CHANS   (SOX_FILE_MONO | SOX_FILE_STEREO | SOX_FILE_QUAD) /**< Client API: Mask to interrogate channels restrictions. If a sox_format_handler_t.flags & SOX_FILE_CHANS is 0 there are no restrictions. */
 #define SOX_FILE_LIT_END (SOX_FILE_ENDIAN | 0)                             /**< Client API: File is little-endian */
 #define SOX_FILE_BIG_END (SOX_FILE_ENDIAN | SOX_FILE_ENDBIG)               /**< Client API: File is big-endian */
 
@@ -1266,8 +1281,8 @@ function.
 typedef struct sox_version_info {
     size_t       size;         /**< structure size = sizeof(sox_version_info_t) */
     sox_version_flags_t flags; /**< feature flags = popen | magic | threads | memopen */
-    sox_uint32_t version_code; /**< version number = 0x140400 */
-    char const * version;      /**< version string = sox_version(), for example, "14.4.0" */
+    sox_uint32_t version_code; /**< version number = 0x0E0402 */
+    char const * version;      /**< version string = sox_version(), for example, "14.4.2" */
     char const * version_extra;/**< version extra info or null = "PACKAGE_EXTRA", for example, "beta" */
     char const * distro;       /**< distro or null = "DISTRO", for example, "Debian" */
     char const * compiler;     /**< compiler info or null, for example, "msvc 160040219" */
@@ -1275,13 +1290,29 @@ typedef struct sox_version_info {
     /* new info should be added at the end for version backwards-compatibility. */
 } sox_version_info_t;
 
+
+/**
+Client API:
+Internal representation of --keymap bindings
+*/
+typedef struct {
+  char  *key;	    /* String name of the bound key, like "D" */
+  char  *effect;    /* Effect whose parameter this changes */
+  char  *field;     /* Parameter changed in the effect's priv_t */
+  char   op;        /* How to adjust the parameter: '+', '-', '*', '/' or '=' */
+  double step;      /* How much to add or subtract, to multiply or divide by */
+} sox_keymap_t;
+
+
 /**
 Client API:
 Global parameters (for effects & formats), returned from the sox_get_globals
 function.
 */
-typedef struct sox_globals {
+/* The public fields must correspond to the order in sox_globals */
+typedef struct {
 /* public: */
+  char *       myname;  /**< argv[0] */
   unsigned     verbosity; /**< messages are only written if globals.verbosity >= message.level */
   sox_output_message_handler_t output_message_handler; /**< client-specified message output callback */
   sox_bool     repeatable; /**< true to use pre-determined timestamps and PRNG seed */
@@ -1312,6 +1343,13 @@ typedef struct sox_globals {
   Plugins should use similarly-sized DFTs to get best performance.
   */
   size_t       log2_dft_min_size;
+
+  /** The frequency of A above middle C, usually 440 */
+  float        A4;
+
+  /* Stuff for --keymap */
+  sox_keymap_t *keymaps;
+  unsigned     keymap_count;
 } sox_globals_t;
 
 /**
@@ -1521,7 +1559,7 @@ function pointer that can be invoked to get additional information about the
 format.
 */
 typedef struct sox_format_tab {
-  char *name;         /**< Name of format handler */
+  char const *name;         /**< Name of format handler */
   sox_format_fn_t fn; /**< Function to call to get format handler's information */
 } sox_format_tab_t;
 
@@ -1534,6 +1572,40 @@ typedef struct sox_effects_globals {
   sox_globals_t * global_info; /**< Pointer to associated SoX globals */
 } sox_effects_globals_t;
 
+/*
+ * The type of functions to read or write the value of an effect's parameters
+ * while it's running.
+ *
+ * The second argument is the name of the parameter and
+ * _set's third argument is the new value as text ("%g" is suggested).
+ *
+ * get functions return:
+ * - the current value as text in mallocked memory that the caller must free or
+ * - NULL if there is no such readable parameter or the value is garbage
+ *
+ * set functions return:
+ * - a mallocked string version of the actual value that was set
+ * - NULL if there is no such writable parameter or the value is garbage
+ *
+ * The return values are sprintfed as "%g" so, if the caller does the same
+ * it can strcmp() the strings to see it it was set to the same or different.
+ */
+/**
+Client API:
+Callback to read the current value of an effect's parameter,
+returning NULL if the parameter cannot be read, or a pointer to
+mallocked memory containing a string value sprintfed with "%g".
+*/
+typedef char *(*sox_effect_handler_get)(sox_effect_t *effp, char *);
+/**
+Client API:
+Callback to set the value of an effect's parameter while it is running,
+returning NULL if that parameter cannot be set or the value is garbage or
+a pointer to mallocked memory containing the new value sprintfed with "%g".
+Values outside the parameter's range return the minimum or maximum that was set.
+*/
+typedef char *(*sox_effect_handler_set)(sox_effect_t *effp, char *, char *);
+
 /**
 Client API:
 Effect handler information.
@@ -1541,7 +1613,6 @@ Effect handler information.
 struct sox_effect_handler {
   char const * name;  /**< Effect name */
   char const * usage; /**< Short explanation of parameters accepted by effect */
-  char const * const * extra_usage;           /**< Additional lines of usage */
   unsigned int flags; /**< Combination of SOX_EFF_* flags */
   sox_effect_handler_getopts getopts; /**< Called to parse command-line arguments (called once per effect). */
   sox_effect_handler_start start;     /**< Called to initialize effect (called once per flow). */
@@ -1550,6 +1621,15 @@ struct sox_effect_handler {
   sox_effect_handler_stop stop;       /**< Called to shut down effect (called once per flow). */
   sox_effect_handler_kill kill;       /**< Called to shut down effect (called once per effect). */
   size_t       priv_size;             /**< Size of private data SoX should pre-allocate for effect */
+  /* Add new fields here at the end so that existing effects get NULL
+   * when they say "static sox_effect_handler_t foo = {..., sizeof(priv_t)};"
+   * As the aeons pass, priv_size will slowly migrate upwards through
+   * the layers of pointer functions and end up cocooned in them but hey.
+   * You should have put it first, folks.
+   */
+  char const * const * extra_usage;           /**< Additional lines of usage */
+  sox_effect_handler_get get;         /**< Called to read the value of a parameter */
+  sox_effect_handler_set set;         /**< Called to change the value of a parameter */
 };
 
 /**
@@ -1629,6 +1709,34 @@ Deprecated macro that returns the structure with libSoX's global settings
 as an lvalue.
 */
 #define sox_globals (*sox_get_globals())
+
+/**
+Client API:
+Add a keymap
+*/
+extern void sox_keymap_add(char *key, char *effect, char *field,
+                           char op, double step);
+/**
+Client API:
+See if a key or an effect.field is used in a keymap
+*/
+extern sox_bool sox_is_keymapped(char *key);
+
+/**
+Client API:
+Apply a keymap
+Returns: SOX_SUCCESS on successful application,
+         SOX_ENOEFFECT if the effect was not found in the chain
+         or it was found but doesn't have a keymappable parameter
+         of that name,
+         SOX_ENOKEYMAP if the key was not mapped to anything.
+*/
+extern int sox_keymap_apply(sox_effects_chain_t *effp, char *key);
+/**
+Client API:
+Free keymap memory
+*/
+extern void sox_keymap_free(void);
 
 /**
 Client API:
@@ -1763,7 +1871,7 @@ sox_format_quit(void);
 
 /**
 Client API:
-Initialize effects library.
+Initialize the effects library.
 @returns SOX_SUCCESS if successful.
 */
 int
@@ -1772,7 +1880,7 @@ sox_init(void);
 
 /**
 Client API:
-Close effects library and unload format handler plugins.
+Close the effects library and unload format handler plugins.
 @returns SOX_SUCCESS if successful.
 */
 int
@@ -2325,7 +2433,7 @@ typedef struct lsx_enum_item {
 Plugins API:
 Declares a static instance of an lsx_enum_item structure in format
 { "item", prefixitem }, for use in declaring lsx_enum_item[] arrays.
-@param prefix The prefix to prepend to the item in the enumeration symbolic name.
+@param prefix The prefix to prefix to the item in the enumeration symbolic name.
 @param item   The user-visible text name of the item (must also be a valid C symbol name).
 */
 #define LSX_ENUM_ITEM(prefix, item) {#item, prefix##item},
@@ -2464,7 +2572,6 @@ lsx_strcasecmp(
     LSX_PARAM_IN_Z char const * s2  /**< Second string. */
     );
 
-
 /**
 Plugins API:
 Like strncmp, except that the characters are compared without regard to case.
@@ -2477,6 +2584,19 @@ lsx_strncasecmp(
     LSX_PARAM_IN_Z char const * s1, /**< First string. */
     LSX_PARAM_IN_Z char const * s2, /**< Second string. */
     size_t n /**< Maximum number of characters to examine. */
+    );
+
+/**
+Plugins API:
+Like strtod, but checking for broken strtod() at runtime and
+disallowing NaN.
+Note: *not* LSX_RETURN_PURE
+*/
+double
+LSX_API
+lsx_strtod(
+    LSX_PARAM_IN_Z char const * nptr, /**< String to convert */
+    LSX_PARAM_OUT_OPT char ** endptr  /**< If not NULL, set to the address of the first char not used in conversion */
     );
 
 /**
@@ -2503,7 +2623,7 @@ typedef enum lsx_getopt_flags_t {
 Plugins API:
 lsx_getopt long option descriptor.
 */
-typedef struct lsx_option_t {
+typedef struct lsx_option {
     char const *     name;    /**< Name of the long option. */
     lsx_option_arg_t has_arg; /**< Whether the long option supports an argument and, if so, whether the argument is required or optional. */
     int *            flag;    /**< Flag to set if argument is present. */
@@ -2514,7 +2634,7 @@ typedef struct lsx_option_t {
 Plugins API:
 lsx_getopt session information (initialization data and state).
 */
-typedef struct lsx_getopt_t {
+typedef struct lsx_getopt {
     int                  argc;     /**< IN    argc:      Number of arguments in argv */
     char * const *       argv;     /**< IN    argv:      Array of arguments */
     char const *         shortopts;/**< IN    shortopts: Short option characters */

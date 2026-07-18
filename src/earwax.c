@@ -53,7 +53,7 @@ static const sox_sample_t filt[32 * 2] = {
 #define NUMTAPS array_length(filt)
 typedef struct {sox_sample_t tap[NUMTAPS];} priv_t; /* FIR filter z^-1 delays */
 
-static int start(sox_effect_t * effp)
+static int start_earwav(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   if (effp->in_signal.rate != 44100 || effp->in_signal.channels != 2) {
@@ -66,7 +66,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_earwav(sox_effect_t * effp, const sox_sample_t * ibuf,
                 sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -117,7 +117,8 @@ static char const * extra_usage[] = {
 sox_effect_handler_t const *lsx_earwax_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "earwax", NULL, extra_usage, SOX_EFF_MCHAN,
-    NULL, start, flow, NULL, NULL, NULL, sizeof(priv_t)};
+    "earwax", NULL, SOX_EFF_MCHAN,
+    NULL, start_earwav, flow_earwav, NULL, NULL, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL };
   return &handler;
 }

@@ -16,13 +16,13 @@
 # 42b355 and sox.sf.net HEAD 2025-02-14
 # Floating point exception (core dumped)
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} poc_fpe_lsx_aiffstartwrite -t aiff /dev/null
 
 status=$?
 
-rm -f core
+rm -f core core.*
 
 case $status in
 2) status=0;;

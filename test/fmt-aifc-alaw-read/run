@@ -2,11 +2,11 @@
 
 # Test reading of AIFC ALAW encoding
 
-rm -f core out.wav
+rm -f core core.* out.wav
 
 ${sox:-sox} alaw.aifc out.wav
 status=$?
 
-rm -f core out.wav
+rm -f core core.* out.wav
 
 exit $status

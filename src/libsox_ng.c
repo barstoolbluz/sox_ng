@@ -118,7 +118,9 @@ static void output_message(
   }
 }
 
+/* The fields must correspond to their order in sox_globals_t */
 static sox_globals_t s_sox_globals = {
+  NULL,            /* char *       progname */
   2,               /* unsigned     verbosity */
   output_message,  /* sox_output_message_handler */
   sox_false,       /* sox_bool     repeatable */
@@ -130,8 +132,10 @@ static sox_globals_t s_sox_globals = {
   NULL,            /* char const * subsystem */
   NULL,            /* char       * tmp_path */
   sox_false,       /* sox_bool     use_magic */
-  sox_true,        /* sox_bool     use_threads */
-  10               /* size_t       log2_dft_min_size */
+  sox_false,       /* sox_bool     use_threads */
+  10,              /* size_t       log2_dft_min_size */
+  440.0f,          /* float        A4 */
+  NULL, 0,         /* sox_keymap_t *keymaps, unsigned keymap_count */
 };
 
 sox_globals_t * sox_get_globals(void)
@@ -151,6 +155,8 @@ sox_get_effects_globals(void)
 
 char const * sox_strerror(int sox_errno)
 {
+  /* The order of the entries must correspond to the order of
+   * the entries in enum sox_error_t */
   static char const * const errors[] = {
     "Invalid Audio Header",
     "Unsupported data format",
@@ -158,6 +164,8 @@ char const * sox_strerror(int sox_errno)
     "Operation not permitted",
     "Operation not supported",
     "Invalid argument",
+    "No such keymap",
+    "No such effect",
   };
   if (sox_errno < SOX_EHDR)
     return strerror(sox_errno);
@@ -216,6 +224,7 @@ int sox_init(void)
 
 int sox_quit(void)
 {
+  sox_keymap_free();
   sox_format_quit();
   return lsx_effects_quit();
 }

@@ -128,24 +128,24 @@ static int read_bits(sox_format_t * ft, INT32 *bits, int len)
   return (len);
 }
 
-static int startread(sox_format_t * ft)
+static int startread_lpc10(sox_format_t * ft)
 {
   priv_t * lpc = (priv_t *)ft->priv;
 
   if ((lpc->decst = create_lpc10_decoder_state()) == NULL) {
-    lsx_fail("lpc10 could not allocate decoder state");
+    lsx_fail("could not allocate decoder state");
     return SOX_EOF;
   }
   lpc->samples = LPC10_SAMPLES_PER_FRAME;
   return lsx_check_read_params(ft, 1, 8000., SOX_ENCODING_LPC10, 0, (uint64_t)0, sox_false);
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_lpc10(sox_format_t * ft)
 {
   priv_t * lpc = (priv_t *)ft->priv;
 
   if ((lpc->encst = create_lpc10_encoder_state()) == NULL) {
-    lsx_fail("lpc10 could not allocate encoder state");
+    lsx_fail("could not allocate encoder state");
     return SOX_EOF;
   }
   lpc->samples = 0;
@@ -153,7 +153,7 @@ static int startwrite(sox_format_t * ft)
   return SOX_SUCCESS;
 }
 
-static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
+static size_t read_samples_lpc10(sox_format_t * ft, sox_sample_t *buf, size_t len)
 {
   priv_t * lpc = (priv_t *)ft->priv;
   size_t nread = 0;
@@ -178,7 +178,7 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
   return nread;
 }
 
-static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t len)
+static size_t write_samples_lpc10(sox_format_t * ft, const sox_sample_t *buf, size_t len)
 {
   priv_t * lpc = (priv_t *)ft->priv;
   size_t nwritten = 0;
@@ -203,7 +203,7 @@ static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t l
   return nwritten;
 }
 
-static int stopread(sox_format_t * ft)
+static int stopread_lpc10(sox_format_t * ft)
 {
   priv_t * lpc = (priv_t *)ft->priv;
 
@@ -212,7 +212,7 @@ static int stopread(sox_format_t * ft)
   return SOX_SUCCESS;
 }
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_lpc10(sox_format_t * ft)
 {
   priv_t * lpc = (priv_t *)ft->priv;
 
@@ -228,8 +228,8 @@ LSX_FORMAT_HANDLER(lpc10)
   static unsigned     const write_encodings[] = {SOX_ENCODING_LPC10, 0, 0};
   static sox_format_handler_t handler = {SOX_LIB_VERSION_CODE,
     "Low bandwidth, robotic sounding speech compression", names, SOX_FILE_MONO,
-    startread, read_samples, stopread,
-    startwrite, write_samples, stopwrite,
+    startread_lpc10, read_samples_lpc10, stopread_lpc10,
+    startwrite_lpc10, write_samples_lpc10, stopwrite_lpc10,
     NULL, write_encodings, write_rates, sizeof(priv_t)
   };
   return &handler;

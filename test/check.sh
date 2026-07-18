@@ -6,6 +6,9 @@
 # set environment variable "sox" to the name or path to the executable.
 # e.g.
 #	sox=$HOME/sox-14.4.2/src/sox sh check.sh
+# or, to test the current source tree
+#	sox=../../src/sox_ng sh check.sh
+# (../.. because it is used when cd'd into each BUG-* directories)
 #
 # You can also just run one or more tests,
 # e.g.
@@ -33,7 +36,9 @@ done
 args="$*"
 if [ -z "$args" ]
 then
-    args="`ls`"
+    LC_COLLATE=C       # Do upper case before lower case
+    export LC_COLLATE
+    args="`LC_COLLATE=C ls`"
 fi
 
 # By default, check the sox in the source tree
@@ -55,6 +60,7 @@ SUCC sox "succeeded" (exit 0) when it should have failed (exit 2)
 ABRT sox Aborted (core dumped)
 SEGV sox got a Segmentation fault (core dumped)
 FPE  sox got a Floating Point Exception (core dumped)
+ILL  sox got a Illegal instruction exception (core dumped)
 LOOP sox ran for more than four minutes of CPU.
 EXEC Can't execute the sox binary. Missing shared libraries also provoke this.
 VOID This test cannot be run with the sox you have installed
@@ -94,8 +100,9 @@ do
 	1)   result=ASAN ;;
 	2)   result=FAIL ;;
 	127) result=EXEC ;;
+	132) result=ILL  ;;
 	134) result=ABRT ;;
-	136) result=FPE ;;
+	136) result=FPE  ;;
 	137) result=LOOP ;;
 	139) result=SEGV ;;
 	254) result=VOID ;;

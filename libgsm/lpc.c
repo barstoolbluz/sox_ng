@@ -4,7 +4,7 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/* $Header: /cvsroot/sox/sox/libgsm/lpc.c,v 1.2 2007/11/04 16:32:36 robs Exp $ */
+/* $Header: /tmp_amd/presto/export/kbs/jutta/src/gsm/RCS/lpc.c,v 1.5 1994/12/30 23:14:54 jutta Exp $ */
 
 #include <stdio.h>
 #include <assert.h>
@@ -12,6 +12,9 @@
 #include "private.h"
 
 #include "gsm.h"
+#include "proto.h"
+
+#undef	P
 
 /*
  *  4.2.4 .. 4.2.7 LPC ANALYSIS SECTION
@@ -20,7 +23,7 @@
 /* 4.2.4 */
 
 
-static void Autocorrelation (
+static void Autocorrelation P2((s, L_ACF),
 	word     * s,		/* [0..159]	IN/OUT  */
  	longword * L_ACF)	/* [0..8]	OUT     */
 /*
@@ -66,7 +69,7 @@ static void Autocorrelation (
 			float_s[k] = (float)	\
 				(s[k] = GSM_MULT_R(s[k], 16384 >> (n-1)));\
 		break;
-# else 
+# else
 #   define SCALE(n)	\
 	case n: for (k = 0; k <= 159; k++) \
 			s[k] = GSM_MULT_R( s[k], 16384 >> (n-1) );\
@@ -130,20 +133,20 @@ static void Autocorrelation (
 		STEP(5); STEP(6); STEP(7); STEP(8);
 	}
 
-	for (k = 9; k--; L_ACF[k] <<= 1) ; 
+	for (k = 9; k--; L_ACF[k] <<= 1) ;
 
 	}
 	/*   Rescaling of the array s[0..159]
 	 */
 	if (scalauto > 0) {
-		assert(scalauto <= 4); 
+		assert(scalauto <= 4);
 		for (k = 160; k--; *s++ <<= scalauto) ;
 	}
 }
 
 #if defined(USE_FLOAT_MUL) && defined(FAST)
 
-static void Fast_Autocorrelation (
+static void Fast_Autocorrelation P2((s, L_ACF),
 	word * s,		/* [0..159]	IN/OUT  */
  	longword * L_ACF)	/* [0..8]	OUT     */
 {
@@ -171,7 +174,7 @@ static void Fast_Autocorrelation (
 
 /* 4.2.5 */
 
-static void Reflection_coefficients (
+static void Reflection_coefficients P2( (L_ACF, r),
 	longword	* L_ACF,		/* 0...8	IN	*/
 	register word	* r			/* 0...7	OUT 	*/
 )
@@ -221,7 +224,7 @@ static void Reflection_coefficients (
 		assert(*r >= 0);
 		if (P[1] > 0) *r = -*r;		/* r[n] = sub(0, r[n]) */
 		assert (*r != MIN_WORD);
-		if (n == 8) return; 
+		if (n == 8) return;
 
 		/*  Schur recursion
 		 */
@@ -240,7 +243,7 @@ static void Reflection_coefficients (
 
 /* 4.2.6 */
 
-static void Transformation_to_Log_Area_Ratios (
+static void Transformation_to_Log_Area_Ratios P1((r),
 	register word	* r 			/* 0..7	   IN/OUT */
 )
 /*
@@ -281,7 +284,7 @@ static void Transformation_to_Log_Area_Ratios (
 
 /* 4.2.7 */
 
-static void Quantization_and_coding (
+static void Quantization_and_coding P1((LAR),
 	register word * LAR    	/* [0..7]	IN/OUT	*/
 )
 {
@@ -291,7 +294,7 @@ static void Quantization_and_coding (
 
 	/*  This procedure needs four tables; the following equations
 	 *  give the optimum scaling for the constants:
-	 *  
+	 *
 	 *  A[0..7] = integer( real_A[0..7] * 1024 )
 	 *  B[0..7] = integer( real_B[0..7] *  512 )
 	 *  MAC[0..7] = maximum of the LARc[0..7]
@@ -320,13 +323,13 @@ static void Quantization_and_coding (
 #	undef	STEP
 }
 
-void Gsm_LPC_Analysis (
+void Gsm_LPC_Analysis P3((S, s,LARc),
 	struct gsm_state *S,
 	word 		 * s,		/* 0..159 signals	IN/OUT	*/
         word 		 * LARc)	/* 0..7   LARc's	OUT	*/
 {
 	longword	L_ACF[9];
-  (void)S; /* Denotes intentionally unused */
+	if (S) assert(S); /* Shut compiler warning up */
 
 #if defined(USE_FLOAT_MUL) && defined(FAST)
 	if (S->fast) Fast_Autocorrelation (s,	  L_ACF );

@@ -30,28 +30,112 @@ typedef struct {
   pa_simple *pasp;
 } priv_t;
 
+/* The filename supplied to -t pulseaudio can be a space-separated list of
+ * servers, an application name and/or a device name.
+ * An application name is "app:whatever", a server name is anything else
+ * that contains a colon and a device name doesn't contain a colon.
+ *
+ * Pointers to mallocked memory are stored in *server, *dev and *name
+ * if those elements are present and the caller should free them if so;
+ * The caller should set them to NULL beforehand.
+ *
+ * Returns SOX_SUCCESS or SOX_EOF.
+ */
+static int parse_pulse_filename(char *filename,
+                                 char *volatile*volatile server, char **dev, char **name)
+{
+  char *argp;  /* Pointer into filename */
+  char *arg;   /* An argument we are constructing */
+
+  /* Split on spaces and switch on type of each element */
+  argp = filename;
+  while (*argp) {
+    char *spacep;
+
+    /* Skip initial spaces to eliminate multiple ones */
+    while (*argp == ' ') argp++;
+    if (!*argp) break; /* All done */
+
+    /* App names can contain spaces and need to be last */
+    if (!strncmp(argp, "app:", 4)) {
+      if (*name) {
+        lsx_fail("multiple application names in %s", filename);
+        return SOX_EOF;
+      }
+      if (argp[4] == '\0') {
+        /* "app:" means default; *name is already NULL */
+        return SOX_SUCCESS;
+      }
+      *name = lsx_malloc(strlen(argp) - 4 + 1);
+      strcpy(*name, argp + 4);
+      return SOX_SUCCESS;
+    }
+
+    spacep = strchr(argp, ' ');
+    if (spacep) {
+      int len = spacep - argp;
+      arg = lsx_malloc(len + 1);
+      memcpy(arg, argp, len);
+      arg[len] = '\0';
+    } else {
+      arg = lsx_malloc(strlen(argp) + 1);
+      strcpy(arg, argp);
+    }
+
+    /* Now that arg is mallocked, it should either be assigned to
+     * one of the return value pointers or freed.
+     */
+
+    /* Switch on server name/device name */
+    if (!strncmp(arg, "app:", 4) && arg[4] != '\0') {
+      if (*name) {
+        lsx_fail("multiple application names in %s", filename);
+        free(arg);
+        return SOX_EOF;
+      }
+      *name = arg;
+    } else if (strchr(arg, ':')) {
+      /* A server name to set or append */
+      if (*server == NULL)
+        *server = arg;
+      else {
+        size_t oldlen = strlen(*server);
+        *server = lsx_realloc(*server, oldlen + 1 + strlen(arg) + 1);
+        (*server)[oldlen] = ' ';
+        strcpy((*server) + oldlen + 1, arg);
+        free(arg);
+      }
+    } else {
+      /* No colon: a device name */
+      if (*dev) {
+        lsx_fail("multiple device names in %s", filename);
+        free(arg);
+        return SOX_EOF;
+      }
+      *dev = arg;
+    }
+    if (spacep) argp=spacep + 1;
+    else break;
+  }
+  return SOX_SUCCESS;
+}
+
 static int setup(sox_format_t *ft, int is_input)
 {
   priv_t *pa = (priv_t *)ft->priv;
-  char *server;
   pa_stream_direction_t dir;
-  char *app_str;
-  char *dev;
+  char *server = NULL;  /* PulseAudio server list */
+  char *dev = NULL;     /* PulseAudio device to use */
+  char *name = NULL;    /* To set the PA application name */
+  char *app_str;        /* The PA stream name, "record" or "playback" */
   pa_sample_spec spec;
   pa_channel_map map;
-
-  /* Pulseaudio will introduce a 250ms buffer if no buffer_attr is set
-     (https://github.com/pulseaudio/pulseaudio/blob/master/src/pulse/stream.c#L1028)
-     unless PULSE_LATENCY_MSEC environment variable is set.
-     Here we override this based on --input-buffer / --buffer command-line arguments
-  */
   pa_buffer_attr buffer_attr;
   int error;
 
   /* TODO: If user specified device of type "server:dev" then
    * break up and override server.
    */
-  server = NULL;
 
   if (is_input)
   {
@@ -64,10 +148,19 @@ static int setup(sox_format_t *ft, int is_input)
     app_str = "playback";
   }
 
-  if (strncmp(ft->filename, "default", (size_t)7) == 0)
+  if (parse_pulse_filename(ft->filename, &server, &dev, &name) != SOX_SUCCESS) {
+    free(server); free(dev); free(name);
+    return SOX_EOF;
+  }
+
+  if (dev && strncmp(dev, "default", (size_t)7) == 0) {
+    free(dev);
     dev = NULL;
-  else
-    dev = ft->filename;
+  }
+  if (server && strncmp(server, "default", (size_t)7) == 0) {
+    free(server);
+    server = NULL;
+  }
 
   /* If user doesn't specify, default to some reasonable values.
    * Since this is mainly for recording case, default to typical
@@ -83,11 +176,17 @@ static int setup(sox_format_t *ft, int is_input)
     ft->encoding.bits_per_sample = 16;
     ft->encoding.encoding = SOX_ENCODING_SIGN2;
   }
- 
+
   spec.format = PA_SAMPLE_S32NE;
   spec.rate = ft->signal.rate;
   spec.channels = ft->signal.channels;
 
+  /* Pulseaudio will introduce a 250ms buffer if no buffer_attr is set
+   * https://github.com/pulseaudio/pulseaudio/blob/master/src/pulse/stream.c
+   * unless the PULSE_LATENCY_MSEC environment variable is set.
+   * Here we override this based on --input-buffer / --buffer
+   * command-line arguments.
+   */
   pa_zero(buffer_attr);
   buffer_attr.maxlength = (uint32_t) -1;
   buffer_attr.prebuf = (uint32_t) -1;
@@ -98,16 +197,18 @@ static int setup(sox_format_t *ft, int is_input)
        ToDo: Add a pacat/parec-like --latency-msec option?
     */
     buffer_attr.fragsize = sox_globals.input_bufsiz ? sox_globals.input_bufsiz : (uint32_t) -1;
-    lsx_debug("INPUT cmd buffer size=%zu, pulseaudio buffer size=%u", sox_globals.input_bufsiz, buffer_attr.fragsize);
+    lsx_debug("INPUT cmd buffer size=%" PRIu64 ", pulseaudio buffer size=%u", (uint64_t)sox_globals.input_bufsiz, buffer_attr.fragsize);
   } else {
     buffer_attr.tlength = sox_globals.bufsiz ? sox_globals.bufsiz : (uint32_t) -1;
-    lsx_debug("OUTPUT cmd buffer size=%zu, pulseaudio buffer size=%u", sox_globals.bufsiz, buffer_attr.tlength);
+    lsx_debug("OUTPUT cmd buffer size=%" PRIu64 ", pulseaudio buffer size=%u",
+              (uint64_t)sox_globals.bufsiz, buffer_attr.tlength);
   }
 
   pa_channel_map_init_auto(&map, spec.channels, PA_CHANNEL_MAP_ALSA);
 
-  pa->pasp = pa_simple_new(server, "SoX", dir, dev, app_str, &spec,
-                          &map, &buffer_attr, &error);
+  pa->pasp = pa_simple_new(server, name ? name : "SoX", dir, dev, app_str,
+                           &spec, &map, &buffer_attr, &error);
+  free(server); free(name); free(dev);
 
   if (pa->pasp == NULL)
   {
@@ -124,12 +225,12 @@ static int setup(sox_format_t *ft, int is_input)
   return SOX_SUCCESS;
 }
 
-static int startread(sox_format_t *ft)
+static int startread_pulse(sox_format_t *ft)
 {
     return setup(ft, 1);
 }
 
-static int stopread(sox_format_t * ft)
+static int stopread_pulse(sox_format_t * ft)
 {
   priv_t *pa = (priv_t *)ft->priv;
 
@@ -138,11 +239,14 @@ static int stopread(sox_format_t * ft)
   return SOX_SUCCESS;
 }
 
-static size_t read_samples(sox_format_t *ft, sox_sample_t *buf, size_t nsamp)
+static size_t read_samples_pulse(sox_format_t *ft, sox_sample_t *buf, size_t nsamp)
 {
   priv_t *pa = (priv_t *)ft->priv;
   size_t len;
   int rc, error;
+
+  if (!nsamp)
+    return 0;
 
   /* Pulse Audio buffer lengths are true buffer lengths and not
    * count of samples. */
@@ -159,12 +263,12 @@ static size_t read_samples(sox_format_t *ft, sox_sample_t *buf, size_t nsamp)
     return nsamp;
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_pulse(sox_format_t * ft)
 {
     return setup(ft, 0);
 }
 
-static size_t write_samples(sox_format_t *ft, const sox_sample_t *buf, size_t nsamp)
+static size_t write_samples_pulse(sox_format_t *ft, const sox_sample_t *buf, size_t nsamp)
 {
   priv_t *pa = (priv_t *)ft->priv;
   size_t len;
@@ -185,7 +289,7 @@ static size_t write_samples(sox_format_t *ft, const sox_sample_t *buf, size_t ns
   return nsamp;
 }
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_pulse(sox_format_t * ft)
 {
   priv_t *pa = (priv_t *)ft->priv;
   int error;
@@ -205,8 +309,8 @@ LSX_FORMAT_HANDLER(pulseaudio)
   static sox_format_handler_t const handler = {SOX_LIB_VERSION_CODE,
     "Pulse Audio client",
     names, SOX_FILE_DEVICE | SOX_FILE_NOSTDIO,
-    startread, read_samples, stopread,
-    startwrite, write_samples, stopwrite,
+    startread_pulse, read_samples_pulse, stopread_pulse,
+    startwrite_pulse, write_samples_pulse, stopwrite_pulse,
     NULL, write_encodings, NULL, sizeof(priv_t)
   };
   return &handler;

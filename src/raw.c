@@ -167,6 +167,7 @@ static ft_##type##_fn * type##_fn(sox_format_t * ft) { \
 typedef size_t(ft_read_fn)
   (sox_format_t * ft, sox_sample_t * buf, size_t len);
 
+static ft_read_fn * read_fn(sox_format_t * ft);
 GET_FORMAT(read)
 
 /* Read a stream of some type into SoX's internal buffer format. */
@@ -182,6 +183,7 @@ size_t lsx_rawread(sox_format_t * ft, sox_sample_t * buf, size_t nsamp)
 typedef size_t(ft_write_fn)
   (sox_format_t * ft, sox_sample_t const * buf, size_t len);
 
+static ft_write_fn * write_fn(sox_format_t * ft);
 GET_FORMAT(write)
 
 /* Writes SoX's internal buffer format to buffer of various data types. */

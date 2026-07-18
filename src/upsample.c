@@ -22,7 +22,7 @@
 
 typedef struct {unsigned factor, pos;} priv_t;
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_upsample(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   p->factor = 2;
@@ -31,14 +31,14 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   return argc? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static int start_upsample(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *) effp->priv;
   effp->out_signal.rate = effp->in_signal.rate * p->factor;
   return p->factor == 1? SOX_EFF_NULL : SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_upsample(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -59,7 +59,9 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
 sox_effect_handler_t const * lsx_upsample_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "upsample", "[factor(2)]", NULL,
-    SOX_EFF_RATE | SOX_EFF_MODIFY, create, start, flow, NULL, NULL, NULL, sizeof(priv_t)};
+    "upsample", "[factor(2)]", SOX_EFF_RATE | SOX_EFF_MODIFY,
+    create_upsample, start_upsample, flow_upsample, NULL, NULL, NULL,
+    sizeof(priv_t), NULL, NULL, NULL,
+  };
   return &handler;
 }
