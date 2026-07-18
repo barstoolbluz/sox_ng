@@ -18,6 +18,9 @@
 
 #include "sox_i.h"
 #include <ctype.h>
+#if HAVE_PIPE && HAVE_FORK
+#include <unistd.h>
+#endif
 
 int lsx_strcasecmp(const char * s1, const char * s2)
 {
@@ -45,6 +48,35 @@ int lsx_strncasecmp(char const * s1, char const * s2, size_t n)
 #endif
 }
 
+/* A version of strtod() that disallows NaN which tends to provoke FPE.
+ * Some versions of Linux fail on strings beginning with '+'
+ * according to AC_FUNC_STRTOD() */
+#undef strtod
+double lsx_strtod(char const *nptr, char **endptr)
+{
+  char *orig_nptr = (char *)nptr;
+  char *string = " +69";
+  char *term = (char *)nptr;
+  double value;
+
+  /* Check for broken strtod */
+  value = strtod(string, &term);
+  if (value != 69 || term != string + 4) {
+    while (*nptr == ' ') nptr++;
+    if (*nptr == '+') nptr++;
+  }
+
+  /* The proper conversion */
+  value = strtod(nptr, &term);
+  if (term == nptr || isnan(value)) {
+    if (endptr) *endptr = orig_nptr;
+    return 0;
+  }
+
+  if (endptr) *endptr = term;
+  return value;
+}
+
 /* A version of sscanf() that disallows infinites and NaNs.
  * Infinities could in theory be useful, like for dB levels,
  * but NaNs tend to provoke Floating Point Exceptions.
@@ -64,7 +96,12 @@ int lsx_sscanf(const char *str, const char *format, ...)
 #else
  /* "Some systems that do not supply va_copy() have __va_copy instead,
   * since that was the name used in the draft proposal. */
+# ifdef __va_copy
   __va_copy(va2, va);
+# else
+  /* Generic fallback */
+  memcpy(&va2, &va, sizeof(va_list));
+# endif
 #endif
   retval = vsscanf(str, format, va);
 
@@ -215,12 +252,12 @@ int lsx_open_dllibrary(
 
     for (libname = library_names; *libname; libname++)
     {
-      lsx_debug("Attempting to open %s (%s).", library_description, *libname);
+      lsx_debug("Attempting to open %s (%s)", library_description, *libname);
       dl = lt_dlopenext(*libname);
       if (dl)
       {
         size_t i;
-        lsx_debug("Opened %s (%s).", library_description, *libname);
+        lsx_debug("Opened %s (%s)", library_description, *libname);
         for (i = 0; func_infos[i].name; i++)
         {
           union {lsx_dlptr fn; lt_ptr ptr;} func;
@@ -232,7 +269,7 @@ int lsx_open_dllibrary(
             dl = NULL;
             failed_libname = *libname;
             failed_funcname = func_infos[i].name;
-            lsx_debug("Cannot use %s (%s) - missing function \"%s\".", library_description, failed_libname, failed_funcname);
+            lsx_debug("Cannot use %s (%s) - missing function \"%s\"", library_description, failed_libname, failed_funcname);
             break;
           }
         }
@@ -339,4 +376,133 @@ void lsx_close_dllibrary(
     lt_dlexit();
   }
 #endif /* HAVE_LIBLTDL */
+}
+
+/* Our own version of popen() that doesn't use the shell, adapted from
+ * android.googlesource.com/platform/bionic/+/3884bfe/libc/unistd/popen.c
+ * derived from software written by Ken Arnold and published in
+ * UNIX Review, Vol. 6, No. 8.
+ */
+
+FILE * lsx_popen(char ** argv, char type,
+#if (HAVE_PIPE && HAVE_FORK) || !HAVE_POPEN
+LSX_UNUSED
+#endif
+                 int filename_index)
+{
+#if HAVE_PIPE && HAVE_FORK
+  FILE *iop;
+  int pdes[2];
+#elif HAVE_POPEN
+  FILE *iop;
+  char *quoted_filename;
+  char *p, *q;
+  char *command;
+  char *filename = argv[filename_index];
+  int nchars;
+  int i;
+#endif
+  char mode[3];
+
+  mode[0] = type;
+#ifdef _WIN32
+  mode[1] = 'b'; mode[2] = '\0';
+#else
+  mode[1] = '\0';
+#endif
+
+#if HAVE_PIPE && HAVE_FORK
+  if (type != 'r' && type != 'w') {
+    errno = EINVAL;
+    return NULL;
+  }
+  if (pipe(pdes) < 0) {
+    return NULL;
+  }
+  switch (fork()) {
+    int i;
+
+  case -1:      /* Error. */
+    close(pdes[0]);
+    close(pdes[1]);
+    return NULL;
+
+  case 0:        /* Child. */
+    /* Close all other file descriptors except
+     * stdin, in case the input file is "-" and
+     * stderr in case the program spouts errors.
+     * stdout will be closed by dup2().
+     */
+    for (i=3; ; i++) {
+      if (i == pdes[0] || i == pdes[1]) continue;
+      if (close(i) != 0) break;
+    }
+    if (type == 'r') {
+      close(pdes[0]);
+      if (pdes[1] != 1) {
+        dup2(pdes[1], 1);
+        close(pdes[1]);
+      }
+    } else {
+      close(pdes[1]);
+      if (pdes[0] != 0) {
+        dup2(pdes[0], 0);
+        close(pdes[0]);
+      }
+    }
+    execvp(argv[0], argv);
+    _exit(127);
+    /* NOTREACHED */
+  }
+  /* Parent; assume fdopen can't fail. */
+  if (type == 'r') {
+    iop = fdopen(pdes[0], mode);
+    close(pdes[1]);
+  } else {
+    iop = fdopen(pdes[1], mode);
+    close(pdes[0]);
+  }
+  return iop;
+
+#elif HAVE_POPEN
+
+  /* Quote special characters in the filename. */
+  /* This is for the Unix shell. I dunno about Windows. */
+  quoted_filename = lsx_malloc(strlen(filename) * 2 + 1);
+  for (p=filename, q=quoted_filename; *p; p++, q++) {
+    switch (*p) {
+    case '"':
+    case '`':
+    case '\\':
+    case '$':
+    case '\n':
+      *q++ = '\\';
+      break;
+    }
+    *q = *p;
+  }
+  *q = '\0';
+
+  argv[filename_index] = quoted_filename;
+
+  /* Make a command-line from the argv list */
+  nchars = 0;
+  for (i=0; argv[i]; i++) nchars += strlen(argv[i]) + 1;
+  nchars++; /* and a nul */
+  command = lsx_malloc(nchars); *command = '\0';
+  for (i=0; argv[i]; i++) {
+    if (i > 0) strcat(command, " ");
+    strcat(command, argv[i]);
+  }
+  free(quoted_filename);
+  iop = popen(command, mode);
+  free(command);
+  return iop;
+
+#else
+
+  lsx_fail("this build of SoX can't open programs on a pipe");
+  return NULL;
+
+#endif
 }

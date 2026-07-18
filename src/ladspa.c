@@ -63,7 +63,11 @@ static LADSPA_Data ladspa_default(const LADSPA_PortRangeHint *p)
   else if (LADSPA_IS_HINT_DEFAULT_100(p->HintDescriptor))
     d = 100.0;
   else if (LADSPA_IS_HINT_DEFAULT_440(p->HintDescriptor))
-    d = 440.0;
+    /* ladspa.h says:
+     * This default hint indicates that the Hz frequency of `concert A'
+     * should be used. This will be 440 unless the host uses an unusual
+     * tuning convention, in which case it may be within a few Hz. */
+    d = sox_globals.A4;
   else if (LADSPA_IS_HINT_DEFAULT_MINIMUM(p->HintDescriptor))
     d = p->LowerBound;
   else if (LADSPA_IS_HINT_DEFAULT_MAXIMUM(p->HintDescriptor))
@@ -118,7 +122,7 @@ static int sox_ladspa_getopts(sox_effect_t *effp, int argc, char **argv)
     case 'r': l_st->clone = sox_true; break;
     case 'l': l_st->latency_compensation = sox_true; break;
     default:
-      lsx_fail("unknown option `-%c'", optstate.opt);
+      lsx_fail("invalid option `-%c'", optstate.opt);
       return lsx_usage(effp);
   }
   argc -= optstate.ind, argv += optstate.ind;
@@ -191,7 +195,7 @@ static int sox_ladspa_getopts(sox_effect_t *effp, int argc, char **argv)
 
   if(lt_dlinit() || lt_dlsetsearchpath(path)
       || (l_st->lth = lt_dlopenext(l_st->name)) == NULL) {
-    lsx_fail("could not open LADSPA plugin %s", l_st->name);
+    lsx_fail("could not open plugin %s", l_st->name);
     return SOX_EOF;
   }
 
@@ -320,7 +324,9 @@ static int sox_ladspa_start(sox_effect_t * effp)
      * Some LADSPA plugins are stereo (e.g. bs2b-ladspa)
      */
 
-    if (l_st->input_count < effp->in_signal.channels) {
+    if (l_st->input_count == 0) {
+      /* Plugins that take no input, e.g. "noise", need to throw awway all input */
+    } else if (l_st->input_count < effp->in_signal.channels) {
       lsx_fail("fewer plugin input ports than input channels (%u < %u)",
                (unsigned)l_st->input_count, effp->in_signal.channels);
       return SOX_EOF;
@@ -392,12 +398,17 @@ static int sox_ladspa_flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sa
   size_t h;
   const size_t total_input_count = l_st->input_count * l_st->handle_count;
   const size_t total_output_count = l_st->output_count * l_st->handle_count;
-  const size_t channel_len = min(*isamp / total_input_count, *osamp / total_output_count + l_st->in_latency);
+  size_t channel_len;
 
   LADSPA_Data *buf, *outbuf;
   LADSPA_Handle handle;
   unsigned long port, l;
   SOX_SAMPLE_LOCALS;
+
+  if (total_input_count == 0)
+    channel_len = *osamp / total_output_count + l_st->in_latency;
+  else
+    channel_len = min(*isamp / total_input_count, *osamp / total_output_count + l_st->in_latency);
 
   lsx_vcalloc(buf, channel_len * total_input_count);
   lsx_vcalloc(outbuf, channel_len * total_output_count);
@@ -541,7 +552,7 @@ static char const * const extra_usage[] = {
 
 static sox_effect_handler_t sox_ladspa_effect = {
   "ladspa",
-  "[-l] [-r] module [plugin] {argument}", extra_usage,
+  "[-l] [-r] module [plugin] {argument}",
   SOX_EFF_MCHAN | SOX_EFF_CHAN | SOX_EFF_GAIN,
   sox_ladspa_getopts,
   sox_ladspa_start,
@@ -549,7 +560,10 @@ static sox_effect_handler_t sox_ladspa_effect = {
   sox_ladspa_drain,
   sox_ladspa_stop,
   sox_ladspa_kill,
-  sizeof(priv_t)
+  sizeof(priv_t),
+  extra_usage,
+  NULL,
+  NULL,
 };
 
 const sox_effect_handler_t *lsx_ladspa_effect_fn(void)

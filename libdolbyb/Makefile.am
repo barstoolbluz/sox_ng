@@ -5,7 +5,7 @@ EXTRA_DIST = \
      libdolbyb.c \
      Calibrate.h DCfilter.h DiodeClip.h FindOutSmp.h HPF1.h HPF2.h \
      HPF2SetVals.h HPFAdj.h LPFAdj.h Mixers.h Param.h SetGate.h SidePath.h \
-     dolbyb.h
+     dolbyb.h CMakeLists.txt
 else
 noinst_LTLIBRARIES = libdolbyb.la
 noinst_HEADERS = dolbyb.h
@@ -16,7 +16,6 @@ libdolbyb_la_SOURCES = \
      Calibrate.h DCfilter.h DiodeClip.h FindOutSmp.h HPF1.h HPF2.h \
      HPF2SetVals.h HPFAdj.h LPFAdj.h Mixers.h Param.h SetGate.h SidePath.h \
      dolbyb.h
-AM_CPPFLAGS=-I../src
 if HAVE_LIBLTDL
 AM_LDFLAGS=-avoid-version -module
 endif

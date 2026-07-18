@@ -83,7 +83,7 @@ static int sunstartread(sox_format_t * ft)
         lsx_fail_errno(ft,errno,"unable to get information for device %s", szDevname);
         return(SOX_EOF);
     }
-    lsx_report("Hardware detected:  %s",audio_dev.name);
+    lsx_report("hardware detected:  %s",audio_dev.name);
     if (strcmp("SUNW,am79c30",audio_dev.name) == 0)
     {
         simple_hw = 1;
@@ -98,13 +98,13 @@ static int sunstartread(sox_format_t * ft)
             if (ft->encoding.encoding != SOX_ENCODING_ULAW &&
                 ft->encoding.encoding != SOX_ENCODING_ALAW)
             {
-                lsx_report("Warning: Detected simple hardware.  Forcing output to ULAW");
+                lsx_warn("detected simple hardware; forcing output to ULAW");
                 ft->encoding.encoding = SOX_ENCODING_ULAW;
             }
         }
         else if (ft->encoding.bits_per_sample == 16)
         {
-            lsx_report("Warning: Detected simple hardware.  Forcing output to ULAW");
+            lsx_warn("detected simple hardware; forcing output to ULAW");
             ft->encoding.bits_per_sample = 8;
             ft->encoding.encoding = SOX_ENCODING_ULAW;
         }
@@ -143,11 +143,10 @@ static int sunstartread(sox_format_t * ft)
     if (ft->signal.channels == 0)
         ft->signal.channels = 1;
     else if (ft->signal.channels > 1) {
-        lsx_report("Warning: some Sun audio devices can not play stereo");
-        lsx_report("at all or sometimes only with signed words.  If the");
-        lsx_report("sound seems sluggish then this is probably the case.");
-        lsx_report("Try forcing output to signed words or use the avg");
-        lsx_report("filter to reduce the number of channels.");
+        lsx_warn("some Sun audio devices can not play stereo at all");
+        lsx_warn("or sometimes only with signed words. If the sound");
+        lsx_warn("seems sluggish, try forcing the output to signed words");
+        lsx_warn("or use the avg filter to reduce the number of channels.");
         ft->signal.channels = 2;
     }
 
@@ -228,7 +227,7 @@ static int sunstartwrite(sox_format_t * ft)
         lsx_fail_errno(ft,errno,"unable to get device information");
         return(SOX_EOF);
     }
-    lsx_report("Hardware detected:  %s",audio_dev.name);
+    lsx_report("hardware detected:  %s",audio_dev.name);
     if (strcmp("SUNW,am79c30",audio_dev.name) == 0)
     {
         simple_hw = 1;
@@ -242,13 +241,13 @@ static int sunstartwrite(sox_format_t * ft)
             if (ft->encoding.encoding != SOX_ENCODING_ULAW &&
                 ft->encoding.encoding != SOX_ENCODING_ALAW)
             {
-                lsx_report("Warning: Detected simple hardware.  Forcing output to ULAW");
+                lsx_warn("detected simple hardware; forcing output to ULAW");
                 ft->encoding.encoding = SOX_ENCODING_ULAW;
             }
         }
         else if (ft->encoding.bits_per_sample == 16)
         {
-            lsx_report("Warning: Detected simple hardware.  Forcing output to ULAW");
+            lsx_warn("detected simple hardware; forcing output to ULAW");
             ft->encoding.bits_per_sample = 8;
             ft->encoding.encoding = SOX_ENCODING_ULAW;
         }
@@ -263,15 +262,15 @@ static int sunstartwrite(sox_format_t * ft)
         else if (ft->encoding.encoding != SOX_ENCODING_ULAW &&
             ft->encoding.encoding != SOX_ENCODING_ALAW &&
             ft->encoding.encoding != SOX_ENCODING_SIGN2) {
-            lsx_report("Sun Audio driver only supports ULAW, ALAW, and Signed Linear for bytes.");
-            lsx_report("Forcing to ULAW");
+            lsx_report("Sun audio driver only supports ULAW, ALAW, and Signed Linear for bytes");
+            lsx_report("forcing to ULAW");
             ft->encoding.encoding = SOX_ENCODING_ULAW;
         }
         if ((ft->encoding.encoding == SOX_ENCODING_ULAW ||
              ft->encoding.encoding == SOX_ENCODING_ALAW) &&
             ft->signal.channels == 2)
         {
-            lsx_report("Warning: only support mono for ULAW and ALAW data.  Forcing to mono.");
+            lsx_warn("only mono is supported for ULAW and ALAW data; forcing to mono");
             ft->signal.channels = 1;
         }
 
@@ -282,13 +281,12 @@ static int sunstartwrite(sox_format_t * ft)
         if (ft->encoding.encoding == SOX_ENCODING_UNKNOWN)
             ft->encoding.encoding = SOX_ENCODING_SIGN2;
         else if (ft->encoding.encoding != SOX_ENCODING_SIGN2) {
-            lsx_report("Sun Audio driver only supports Signed Linear for words.");
-            lsx_report("Forcing to Signed Linear");
+            lsx_report("only signed linear is supported for words; forcing to signed linear");
             ft->encoding.encoding = SOX_ENCODING_SIGN2;
         }
     }
     else {
-        lsx_report("Sun Audio driver only supports bytes and words");
+        lsx_report("only bytes and words are supported");
         ft->encoding.bits_per_sample = 16;
         ft->encoding.encoding = SOX_ENCODING_SIGN2;
         samplesize = 16;

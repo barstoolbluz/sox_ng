@@ -21,8 +21,40 @@
 
 #ifdef HAVE_SPEEXDSP
 
-#include <speex/speex_types.h>
+#include <speex/speexdsp_types.h>
 #include <speex/speex_preprocess.h>
+
+#if !defined(HAVE_LIBLTDL)
+#undef DL_SPEEXDSP
+#endif
+
+static const char* const speexdsp_library_names[] =
+{
+#ifdef DL_SPEEXDSP
+  "libspeexdsp",
+  "libspeexdsp-1",
+  "cygspeexdsp-1",
+#endif
+  NULL
+};
+
+#ifdef DL_SPEEXDSP
+  #define SPEEXDSP_FUNC      LSX_DLENTRY_DYNAMIC
+  #define SPEEXDSP_FUNC_STOP LSX_DLENTRY_STUB
+#else
+  #define SPEEXDSP_FUNC      LSX_DLENTRY_STATIC
+  #define SPEEXDSP_FUNC_STOP LSX_DLENTRY_STUB
+#endif /* DL_SPEEXDSP/ */
+
+#define SPEEXDSP_FUNC_ENTRIES(f,x) \
+  SPEEXDSP_FUNC(f,x, SpeexPreprocessState*, speex_preprocess_state_init, \
+                (int, int)) \
+  SPEEXDSP_FUNC(f,x, int, speex_preprocess_ctl, \
+                (SpeexPreprocessState*, int, void *)) \
+  SPEEXDSP_FUNC(f,x, int, speex_preprocess_run, \
+                (SpeexPreprocessState*, spx_int16_t *)) \
+  SPEEXDSP_FUNC(f,x, void, speex_preprocess_state_destroy, \
+                (SpeexPreprocessState*))
 
 /* Private data for effect */
 typedef struct speexdsp_priv_t {
@@ -36,6 +68,7 @@ typedef struct speexdsp_priv_t {
     size_t dereverb;          /* Param: Dereverb: 0 to disable, 1 to enable. */
     size_t frames_per_second; /* Param: Used to compute buffer size from sample rate. */
     size_t samples_per_frame; /* Param: Used to compute buffer size directly. Default is to use frames_per_second instead. */
+    LSX_DLENTRIES_TO_PTRS(SPEEXDSP_FUNC_ENTRIES, speexdsp_dl);
 } priv_t;
 
 static int get_param(
@@ -66,7 +99,7 @@ static int get_param(
  * initialization now: effp->in_signal & effp->out_signal are not
  * yet filled in.
  */
-static int getopts(sox_effect_t* effp, int argc, char** argv)
+static int getopts_speexdsp(sox_effect_t* effp, int argc, char** argv)
 {
     priv_t* p = (priv_t*)effp->priv;
     const size_t agcDefault = 100;
@@ -91,7 +124,7 @@ static int getopts(sox_effect_t* effp, int argc, char** argv)
                If specified, it must be from 1 to 100. */
             if (!get_param(&argc, &argv, &p->denoise, denoiseDefault, 1, 100))
             {
-                lsx_fail("invalid argument \"%s\" to -denoise parameter - expected number from 0 to 100", argv[1]);
+                lsx_fail("invalid argument \"%s\" to -denoise parameter - expected number from 1 to 100", argv[1]);
                 return SOX_EOF;
             }
         }
@@ -132,7 +165,7 @@ static int getopts(sox_effect_t* effp, int argc, char** argv)
 
     if (!p->agc && !p->denoise && !p->dereverb)
     {
-        lsx_report("No features specified. Enabling default settings \"-agc %zu -denoise %zu\".", agcDefault, denoiseDefault);
+        lsx_report("no features specified. Enabling default settings \"-agc %" PRIu64 " -denoise %" PRIu64 "\".", (uint64_t)agcDefault, (uint64_t)denoiseDefault);
         p->agc = agcDefault;
         p->denoise = denoiseDefault;
     }
@@ -143,13 +176,13 @@ static int getopts(sox_effect_t* effp, int argc, char** argv)
 /*
  * Do anything required when you stop reading samples.
  */
-static int stop(sox_effect_t* effp)
+static int stop_speexdsp(sox_effect_t* effp)
 {
     priv_t* p = (priv_t*)effp->priv;
 
     if (p->sps)
     {
-        speex_preprocess_state_destroy(p->sps);
+        p->speex_preprocess_state_destroy(p->sps);
         p->sps = NULL;
     }
 
@@ -159,6 +192,7 @@ static int stop(sox_effect_t* effp)
         p->buffer = NULL;
     }
 
+    LSX_DLLIBRARY_CLOSE(p, speexdsp_dl);
     return SOX_SUCCESS;
 }
 
@@ -166,12 +200,23 @@ static int stop(sox_effect_t* effp)
  * Prepare processing.
  * Do all initializations.
  */
-static int start(sox_effect_t* effp)
+static int start_speexdsp(sox_effect_t* effp)
 {
     priv_t* p = (priv_t*)effp->priv;
     int result = SOX_SUCCESS;
     spx_int32_t int_val;
     float float_val;
+    int open_library_result;
+
+    LSX_DLLIBRARY_OPEN(
+        p,
+        speexdsp_dl,
+        SPEEXDSP_FUNC_ENTRIES,
+        "libspeexdsp library",
+        speexdsp_library_names,
+        open_library_result);
+    if (open_library_result)
+      return SOX_EOF;
 
     if (p->samples_per_frame)
     {
@@ -192,7 +237,7 @@ static int start(sox_effect_t* effp)
 
     lsx_valloc(p->buffer, p->buffer_end);
 
-    p->sps = speex_preprocess_state_init((int)p->buffer_end, (int)(effp->in_signal.rate + .5));
+    p->sps = p->speex_preprocess_state_init((int)p->buffer_end, (int)(effp->in_signal.rate + .5));
     if (!p->sps)
     {
         lsx_fail("failed to initialize preprocessor DSP");
@@ -201,27 +246,27 @@ static int start(sox_effect_t* effp)
     }
 
     int_val = p->agc ? 1 : 2;
-    speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_AGC, &int_val);
+    p->speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_AGC, &int_val);
     if (p->agc)
     {
         float_val = p->agc * 327.68f;
-        speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_AGC_LEVEL, &float_val);
+        p->speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_AGC_LEVEL, &float_val);
     }
 
     int_val = p->denoise ? 1 : 2;
-    speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_DENOISE, &int_val);
+    p->speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_DENOISE, &int_val);
     if (p->denoise)
     {
         int_val = -(spx_int32_t)p->denoise;
-        speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_NOISE_SUPPRESS, &int_val);
+        p->speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_NOISE_SUPPRESS, &int_val);
     }
 
     int_val = p->dereverb ? 1 : 2;
-    speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_DEREVERB, &int_val);
+    p->speex_preprocess_ctl(p->sps, SPEEX_PREPROCESS_SET_DEREVERB, &int_val);
 
 Done:
     if (result != SOX_SUCCESS)
-        stop(effp);
+        stop_speexdsp(effp);
 
     return result;
 }
@@ -231,7 +276,7 @@ Done:
  * in obuf.  Write back the actual numbers of samples to *isamp and *osamp.
  * Return SOX_SUCCESS or, if error occurs, SOX_EOF.
  */
-static int flow(
+static int flow_speexdsp(
     sox_effect_t* effp,
     const sox_sample_t* ibuf,
     sox_sample_t* obuf,
@@ -262,7 +307,7 @@ static int flow(
         if (p->buffer_ipos != p->buffer_end)
             break; /* Working buffer is not full and there is no more input data. */
 
-        speex_preprocess_run(p->sps, p->buffer);
+        p->speex_preprocess_run(p->sps, p->buffer);
         p->buffer_ipos = 0;
         p->buffer_opos = 0;
     }
@@ -275,7 +320,7 @@ static int flow(
 /*
  * Drain out remaining samples if the effect generates any.
  */
-static int drain(sox_effect_t* effp, sox_sample_t* obuf, size_t* osamp)
+static int drain_speexdsp(sox_effect_t* effp, sox_sample_t* obuf, size_t* osamp)
 {
     priv_t* p = (priv_t*)effp->priv;
     size_t obuf_pos = 0;
@@ -289,7 +334,7 @@ static int drain(sox_effect_t* effp, sox_sample_t* obuf, size_t* osamp)
         /* DSP only works on full frames, so fill the remaining space with 0s. */
         for (i = p->buffer_ipos; i < p->buffer_end; i++)
             p->buffer[i] = 0;
-        speex_preprocess_run(p->sps, p->buffer);
+        p->speex_preprocess_run(p->sps, p->buffer);
         p->buffer_end = p->buffer_ipos;
         p->buffer_ipos = 0;
         p->buffer_opos = 0;
@@ -321,23 +366,24 @@ const sox_effect_handler_t* lsx_speexdsp_effect_fn(void)
   static const char usage[] = "[options]";
 
   static char const * const extra_usage[] = {
-"Use the Speex DSP library to improve perceived sound quality.",
-"-agc [target_level]    Enable automatic gain control and optionally specify",
-"                       a target volume level from 1-100. The default is 100.",
-"-denoise [max_dB]      Enable noise reduction and optionally specify the",
-"                       maximum attenuation from 1 to 100. The default is 15.",
-"-dereverb              Enable reverb reduction.",
-"-fps frames_per_second Specify the number of frames per second from 1-100",
-"                       The default is 20.",
-"-spf samples_per_frame Specify the number of samples per frame.",
-"                       The default is to use the -fps setting.",
-"If no options are specified, the -agc and -denoise features are enabled.",
+"Use the Speex DSP library to improve perceived sound quality",
+"OPTION         RANGE DEFAULT DESCRIPTION",
+"-agc [target]  1-100  100    Enable automatic gain control and optionally",
+"                             specify a target volume level",
+"-denoise [max] 1-100   15    Enable noise reduction and optionally specify",
+"                             the maximum attenuation in dB",
+"-dereverb                    Enable reverb reduction",
+"-fps N         1-100   20    Specify the number of frames per second",
+"-spf N         1-    sr/fps  Specify the number of samples per frame",
+"If no options are specified, the -agc and -denoise features are enabled",
     NULL
   };
 
   static sox_effect_handler_t descriptor = {
-    "speexdsp", usage, extra_usage, SOX_EFF_PREC | SOX_EFF_GAIN,
-    getopts, start, flow, drain, stop, NULL, sizeof(priv_t)
+    "speexdsp", usage, SOX_EFF_PREC | SOX_EFF_GAIN,
+    getopts_speexdsp, start_speexdsp, flow_speexdsp,
+    drain_speexdsp, stop_speexdsp, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
 
   return &descriptor;

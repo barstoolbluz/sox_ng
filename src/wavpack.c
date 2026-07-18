@@ -29,6 +29,15 @@
 #include <wavpack/wavpack.h>
 #endif
 
+#if HAVE_LIBWAVPACK5
+# define WavpackOpenFileInputEx WavpackOpenFileInputEx64
+typedef int64_t wavpack_off_t;
+typedef int64_t wavpack_reloff_t;
+# else
+typedef uint32_t wavpack_off_t;
+typedef int32_t wavpack_reloff_t;
+#endif
+
 typedef struct {
   WavpackContext * codec;
   size_t first_block_size;
@@ -36,15 +45,15 @@ typedef struct {
 
 static int32_t ft_read_b_buf(void * ft, void * buf, int32_t len) {
   return (int32_t)lsx_read_b_buf((sox_format_t *)ft, buf, (size_t)len);}
-static uint32_t ft_tell(void * ft) {
+static wavpack_off_t ft_tell(void * ft) {
   return lsx_tell((sox_format_t *)ft);}
-static int ft_seek_abs(void * ft, uint32_t offset) {
+static int ft_seek_abs(void * ft, wavpack_off_t offset) {
   return lsx_seeki((sox_format_t *)ft, (off_t)offset, SEEK_SET);}
-static int ft_seek_rel(void * ft, int32_t offset, int mode) {
+static int ft_seek_rel(void * ft, wavpack_reloff_t offset, int mode) {
   return lsx_seeki((sox_format_t *)ft, (off_t)offset, mode);}
 static int ft_unreadb(void * ft, int b) {
   return lsx_unreadb((sox_format_t *)ft, (unsigned)b);}
-static uint32_t ft_filelength(void * ft) {
+static wavpack_off_t ft_filelength(void * ft) {
   return (uint32_t)lsx_filelength((sox_format_t *)ft);}
 static int ft_is_seekable(void *ft) {
   return ((sox_format_t *)ft)->seekable;}
@@ -54,17 +63,29 @@ static int32_t ft_write_b_buf(void * ft, void * buf, int32_t len) {
     p->first_block_size = len;
   return (int32_t)lsx_write_b_buf((sox_format_t *)ft, buf, (size_t)len);}
 
+#if HAVE_LIBWAVPACK5
+static WavpackStreamReader64 io_fns = {
+  ft_read_b_buf, ft_write_b_buf,
+  ft_tell, ft_seek_abs, ft_seek_rel,
+  ft_unreadb, ft_filelength, ft_is_seekable,
+  NULL, /* truncate_here() */
+  NULL, /* close() */
+};
+#else
 static WavpackStreamReader io_fns = {
-  ft_read_b_buf, ft_tell, ft_seek_abs, ft_seek_rel,
+  ft_read_b_buf,
+  ft_tell, ft_seek_abs, ft_seek_rel,
   ft_unreadb, ft_filelength, ft_is_seekable, ft_write_b_buf
 };
+#endif
 
 static int start_read(sox_format_t * ft)
 {
   priv_t * p = (priv_t *)ft->priv;
   char msg[80];
 
-  p->codec = WavpackOpenFileInputEx(&io_fns, ft, NULL, msg, OPEN_NORMALIZE, 0);
+  p->codec = WavpackOpenFileInputEx(&io_fns, ft, NULL, msg, 
+                                    OPEN_NORMALIZE | OPEN_WRAPPER, 0);
   if (!p->codec) {
     lsx_fail_errno(ft, SOX_EHDR, "%s", msg);
     return SOX_EOF;
@@ -78,6 +99,10 @@ static int start_read(sox_format_t * ft)
   ft->signal.length = (uint64_t)WavpackGetNumSamples(p->codec) * ft->signal.channels;
   ft->encoding.encoding = (WavpackGetMode(p->codec) & MODE_FLOAT)?
     SOX_ENCODING_WAVPACKF : SOX_ENCODING_WAVPACK;
+
+  if (ft->seekable) WavpackSeekTrailingWrapper(p->codec);
+  ft->data_start = WavpackGetWrapperBytes(p->codec);
+
   return SOX_SUCCESS;
 }
 
@@ -101,6 +126,7 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t * buf, size_t len)
 static int stop_read(sox_format_t * ft)
 {
   priv_t * p = (priv_t *)ft->priv;
+  WavpackFreeWrapper(p->codec);
   WavpackCloseFile(p->codec);
   return SOX_SUCCESS;
 }
@@ -167,19 +193,28 @@ static int stop_write(sox_format_t * ft)
   }
   if (ft->seekable && WavpackGetNumSamples(p->codec) != WavpackGetSampleIndex(p->codec) && p->first_block_size >= 4) {
     char * buf = lsx_malloc(p->first_block_size);
+    /* If you fseek() in a mamopened stream then fclose() it, the length
+     * is reported as the seek offset and fseek(SEEK_END) doesn't work so
+     * remember the current offset and seek back to it.
+     */
+    off_t o = ftell(ft->fp);
+
     lsx_rewind(ft);
     if (lsx_readchars(ft, buf, p->first_block_size)) {
       lsx_fail_errno(ft, SOX_EOF, "cannot reread header");
+      free(buf);
       return SOX_EOF;
     }
     if (!memcmp(buf, "wvpk", (size_t)4)) {
       WavpackUpdateNumSamples(p->codec, buf);
       lsx_rewind(ft);
-      if (lsx_writebuf(ft, buf, p->first_block_size)) {
+      if (lsx_writebuf(ft, buf, p->first_block_size) != p->first_block_size) {
         lsx_fail_errno(ft, SOX_EOF, "cannot rewrite header");
+        free(buf);
         return SOX_EOF;
       }
     }
+    fseek(ft->fp, o, SEEK_SET);
     free(buf);
   }
   p->codec = WavpackCloseFile(p->codec);

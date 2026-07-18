@@ -46,7 +46,7 @@ extern "C" {
    attempts to find the `greatest common divisor' in their logical
    behaviour. Having said this, certain limiting decisions are
    implicit, notably the use of a fixed type (LADSPA_Data) for all
-   data transfer and absence of a parameterised `initialisation'
+   data transfer and absence of a parameterized `initialization'
    phase. See below for the LADSPA_Data typedef.
 
    Plugins are expected to distinguish between control and audio
@@ -431,7 +431,7 @@ typedef struct _LADSPA_Descriptor {
      must also be passed. This function must return NULL if
      instantiation fails. 
 
-     Note that instance initialisation should generally occur in
+     Note that instance initialization should generally occur in
      activate() rather than here. */
   LADSPA_Handle (*instantiate)(const struct _LADSPA_Descriptor * Descriptor,
                                unsigned long                     SampleRate);
@@ -466,10 +466,10 @@ typedef struct _LADSPA_Descriptor {
                         unsigned long Port,
                         LADSPA_Data * DataLocation);
 
-  /* This member is a function pointer that initialises a plugin
+  /* This member is a function pointer that initializes a plugin
      instance and activates it for use. This is separated from
      instantiate() to aid real-time support and so that hosts can
-     reinitialise a plugin instance by calling deactivate() and then
+     reinitialize a plugin instance by calling deactivate() and then
      activate(). In this case the plugin instance must reset all state
      information dependent on the history of the plugin instance
      except for any data locations provided by connect_port() and any
@@ -544,7 +544,7 @@ typedef struct _LADSPA_Descriptor {
      called before or after a call to deactivate().
 
      Deactivation is not similar to pausing as the plugin instance
-     will be reinitialised when activate() is called to reuse it. */
+     will be reinitialized when activate() is called to reuse it. */
   void (*deactivate)(LADSPA_Handle Instance);
 
   /* Once an instance of a plugin has been finished with it can be

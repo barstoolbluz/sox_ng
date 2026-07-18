@@ -12,7 +12,7 @@ usage() {
     echo 'Usage: sh clean.sh [-a [-f]]'
     echo '-a      Remove unmodified .md files and their directories'
     echo '-f      Remove all issues, even if they have been modified since download.'
-    echo '-d dir  Work with issues in directory dir instead of in issues/'
+    echo '-d dir  Work with issues in directory dir instead of in issues/ or ./'
   } 1>&2
 }
 

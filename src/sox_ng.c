@@ -62,6 +62,7 @@
   #include <io.h>
 #endif
 
+#if HAVE_SUN_AUDIO
 #ifdef HAVE_SUN_AUDIOIO_H
   #include <sun/audioio.h>
   #define HAVE_AUDIOIO_H 1
@@ -71,6 +72,7 @@
   typedef unsigned char u_char;
   #include <sys/audioio.h>
   #define HAVE_AUDIOIO_H 1
+#endif
 #endif
 #endif
 
@@ -123,14 +125,16 @@
 #undef HAVE_TERMIOS_H
 #endif
 
-/*#define MORE_INTERACTIVE 1*/
+#ifdef _MSC_VER
+#define IS_REGULAR_FILE(f)   ((f.st_mode & S_IFMT) == S_IFREG)
+#else
+#define IS_REGULAR_FILE(f)   (S_ISREG(f.st_mode))
+#endif
 
 #define SOX_OPTS "SOX_OPTS"
 static lsx_getopt_t optstate;
 
 /* argv[0] options */
-
-static char const * myname = NULL;
 static enum {sox_sox, sox_play, sox_rec, sox_soxi} sox_mode;
 
 
@@ -153,7 +157,6 @@ static lsx_enum_item const rg_modes[] = {
   {0, 0}};
 static rg_mode replay_gain_mode = RG_default;
 static sox_option_t show_progress = sox_option_default;
-
 
 /* Input & output files */
 
@@ -258,11 +261,14 @@ static void cleanup(void)
     if (ofile->ft) {
       if (!success && ofile->ft->io_type == lsx_io_file) {   /* If we failed part way through */
         struct stat st;                  /* writing a normal file, remove it. */
-        if (!lsx_stat(ofile->ft->filename, &st) && S_ISREG(st.st_mode)) {
+        if (!lsx_stat(ofile->ft->filename, &st) && IS_REGULAR_FILE(st)) {
           /* Don't assume we can unlink a file before closing it
-	   * 'cos that's not true on Windows. */
+           * 'cos that's not true on Windows. */
+          /* sox_close frees the filename and ft, so take a copy */
+          char *filename = lsx_strdup(ofile->ft->filename);
           sox_close(ofile->ft);
-          lsx_unlink(ofile->ft->filename);
+          lsx_unlink(filename);
+          free(filename);
           goto already_closed;
         }
       }
@@ -322,7 +328,7 @@ static char const * size_and_bitrate(sox_format_t * ft, char const * * text)
   off_t size = lsx_filelength(ft);
   if (ft->signal.length && ft->signal.channels && ft->signal.rate && text) {
     double secs = ft->signal.length / ft->signal.channels / ft->signal.rate;
-    *text = lsx_sigfigs3(8. * size / secs);
+    *text = lsx_sigfigs3(8. * (size - ft->data_start) / secs);
   }
   return lsx_sigfigs3((double)size);
 }
@@ -651,9 +657,11 @@ static int combiner_stop(sox_effect_t *effp)
 static sox_effect_handler_t const * input_combiner_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "input", NULL, NULL, SOX_EFF_MCHAN |
+    "input", NULL, SOX_EFF_MCHAN |
     SOX_EFF_MODIFY, 0, combiner_start, 0, combiner_drain,
-    combiner_stop, 0, sizeof(input_combiner_t)
+    combiner_stop, 0,
+    sizeof(input_combiner_t),
+    NULL, NULL, NULL,
   };
   return &handler;
 }
@@ -698,9 +706,11 @@ static int output_flow(sox_effect_t UNUSED *effp, sox_sample_t const * ibuf,
 
 static sox_effect_handler_t const * output_effect_fn(void)
 {
-  static sox_effect_handler_t handler = {"output", NULL, NULL,
+  static sox_effect_handler_t handler = {"output", NULL,
     SOX_EFF_MCHAN | SOX_EFF_MODIFY | SOX_EFF_PREC,
-    NULL, ostart, output_flow, NULL, NULL, NULL, 0
+    NULL, ostart, output_flow, NULL, NULL, NULL,
+    0,
+    NULL, NULL, NULL,
   };
   return &handler;
 }
@@ -951,7 +961,7 @@ static void read_user_effects(char const *filename)
         exit(1);
     }
 
-    lsx_report("Reading effects from file `%s'", filename);
+    lsx_report("reading effects from file `%s'", filename);
 
     while(fgets(s + pos, (int) (buffer_size - pos), file)) {
       int len = strlen(s + pos);
@@ -1244,6 +1254,11 @@ static void get_termwidth(int s UNUSED)
 
   if (!ioctl(2, TIOCGWINSZ, &w))
     termwidth = w.ws_col;
+  else
+    /* If stderr is redirected to a file, don't leave failure in errno,
+     * which will be picked up later by a file-reading routine
+     */
+    errno = 0;
 }
 #endif
 
@@ -1298,18 +1313,20 @@ static void display_status(sox_bool all_done)
   if (all_done || since(&then, .1, sox_false)) {
     double read_time = (double)read_wide_samples / combiner_signal.rate;
     double left_time = 0, in_time = 0, percentage = 0;
-    char buf[128];
+    char buf[80]; /* actually uses 78 + '\0' */
+    int nchars = min(termwidth + 2, sizeof(buf));
 
     if (input_wide_samples) {
       in_time = (double)input_wide_samples / combiner_signal.rate;
       left_time = max(in_time - read_time, 0);
       percentage = max(100. * read_wide_samples / input_wide_samples, 0);
     }
-    snprintf(buf, min(termwidth + 2, sizeof(buf)),
+    sprintf(buf,
       "\rIn:%-5s %s [%s] Out:%-5s [%6s|%-6s] %s Clip:%-5s",
       lsx_sigfigs3p(percentage), str_time(read_time), str_time(left_time),
       lsx_sigfigs3((double)output_samples),
       vu(0), vu(1), headroom(), lsx_sigfigs3((double)total_clips()));
+    buf[nchars - 1] = '\0';
     fputs(buf, stderr);
   }
   if (all_done)
@@ -1336,10 +1353,11 @@ static int kbhit(void)
 static void adjust_volume(int delta)
 {
   char * from_env;
+  int vol1 = 0, vol2 = 0, fd;
 
   if (lsx_adjust_softvol(delta) == SOX_SUCCESS) return;
   from_env = getenv("MIXERDEV");
-  int vol1 = 0, vol2 = 0, fd = open(from_env? from_env : "/dev/mixer", O_RDWR);
+  fd = open(from_env? from_env : "/dev/mixer", O_RDWR);
   if (fd >= 0) {
     if (ioctl(fd, MIXER_READ(SOUND_MIXER_PCM), &vol1) != -1) {
       int side1 = vol1 & 0xff, side2 = (vol1 >> 8) & 0xff;
@@ -1355,10 +1373,11 @@ static void adjust_volume(int delta)
   if (vol1 == vol2)
     putc('\a', stderr);
 }
-#elif defined(HAVE_AUDIOIO_H)
+#elif defined(HAVE_SUN_AUDIO)
 static void adjust_volume(int delta)
 {
-  int vol1 = 0, vol2 = 0, fd = fileno((FILE*)ofile->ft->fp);
+  int vol1 = 0, vol2 = 0, fd;
+  fd = ofile->ft->fp != NULL ? *((int *)ofile->ft->fp) : -1;
   if (lsx_adjust_softvol(delta) == SOX_SUCCESS) return;
   if (fd >= 0) {
     audio_info_t audio_info;
@@ -1367,7 +1386,9 @@ static void adjust_volume(int delta)
       vol2 = range_limit(vol1 + delta, 0, 100);
       AUDIO_INITINFO(&audio_info);
       audio_info.play.gain = (vol2 * AUDIO_MAX_GAIN + 50) / 100;
+#if defined(__sun)
       audio_info.output_muted = 0;
+#endif
       lsx_debug("%04x %04x", vol1, vol2);
       if (vol1 != vol2 && ioctl(fd, AUDIO_SETINFO, &audio_info) < 0)
         vol2 = vol1;
@@ -1386,6 +1407,8 @@ static void adjust_volume(int delta)
 
 static int update_status(sox_bool all_done, void * client_data)
 {
+  char key[2];
+
   (void)client_data;
   if (interactive) while (kbhit()) {
 #ifdef HAVE_CONIO_H
@@ -1394,33 +1417,41 @@ static int update_status(sox_bool all_done, void * client_data)
     int ch = getchar();
 #endif
 
-#ifdef MORE_INTERACTIVE
+    /* See if the key is claimed by an effect parameter-changing key */
+    key[0] = ch; key[1] = '\0';
+    if (sox_is_keymapped(key))
+      (void) sox_keymap_apply(effects_chain, key);
+    else switch (ch) {
+
+    case '>':
     if (files[current_input]->ft->handler.seek &&
-        files[current_input]->ft->seekable)
-    {
-      if (ch == '>')
-      {
+        files[current_input]->ft->seekable) {
         uint64_t jump = files[current_input]->ft->signal.rate*30; /* 30 sec. */
         if (input_wide_samples == 0 ||
                   read_wide_samples+jump < input_wide_samples) {
           read_wide_samples += jump;
-          sox_seek(files[current_input]->ft, read_wide_samples,
-                   SOX_SEEK_SET);
-          /* FIXME: Do something if seek fails. */
+          if (sox_seek(files[current_input]->ft, read_wide_samples,
+                   SOX_SEEK_SET) != SOX_SUCCESS)
+            lsx_warn("seeking failed");
         }
-      }
-      if (ch == '<')
-      {
+      } else /* FIXME: Seek forward by discarding samples */
+        lsx_warn("this file type is not seekable");
+      break;
+
+    case '<':
+    if (files[current_input]->ft->handler.seek &&
+        files[current_input]->ft->seekable) {
         uint64_t jump = files[current_input]->ft->signal.rate*30; /* 30 sec. */
         read_wide_samples = jump < read_wide_samples ?
             read_wide_samples-jump : 0;
-        sox_seek(files[current_input]->ft, read_wide_samples,
-                 SOX_SEEK_SET);
-        /* FIXME: Do something if seek fails. */
-      }
-    }
-    if (ch == 'R')
-    {
+        if (sox_seek(files[current_input]->ft, read_wide_samples,
+                 SOX_SEEK_SET) != SOX_SUCCESS)
+          lsx_warn("seeking failed");
+      } else
+        lsx_warn("this file type is not seekable");
+      break;
+
+    case 'R':
       /* Not very useful, eh!  Sample though of the place you
        * could change the value to effects options
        * like vol or speed or remix.
@@ -1429,11 +1460,22 @@ static int update_status(sox_bool all_done, void * client_data)
        * this function is existed.
        */
       user_restart_eff = sox_true;
-    }
-#endif
-    switch (ch) {
-      case 'V': adjust_volume(+7); break;
-      case 'v': adjust_volume(-7); break;
+      break;
+
+    case 'n':
+      user_skip = sox_true;
+      break;
+
+    case 'q': case 27: /* Escape key */
+      user_abort = sox_true;
+      break;
+
+    case 'V': adjust_volume(+7); break;
+    case 'v': adjust_volume(-7); break;
+      break;
+
+    default:
+      lsx_warn("key `%s' doesn't do anything", key);
     }
   }
 
@@ -1447,7 +1489,7 @@ static void optimize_trim(void)
    * "effect descriptor" and see what the start location is.  This has to be
    * done after its start() is called to have the correct location.  Also, only
    * do this when only working with one input file.  This is because the logic
-   * to do it for multiple files is complex and probably never used.  The same
+   * to do it for multiple files is complex and seldom used.  The same
    * is true for a restarted or additional effects chain (relative positioning
    * within the file and possible samples still buffered in the input effect
    * would have to be taken into account).  This hack is a huge time savings
@@ -1473,13 +1515,13 @@ static sox_bool overwrite_permitted(char const * filename)
   char c;
 
   if (!no_clobber) {
-    lsx_report("Overwriting `%s'", filename);
+    lsx_report("overwriting `%s'", filename);
     return sox_true;
   }
-  lsx_warn("Output file `%s' already exists", filename);
+  lsx_warn("output file `%s' already exists", filename);
   if (!stdin_is_a_tty)
     return sox_false;
-  do fprintf(stderr, "%s: overwrite `%s' (y/n)? ", myname, filename);
+  do fprintf(stderr, "%s: overwrite `%s' (y/n)? ", sox_globals.myname, filename);
   while (scanf(" %c%*[^\n]", &c) != 1 || !strchr("yYnN", c));
   return c == 'y' || c == 'Y';
 }
@@ -1530,11 +1572,12 @@ static char *fndup_with_count(const char *filename, size_t count)
             found_marker = sox_true;
 
             if (width)
-                sprintf(format, "%%0%cd", width);
+                sprintf(format, "%%0%cd", width), width -= '0';
             else
-                strcpy(format, "%02d");
+                strcpy(format, "%02d"), width = 2;
 
-            efn += sprintf(efn, format, count);
+            sprintf(efn, format, count);
+            efn += width;
             fn++;
         }
         else
@@ -1708,10 +1751,10 @@ static void calculate_combiner_signal_parameters(void)
       /* Don't exit quite yet; give the user any other message 1st */
     if (min_channels != max_channels) {
       if (combine_method == sox_concatenate) {
-        lsx_fail("input files must have the same # channels");
+        lsx_fail("input files must have the same number of channels");
         exit(1);
       } else if (combine_method != sox_merge)
-        lsx_warn("Input files don't have the same # channels");
+        lsx_warn("input files don't have the same number of channels");
     }
     if (min_rate != max_rate)
       exit(1);
@@ -1826,7 +1869,7 @@ static int process(void)
     }
   } else if (interactive) {
     /* User called for interactive mode, but ... */
-    lsx_warn("Standard input has to be a terminal for interactive mode");
+    lsx_warn("standard input has to be a terminal for interactive mode");
     interactive = sox_false;
   }
 #endif
@@ -1897,11 +1940,15 @@ static void display_SoX_version(FILE * file)
 #endif
   const sox_version_info_t* info = sox_version_info();
 
+#ifdef VERSION
+  fprintf(file, "%s:      SoX_ng v%s\n", sox_globals.myname, VERSION);
+#else
   fprintf(file, "%s:      SoX_ng v%s%s%s\n",
-      myname,
+      sox_globals.myname,
       info->version,
       info->version_extra ? "-" : "",
       info->version_extra ? info->version_extra : "");
+#endif
 
   if (sox_globals.verbosity > 3) {
     if (info->distro)
@@ -1947,7 +1994,9 @@ static void display_supported_formats(void)
   }
   qsort((void*)format_list, formats, sizeof(*format_list), strcmp_p);
   for (i = 0; i < formats; i++)
-    printf(" %s", format_list[i]);
+    /* Only list duplicates once */
+    if (i == 0 || (i > 0 && strcmp(format_list[i], format_list[i - 1])))
+      printf(" %s", format_list[i]);
   putchar('\n');
 
   printf("PLAYLIST FORMATS: m3u pls\nAUDIO DEVICE DRIVERS:");
@@ -1960,7 +2009,7 @@ static void display_supported_formats(void)
   qsort((void*)format_list, formats, sizeof(*format_list), strcmp_p);
   for (i = 0; i < formats; i++)
     printf(" %s", format_list[i]);
-  puts("\n");
+  putchar('\n');
 
   free((void*)format_list);
 }
@@ -1973,8 +2022,8 @@ static void display_supported_effects(void)
   printf("EFFECTS:");
   for (i = 0; sox_effect_fns[i]; i++) {
     e = sox_effect_fns[i]();
-    if (e && e->name)
-      printf(" %s%s", e->name, (e->flags & SOX_EFF_INTERNAL)? "#" : "");
+    if (e && e->name && !(e->flags & SOX_EFF_INTERNAL))
+      printf(" %s", e->name);
   }
   putchar('\n');
 }
@@ -2000,21 +2049,26 @@ static void usage(void)
 "GLOBAL OPTIONS (gopts) (can be specified at any point before the first effect):",
 "--buffer BYTES           Set the size of all processing buffers (default 8192)",
 "--clobber                Don't prompt to overwrite output file (default)",
+"--no-clobber             Prompt to overwrite output file",
 "--combine concatenate    Concatenate all input files (default for sox, rec)",
 "--combine sequence       Sequence all input files (default for play)",
+"--combine mix, -m        Mix multiple input files",
+"--combine mix-power      Mix to equal power",
+"--combine merge, -M      Merge multiple input files",
 "-D, --no-dither          Don't dither automatically",
 "--dft-min NUM            Minimum size (log2) for DFT processing (default 10)",
 "--effects-file FILENAME  File containing effects and options",
 "-G, --guard              Use temporary files to guard against clipping",
 "-h, --help               Display version number and usage information",
+"-h NAME                  Show info of effect or format NAME",
 "--help-effect NAME       Show usage of effect NAME, or NAME=all for all",
 "--help-format NAME       Show info on format NAME, or NAME=all for all",
 "--i, --info              Behave as soxi(1)",
 "--input-buffer BYTES     Override the input buffer size (default: as --buffer)",
-"--no-clobber             Prompt to overwrite output file",
-"-m, --combine mix        Mix multiple input files (instead of concatenating)",
-"--combine mix-power      Mix to equal power (instead of concatenating)",
-"-M, --combine merge      Merge multiple input files (instead of concatenating)"
+"--interactive            Be interactive (on when playing or with --keymap)",
+"--keymap X:effect.param(+|-|*|/|=)N",
+"                         When key X is pressed, adjust the effect's parameter",
+"                         linearly, logarithmically or set it to a value",
   };
   static char const * const linesMagic[] = {
 "--magic                  Use `magic' file-type detection"
@@ -2023,14 +2077,14 @@ static void usage(void)
 "--multi-threaded         Enable parallel effects channels processing"
   };
   static char const * const lines3[] = {
-"--norm                   Guard (see --guard) & normalise",
+"--norm                   Guard (see --guard) and normalize",
 "--play-rate-arg ARG      Default `rate' argument for auto-resample with `play'",
 "--plot gnuplot|octave    Generate script to plot response of filter effect",
-"-q, --no-show-progress   Run in quiet mode; opposite of -S",
+"-q, --no-show-progress   Run in quiet mode, the opposite of -S",
 "--replay-gain track|album|off  Default: off (sox, rec), track (play)",
 "-R                       Use default random numbers (same on each run of SoX)",
 "-S, --show-progress      Display progress while processing audio data",
-"--single-threaded        Disable parallel effects channels processing",
+"--multi-threaded         Enable parallel effects channels processing",
 "--temp DIRECTORY         Specify the directory to use for temporary files",
 "-T, --combine multiply   Multiply samples of corresponding channels from all",
 "                         input files (instead of concatenating)",
@@ -2094,46 +2148,60 @@ static void usage(void)
   printf("EFFECT OPTIONS: effect dependent; see --help-effect\n");
 }
 
-static void usage_effect(char const * name)
+static int usage_effect(char const * name)
 {
   size_t i;
 
   if (strcmp("all", name) && !sox_find_effect(name)) {
-    printf("Cannot find an effect called `%s'.\n", name);
+    printf("Cannot find an effect called `%s'\n", name);
     display_supported_effects();
+    return SOX_EOF;
   }
   else {
     sox_bool first = sox_true;
 
     for (i = 0; sox_effect_fns[i]; i++) {
       const sox_effect_handler_t *e = sox_effect_fns[i]();
-      if (e && e->name && (!strcmp("all", name) || !strcmp(e->name, name))) {
-	char const * * linep;
+      if (e && e->name &&
+          /* Don't list internal effects in "all" output but do so
+           * if they explicitly ask for --help-effect input or output */
+          ((!strcmp("all", name) && !(e->flags & SOX_EFF_INTERNAL)) ||
+           !strcmp(e->name, name))) {
+        char const * * linep;
         if (first) first = sox_false;
         else printf("\n");
         printf("%s %s\n", e->name, e->usage? e->usage : "");
-	linep = (char const * *) e->extra_usage;
-	if (linep)
-	  while (*linep)
-	    printf("  %s\n", *linep++);
+        linep = (char const * *) e->extra_usage;
+        if (linep)
+          while (*linep)
+            printf("  %s\n", *linep++);
         if (e->flags & SOX_EFF_INTERNAL)
           printf("  `%s' is libSoX-only\n", e->name);
       }
     }
   }
-  exit(1);
+  return SOX_SUCCESS;
 }
 
 static void usage_format1(sox_format_handler_t const * f)
 {
-  char const * const * names;
-
   printf("Format: %s\n", f->names[0]);
   printf("Description: %s\n", f->description);
   if (f->names[1]) {
+    char const ** names; /* Local copy of the pointers except the first one */
+    char const ** namep; /* Loop variable */
+    size_t nitems = 0;
+
+    while (f->names[nitems]) nitems++;
+    lsx_valloc(names, nitems);
+    nitems--; /* We don't want the first canonical name */
+    /* nitems + 1 to copy the terminating NULL */
+    memcpy(names, f->names + 1, (nitems + 1) * sizeof(*names));
+
+    qsort((void*)names, nitems, sizeof(*names), strcmp_p);
     printf("Also handles:");
-    for (names = f->names + 1; *names; ++names)
-      printf(" %s", *names);
+    for (namep = names; *namep; ++namep)
+      printf(" %s", *namep);
     putchar('\n');
   }
   if (f->flags & SOX_FILE_CHANS) {
@@ -2145,50 +2213,70 @@ static void usage_format1(sox_format_handler_t const * f)
   }
   if (f->write_rates) {
     sox_rate_t const * p = f->write_rates;
-    printf("Sample-rate restricted to:");
+    printf("Sample rate is restricted to:");
     while (*p)
       printf(" %g", *p++);
     putchar('\n');
   }
-  printf("Reads: %s\n", f->startread || f->read? "yes" : "no");
-  if (f->startwrite || f->write) {
+  printf("Reads: %s\n", f->read? "yes" : "no");
+  if (f->write) {
     if (f->write_formats) {
       sox_encoding_t e;
       unsigned i, s;
 #define enc_arg(T) (T)f->write_formats[i++]
       i = 0;
       puts("Writes:");
-      while ((e = enc_arg(sox_encoding_t)))
+      /* This looks odd, but the entries in a format's write_formats are, e.g.
+       * {ENCODING1, precision1a, precision1b, 0, ENCODING2, precision2, 0, 0}
+       * so alternating between sox_encoding_t and unsigned is correct.
+       */
+      while ((e = enc_arg(sox_encoding_t))) {
         do {
+          unsigned prec;
           s = enc_arg(unsigned);
-          if (sox_precision(e, s)) {
+          prec = sox_precision(e, s);
+          /* The mp3 format handler sets the precision on startup.
+           * Both LAME and Twolame encoders take floating point input
+           * (24-bit mantissa + 1-bit sign) but set it to 24.
+           */
+          if (prec == 0 && (e == SOX_ENCODING_MP1 ||
+                            e == SOX_ENCODING_MP2 ||
+                            e == SOX_ENCODING_MP3))
+            prec = 24;
+          if (prec) {
             printf("  ");
             if (s)
               printf("%2u-bit ", s);
-            printf("%s (%u-bit precision)\n", sox_encodings_info[e].desc, sox_precision(e, s));
+            printf("%s (%u-bit precision)\n", sox_encodings_info[e].desc, prec);
           }
         } while (s);
       }
-      else puts("Writes: yes");
     }
+    else puts("Writes: yes");
+  }
   else puts("Writes: no");
 }
 
-static void usage_format(char const * name)
+static int usage_format(char const * name)
 {
   sox_format_handler_t const * f;
   unsigned i;
 
   if (strcmp("all", name)) {
+    /* Help for just one format */
     if (!(f = sox_find_format(name, sox_false))) {
-      printf("Cannot find a format called `%s'.\n", name);
+      printf("Cannot find a format called `%s'\n", name);
       display_supported_formats();
+      return SOX_EOF;
+    } else {
+      usage_format1(f);
     }
-    else usage_format1(f);
-  }
-  else {
+  } else {
+    /* Help for all formats */
     sox_bool first = sox_true;
 
+    sox_format_init();  /* So it lists dynamic formats; format-specific help
+                         * will load the modules if it doesn't find one */
     for (i = 0; sox_format_fns[i].fn; ++i) {
       sox_format_handler_t const * f = sox_format_fns[i].fn();
       if (!(f->flags & SOX_FILE_PHONY)) {
@@ -2198,7 +2286,7 @@ static void usage_format(char const * name)
       }
     }
   }
-  exit(1);
+  return SOX_SUCCESS;
 }
 
 static void read_comment_file(sox_comments_t * comments, char const * const filename)
@@ -2235,9 +2323,9 @@ static void read_comment_file(sox_comments_t * comments, char const * const file
 }
 
 static char const * const getoptstr =
-  "+b:c:de:hmnpqr:t:v:xBC:DGLMNRSTV::X";
+  "+b:c:de:hk:mnpqr:t:v:xA:BC:DGLMNRSTV::X";
 
-static struct lsx_option_t const long_options[] = {
+static lsx_option_t const long_options[] = {
   /*
    * The order and position of these must correspond to the numbers
    * in the huge case statement in parse_gopts_and_fopts()
@@ -2257,7 +2345,7 @@ static struct lsx_option_t const long_options[] = {
   {"replay-gain"     , lsx_option_arg_required, NULL, 0},
   {"version"         , lsx_option_arg_none    , NULL, 0},
   {"output"          , lsx_option_arg_required, NULL, 0},
-  {"effects-file"    , lsx_option_arg_required, NULL, 0}, /* 25 */
+  {"effects-file"    , lsx_option_arg_required, NULL, 0}, /* 15 */
   {"temp"            , lsx_option_arg_required, NULL, 0},
   {"single-threaded" , lsx_option_arg_none    , NULL, 0},
   {"ignore-length"   , lsx_option_arg_none    , NULL, 0},
@@ -2270,8 +2358,8 @@ static struct lsx_option_t const long_options[] = {
   {"dft-min"         , lsx_option_arg_required, NULL, 0}, /* 25 */
 
   /*
-   * These instead are index by their letters, which limits the
-   * above section to a maximum of 64 enries.
+   * These instead are indexed by their letters, which limits the
+   * above section to a maximum of 64 entries.
    */
   {"bits"            , lsx_option_arg_required, NULL, 'b'},
   {"channels"        , lsx_option_arg_required, NULL, 'c'},
@@ -2280,6 +2368,7 @@ static struct lsx_option_t const long_options[] = {
   {"no-dither"       , lsx_option_arg_none    , NULL, 'D'},
   {"encoding"        , lsx_option_arg_required, NULL, 'e'},
   {"help"            , lsx_option_arg_none    , NULL, 'h'},
+  {"keymap"          , lsx_option_arg_required, NULL, 'k'},
   {"null"            , lsx_option_arg_none    , NULL, 'n'},
   {"no-show-progress", lsx_option_arg_none    , NULL, 'q'},
   {"pipe"            , lsx_option_arg_none    , NULL, 'p'},
@@ -2413,8 +2502,8 @@ static char parse_gopts_and_fopts(file_t * f)
       case 5:
         if (f->encoding.reverse_bytes != sox_option_default || f->encoding.opposite_endian) {
           lsx_fail("only one endian option per file is allowed");
-	  exit(1);
-	}
+          exit(1);
+        }
         switch (enum_option(optstate.arg, optstate.lngind, endian_options)) {
           case ENDIAN_little: f->encoding.reverse_bytes = MACHINE_IS_BIGENDIAN; break;
           case ENDIAN_big: f->encoding.reverse_bytes = MACHINE_IS_LITTLEENDIAN; break;
@@ -2435,10 +2524,10 @@ static char parse_gopts_and_fopts(file_t * f)
         interactive = sox_true; break;
 #else
         lsx_fail("interactive mode was not enabled at compile time");
-        exit(1); break;
+        exit(1);
 #endif
-      case 8: usage_effect(optstate.arg); break;
-      case 9: usage_format(optstate.arg); break;
+      case 8: exit(usage_effect(optstate.arg) == SOX_SUCCESS ? 0 : 1); break;
+      case 9: exit(usage_format(optstate.arg) == SOX_SUCCESS ? 0 : 1); break;
       case 10: f->no_glob = sox_true; break;
       case 11:
         sox_effects_globals.plot = enum_option(optstate.arg, optstate.lngind, plot_methods);
@@ -2475,6 +2564,9 @@ static char parse_gopts_and_fopts(file_t * f)
         }
         sox_globals.log2_dft_min_size = i;
         break;
+      default:
+        lsx_fail("internal error processing long option");
+        exit(1);
       }
       break;
 
@@ -2488,15 +2580,39 @@ static char parse_gopts_and_fopts(file_t * f)
       break;
 
     case 'd': case 'n': case 'p':
-      optstate.ind = optstate.ind;
       return c;
 
     case 'h':
-      usage();
+      if (optstate.argc < 3) {
+        /* Plain -h or --help */
+        usage(); exit(0);
+      }
+      for ( ; optstate.ind < optstate.argc; optstate.ind++) {
+        /* --help-effect and --help-format */
+        char *arg = optstate.argv[optstate.ind];
+        sox_effect_handler_t const *handler;
+
+        if (!strcmp(arg, "all")) {
+          lsx_fail("Use --help-format all or --help-effect all");
+          exit(1);
+        }
+        if ((handler = sox_find_effect(arg)) != NULL) {
+          (void) usage_effect(arg);
+          continue;
+        }
+        if (sox_find_format(arg, sox_false) != NULL) {
+          (void) usage_format(arg);
+          continue;
+        }
+        lsx_fail("Cannot find a format or effect called `%s'", arg);
+        display_supported_formats();
+        display_supported_effects();
+        exit(1);
+      }
       exit(0);
 
     case '?':
-      lsx_fail("invalid option");
+      lsx_fail("invalid option `%s'", optstate.argv[optstate.ind]);
       exit(1);
 
     case 't':
@@ -2523,8 +2639,16 @@ static char parse_gopts_and_fopts(file_t * f)
       }
       uservolume = sox_true;
       if (f->volume < 0.0)
-        lsx_report("Volume adjustment is negative; "
+        lsx_report("volume adjustment is negative; "
                   "this will result in a phase change");
+      break;
+
+    case 'A':
+      if (sscanf(optstate.arg, "%f %c", &sox_globals.A4, &dummy) != 1 ||
+          /* !isfinite(sox_globals.A4) || */ sox_globals.A4 <= 0) {
+        lsx_fail("concert pitch `%s' is not a positive number", optstate.arg);
+        exit(1);
+      }
       break;
 
     case 'c':
@@ -2572,7 +2696,7 @@ static char parse_gopts_and_fopts(file_t * f)
     case 'L': case 'B': case 'x':
       if (f->encoding.reverse_bytes != sox_option_default || f->encoding.opposite_endian) {
         lsx_fail("only one endian option per file is allowed");
-	exit(1);
+        exit(1);
       }
       switch (c) {
         case 'L': f->encoding.reverse_bytes   = MACHINE_IS_BIGENDIAN;    break;
@@ -2597,6 +2721,29 @@ static char parse_gopts_and_fopts(file_t * f)
           exit(1);
         }
         sox_globals.verbosity = (unsigned)i;
+      }
+      break;
+    case 'k':
+      /* --keymap D:dolbyb.gain+2 --keymap d:dolbyb.gain-2 */
+      {
+        char key[2], *effect, *field;
+        char op[2];  /* "+", "-", "*", "/" or "=" */
+        double step;
+        char dummy; /* Trailing garbage */
+        int n;
+
+        n = sscanf(optstate.arg, "%c:%16m[a-z0-9].%16m[_a-z0-9]%1[+*/=-]%lg%c",
+                   key, &effect, &field, op, &step, &dummy);
+        if (n != 5) {
+          lsx_fail("can't parse `%s' as key:effect.field[+-*/=]value; n=%d",
+                   optstate.arg, n);
+          exit(1);
+        }
+        key[1] = '\0';
+
+        sox_keymap_add(lsx_strdup(key), effect, field, op[0], step);
+
+        interactive = sox_true;
       }
       break;
     }
@@ -2936,7 +3083,8 @@ static void output_message(unsigned level, const char *filename, const char *fmt
   if (sox_globals.verbosity >= level) {
     char base_name[128];
     sox_basename(base_name, sizeof(base_name), filename);
-    fprintf(stderr, "%s %s %s: ", myname, str[min(level - 1, 3)], base_name);
+    if (show_progress == sox_option_yes) fprintf(stderr, "\n");
+    fprintf(stderr, "%s %s %s: ", sox_globals.myname, str[min(level - 1, 3)], base_name);
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
   }
@@ -2956,13 +3104,27 @@ int main(int argc, char **argv)
   size_t i;
   char mybase[8];
 
+  sox_globals.myname = argv[0];
+  {
+    /* Reduce argv[0] to bare program name for error reports.
+     * On Windows, remove .exe too.
+     */
+#ifdef _WIN32
+    char *slash = strrchr(sox_globals.myname, '\\');
+    char *dot   = slash ? strrchr(slash, '.') : NULL;
+    if (dot) *dot = '\0';
+#else
+    char *slash = strrchr(sox_globals.myname, '/');
+#endif
+    if (slash) sox_globals.myname = slash + 1;
+  }
+
   if (argc < 2) { usage(); exit(1); }
 
   gettimeofday(&load_timeofday, NULL);
-  myname = argv[0];
   sox_globals.output_message_handler = output_message;
 
-  if (0 != sox_basename(mybase, sizeof(mybase), myname))
+  if (0 != sox_basename(mybase, sizeof(mybase), sox_globals.myname))
   {
     if (0 == lsx_strncasecmp(mybase, "play", 4))
       sox_mode = sox_play;
@@ -2989,6 +3151,22 @@ int main(int argc, char **argv)
 
   parse_options_and_filenames(argc, argv);
 
+#if _OPENMP && HAVE_GETENV && HAVE_SETENV && HAVE_EXECVP
+  /* Circumvent nasty defect in OpenMP whereby multiple invocations of SoX
+   * in parallel become a hundred times slower. Do a lot of careful checking
+   * because if OMP_WAITPOLICY isn't set, we'll go into an infinite loop.
+   */
+  if (sox_globals.use_threads && !getenv("OMP_WAIT_POLICY")) {
+    if (setenv("OMP_WAIT_POLICY", "PASSIVE", 0) == 0 &&
+        getenv("OMP_WAIT_POLICY") != NULL) {
+      argv[argc] = NULL;  /* Make sure it's NULL-terminated */
+      lsx_report("execing myself to set OMP_WAIT_POLICY");
+      execvp(argv[0], argv);
+      lsx_warn("can't exec myself to set OMP_WAIT_POLICY");
+    }
+  }
+#endif
+
   if (sox_globals.verbosity > 2)
     display_SoX_version(stderr);
 
@@ -3010,7 +3188,7 @@ int main(int argc, char **argv)
 
   /* Make sure we got at least the required # of input filenames */
   if (input_count < 1) {
-    lsx_fail("no input filenames specified. For help say `%s -h'", myname);
+    lsx_fail("no input filenames specified. For help say `%s -h'", sox_globals.myname);
     exit(1);
   }
 
@@ -3034,10 +3212,13 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  setsig(SIGINT, SIG_IGN); /* So child pipes aren't killed by track skip */
   for (i = 0; i < input_count; i++) {
-    size_t j = input_count - 1 - i; /* Open in reverse order 'cos of rec (below) */
-    file_t * f = files[j];
+    size_t j;
+    file_t * f;
+
+    /* Open in reverse order when recording (see below) */
+    j = (sox_mode == sox_rec) ? input_count - 1 - i : i;
+    f = files[j];
 
     /* When mixing audio, default to input side volume adjustments that will
      * make sure no clipping will occur.  Users probably won't be happy with
@@ -3081,7 +3262,6 @@ int main(int argc, char **argv)
   for (i = 0; i < input_count; i++)
     set_replay_gain(files[i]->ft->oob.comments, files[i]);
 
-  setsig(SIGINT, SIG_DFL);
 #ifndef _WIN32
   setsig(SIGPIPE, SIG_IGN);
 #endif
@@ -3108,7 +3288,7 @@ int main(int argc, char **argv)
     sox_globals.ranqd1 = (int32_t)(now.tv_sec - now.tv_usec);
   }
 
-  /* Save things that sox_sequence needs to be reinitialised for each segued
+  /* Save things that sox_sequence needs to be reinitialized for each segued
    * block of input files.*/
   ofile_signal_options = ofile->signal;
   ofile_encoding_options = ofile->encoding;
@@ -3171,7 +3351,28 @@ int main(int argc, char **argv)
 
 #ifdef _WIN32
 
-#include <windows.h>
+# ifndef _MSC_VER
+
+#  include <windows.h>
+
+# else
+
+/* Do not include windows.h because of double definition of
+ * __timeb64; replace this by local definitions */
+
+#define CP_UTF8 65001
+typedef int             BOOL;
+typedef const wchar_t*  LPCWSTR;
+typedef wchar_t*        LPWSTR;
+typedef unsigned int    UINT;
+
+LPWSTR* __stdcall CommandLineToArgvW (LPCWSTR, int*);
+LPWSTR  __stdcall GetCommandLineW();
+UINT    __stdcall GetConsoleOutputCP (void);
+BOOL    __stdcall SetConsoleOutputCP (UINT);
+char*             win32_utf16_to_utf8 (const wchar_t*);
+
+# endif
 
 static UINT g_old_output_cp = ((UINT)-1);
 

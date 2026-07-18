@@ -50,8 +50,10 @@ The current release handles the following audio file formats:
 and if the `ffmpeg' program is installed it automatically reads:
 
 * 3GP/3GPP files
+* Audible Audiobook files
 * AAC Advanced Audio Coding files
 * AC3 Dolby Digital files
+* ACT files (G729A speech compression)
 * CRI ADX files
 * Advanced / Active Streaming Format ASF files
 * APTX Audio Processing Technology for Bluetooth files
@@ -60,6 +62,7 @@ and if the `ffmpeg' program is installed it automatically reads:
 * AVI Audio Video Interleaved files
 * DFPWM1a files
 * DTS Digital Theatre System files
+* Electronic Arts Multimedia files
 * Enhanced AC-3 Audio files
 * GXF General eXchange Format files
 * Lego Mindstorms RSO files
@@ -116,6 +119,7 @@ The audio effects/tools included in this release are as follows:
 ** repeat: Loop the audio a number of times
 ** reverb: Add reverberation
 ** reverse: Reverse the audio (to search for Satanic messages ;-)
+** saturation: Soft clipping effects from subtle warmth to crunchy fuzz
 ** tremolo: Sinusoidal volume modulation
 
 * Volume/level effects
@@ -154,6 +158,7 @@ The audio effects/tools included in this release are as follows:
 ** rate: Change audio sampling rate
 
 * Specialised filters/mixers
+** centercut: A "vocal cut" filter giving left, right and center separately
 ** deemph: ISO 908 CD de-emphasis (shelving) IIR filter
 ** dop: DSD over PCM, packing 1-bit samples into 24-bit ones
 ** earwax: Process CD audio to best effect for headphone use

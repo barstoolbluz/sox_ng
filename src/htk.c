@@ -26,7 +26,7 @@ static char const * const str[] = {
   "Sampled waveform", "Linear prediction filter", "Linear prediction",
   "LPC cepstral", "LPC cepstra plus delta", "LPC reflection coef in",
   "Mel-frequency cepstral", "Log mel-filter bank", "Linear mel-filter bank",
-  "User defined sample", "Vector quantised data", "Unknown"};
+  "User defined sample", "Vector quantized data", "Unknown"};
 
 static int start_read(sox_format_t * ft)
 {

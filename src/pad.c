@@ -61,14 +61,21 @@ static int parse(sox_effect_t * effp, char * * argv, sox_rate_t rate)
       arg = &p->pads[i].pad;
     }
     next = lsx_parsesamples(rate, str, arg, 't');
-    if (next == NULL) break;
+    if (next == NULL) {
+      lsx_fail("cannot parse length `%s'", str);
+      return SOX_EOF;
+    }
     if (*next == '\0')
       p->pads[i].start = i? in_length : 0;
     else {
+      char const *pos;
       if (*next != '@') break;
-      next = lsx_parseposition(rate, next+1, argv ? NULL : &p->pads[i].start,
+      next = lsx_parseposition(rate, (pos=next+1), argv ? NULL : &p->pads[i].start,
                last_seen, in_length, '=');
-      if (next == NULL || *next != '\0') break;
+      if (next == NULL || *next != '\0') {
+        lsx_fail("cannot parse position `%s'", pos);
+        return SOX_EOF;
+      }
       last_seen = p->pads[i].start;
       if (p->pads[i].start == SOX_UNKNOWN_LEN)
         p->pads[i].start = UINT64_MAX; /* currently the same value, but ... */
@@ -83,29 +90,29 @@ static int parse(sox_effect_t * effp, char * * argv, sox_rate_t rate)
       pad_len += p->pads[i].pad;
 
       /* Do this check only during the second pass when the actual
-         sample rate is known, otherwise it might fail on legal
+         sample rate is known, otherwise it might fail on valid
          commands like
            pad 1@0.5 1@30000s
          if the rate is, e.g., 48k. */
-      if (i > 0 && p->pads[i].start <= p->pads[i-1].start) break;
+      if (i > 0 && p->pads[i].start <= p->pads[i-1].start) {
+        lsx_fail("positions must be in ascending order");
+        return SOX_EOF;
+      }
     }
   }
-  if (i < p->npads)
-    return lsx_usage(effp);
   return SOX_SUCCESS;
 }
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_pad(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   --argc, ++argv;
   p->npads = argc;
-  p->pads = lsx_calloc(p->npads, sizeof(*p->pads));
   lsx_vcalloc(p->pads, p->npads);
   return parse(effp, argv, 1e5); /* No rate yet; parse with dummy */
 }
 
-static int start(sox_effect_t * effp)
+static int start_pad(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
@@ -140,7 +147,7 @@ static int start(sox_effect_t * effp)
   return SOX_EFF_NULL;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_pad(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -171,7 +178,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+static int drain_pad(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
   static size_t isamp = 0;
@@ -181,18 +188,18 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
         pad_align(p->pads[p->pads_pos].align, p->pads[p->pads_pos].align);
     p->in_pos = UINT64_MAX;  /* Invoke the final pad (with no given start) */
   }
-  return flow(effp, 0, obuf, &isamp, osamp);
+  return flow_pad(effp, 0, obuf, &isamp, osamp);
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_pad(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   if (p->pads_pos != p->npads)
-    lsx_warn("Input audio too short; pads not applied: %u", p->npads-p->pads_pos);
+    lsx_warn("input audio is too short; pads not applied: %u", p->npads-p->pads_pos);
   return SOX_SUCCESS;
 }
 
-static int lsx_kill(sox_effect_t * effp)
+static int kill_pad(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
@@ -206,8 +213,9 @@ sox_effect_handler_t const * lsx_pad_effect_fn(void)
 {
   static const char usage[] = "{[%]length[@position]}";
   static sox_effect_handler_t handler = {
-    "pad", usage, NULL, SOX_EFF_MCHAN|SOX_EFF_LENGTH|SOX_EFF_MODIFY,
-    create, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    "pad", usage, SOX_EFF_MCHAN|SOX_EFF_LENGTH|SOX_EFF_MODIFY,
+    create_pad, start_pad, flow_pad, drain_pad, stop_pad, kill_pad,
+    sizeof(priv_t), NULL, NULL, NULL,
   };
   return &handler;
 }

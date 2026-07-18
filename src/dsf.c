@@ -410,13 +410,16 @@ LSX_FORMAT_HANDLER(dsf)
 	static unsigned const write_encodings[] = {
 		SOX_ENCODING_DSD, 1, 0,
 		0 };
+	static sox_rate_t const write_rates[] = {
+		64*44100, 128*44100, 256*44100,
+		0 };
 	static sox_format_handler_t const handler = {
 		SOX_LIB_VERSION_CODE,
 		"Container for DSD data",
 		names, SOX_FILE_LIT_END,
 		dsf_startread, dsf_read, dsf_stopread,
 		dsf_startwrite, dsf_write, dsf_stopwrite,
-		dsf_seek, write_encodings, NULL,
+		dsf_seek, write_encodings, write_rates,
 		sizeof(struct dsf)
 	};
 	return &handler;

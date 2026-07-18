@@ -1,0 +1,23 @@
+#! /bin/sh
+
+# sox.sf.net bug 327. Compile SoX with the -fsanitize=address
+
+# sox-14.4.2, sox_ng-14.4.4, 14.5.1.1
+# AddressSanitizer: memcpy-param-overlap: memory ranges [0xb3500100,0xb350012f) and [0xb3500108, 0xb3500137) overlap
+
+# 42b355, sox_ng-14.6.0.3
+# OK
+
+# Check SoX was compiled with mp3 support
+${sox:-sox} --help-format mp3 || exit 254
+# Check SoX was compiled with mp3 decoding support
+${sox:-sox} --help-format mp3 | grep -q "Reads: yes" || exit 254
+
+rm -f core core.*
+
+${sox:-sox} sox_memcpy_param_overlap_large.mp3 -t aiff /dev/null channels 1 rate 16k fade 3 norm
+status=$?
+
+rm -f core core.*
+
+exit $status

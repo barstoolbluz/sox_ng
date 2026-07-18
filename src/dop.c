@@ -155,10 +155,10 @@ static int dop_stop(sox_effect_t *eff)
 const sox_effect_handler_t *lsx_dop_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "dop", NULL, NULL,
+    "dop", NULL,
     SOX_EFF_MCHAN | SOX_EFF_PREC | SOX_EFF_RATE,
     NULL, dop_start, dop_flow, dop_drain, dop_stop, NULL,
-    sizeof(dop_t),
+    sizeof(dop_t), NULL, NULL, NULL,
   };
   return &handler;
 }

@@ -24,7 +24,7 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
 {
   sample_t const * input = stage_read_p(p);
   int i, num_in = stage_occupancy(p), max_num_out = 1 + num_in*p->out_in_ratio;
-  sample_t * output = fifo_reserve(output_fifo, max_num_out);
+  sample_t * output = lsx_fifo_reserve(output_fifo, max_num_out);
   div_t divided2;
 
   for (i = 0; p->at.parts.integer < num_in * p->L; ++i, p->at.parts.integer += p->step.parts.integer) {
@@ -35,10 +35,10 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
     CONVOLVE
     output[i] = sum;
   }
-  assert(max_num_out - i >= 0);
-  fifo_trim_by(output_fifo, max_num_out - i);
+  if (!(max_num_out - i >= 0)) lsx_warn("Assertion `max_num_out - i >= 0' failed. Carrying on anyway...");
+  lsx_fifo_trim_by(output_fifo, max_num_out - i);
   divided2 = div(p->at.parts.integer, p->L);
-  fifo_read(&p->fifo, divided2.quot, NULL);
+  lsx_fifo_read(&p->fifo, divided2.quot, NULL);
   p->at.parts.integer = divided2.rem;
 }
 

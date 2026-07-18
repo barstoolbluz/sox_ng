@@ -38,8 +38,10 @@ typedef struct {
   else { \
     SEP = (SEPARATORS)[strlen(SEPARATORS) - 1]; \
     n = sscanf(text, SCAN"%c", &VAR, &SEP); \
-    if (n == 0 || VAR < MIN || (n == 2 && !strchr(SEPARATORS, SEP))) \
-      return lsx_usage(effp); \
+    if (n == 0 || VAR < MIN || (n == 2 && !strchr(SEPARATORS, SEP))) { \
+      lsx_fail("cannot parse `%s'", text); \
+      return SOX_EOF; \
+    } \
     text = end? end + 1 : text + strlen(text); \
   } \
 } while (0)
@@ -64,12 +66,21 @@ static int parse(sox_effect_t * effp, char * * argv, unsigned channels)
 
       PARSE(sep1, "%i", chan1, 0, separators);
       if (!chan1) {
-       if (j || *text)
-         return lsx_usage(effp);
+       if (j || *text) {
+         /* in-spec 1,0 (j!=0) or 0-something (*text) */
+         lsx_fail("the silent channel 0 cannot be part of a range");
+         return SOX_EOF;
+       }
        continue;
       }
-      if (sep1 == '-')
+      if (sep1 == '-') {
         PARSE(sep1, "%i", chan2, 0, separators + 1);
+        if (!chan2) {
+          /* in-spec 1-0 */
+          lsx_fail("the silent channel 0 cannot be part of a range");
+          return SOX_EOF;
+        }
+      }
       else chan2 = chan1;
       if (sep1 != ',') {
         multiplier = sep1 == 'v' ? 1 : 0;
@@ -109,7 +120,7 @@ static int show(priv_t *p)
   return SOX_SUCCESS;
 }
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_remix(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   --argc, ++argv;
@@ -125,7 +136,7 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   return parse(effp, argv, 1); /* No channels yet; parse with dummy */
 }
 
-static int start(sox_effect_t * effp)
+static int start_remix(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   double max_sum = 0;
@@ -157,7 +168,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_remix(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -175,7 +186,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
   return SOX_SUCCESS;
 }
 
-static int closedown(sox_effect_t * effp)
+static int kill_remix(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
@@ -192,34 +203,41 @@ sox_effect_handler_t const * lsx_remix_effect_fn(void)
   static char const usage[] =
     "[-a|-m] [-p] <0|in-chan[(v|p|i)[volume]]{,in-chan[(v|p|i)[volume]]}>";
   static char const * const extra_usage[] = {
-    "-a  automatically adjust channel levels",
-    "-m  disable all automatic level adjustments",
-    "-p  use power (1/sqrt(n)) scaling",
-    "0   a silent channel",
-    "p   power adjustment in dB (0 is no change)",
-    "i   power adjustment in dB, inverted",
-    "v   voltage multiplier (1 is no change)",
+    "-a  Automatically adjust channel levels",
+    "-m  Disable all automatic level adjustments",
+    "-p  Use power (1/sqrt(n)) scaling",
+    "0   A silent channel",
+    "p   Power adjustment in dB (0 is no change)",
+    "i   Power adjustment in dB, inverted",
+    "v   Voltage multiplier (1 is no change)",
     NULL
   };
   static sox_effect_handler_t handler = {
-    "remix", usage, extra_usage,
+    "remix", usage,
     SOX_EFF_MCHAN | SOX_EFF_CHAN | SOX_EFF_GAIN | SOX_EFF_PREC,
-    create, start, flow, NULL, NULL, closedown, sizeof(priv_t)
+    create_remix, start_remix, flow_remix, NULL, NULL, kill_remix,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
   return &handler;
 }
 
 /*----------------------- The `channels' effect alias ------------------------*/
 
-static int channels_create(sox_effect_t * effp, int argc, char * * argv)
+static int create_channels(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   char dummy;     /* To check for extraneous chars. */
 
   if (argc == 2) {
-    if (sscanf(argv[1], "%d %c", (int *)&p->num_out_channels,
-          &dummy) != 1 || (int)p->num_out_channels <= 0)
-      return lsx_usage(effp);
+    if (sscanf(argv[1], "%d %c", (int *)&p->num_out_channels, &dummy) != 1) {
+      lsx_fail("invalid number of channels `%s'", argv[1]);
+      return SOX_EOF;
+    }
+    if ((int)p->num_out_channels <= 0) {
+      lsx_fail("number of channels must be 1 or more");
+      return SOX_EOF;
+    }
+
     effp->out_signal.channels = p->num_out_channels;
   }
   else if (argc != 1)
@@ -227,7 +245,7 @@ static int channels_create(sox_effect_t * effp, int argc, char * * argv)
   return SOX_SUCCESS;
 }
 
-static int channels_start(sox_effect_t * effp)
+static int start_channels(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned num_out_channels = p->num_out_channels != 0 ?
@@ -271,8 +289,8 @@ sox_effect_handler_t const * lsx_channels_effect_fn(void)
   handler.usage = "number";
   handler.extra_usage = NULL;
   handler.flags &= ~SOX_EFF_GAIN;
-  handler.getopts = channels_create;
-  handler.start = channels_start;
+  handler.getopts = create_channels;
+  handler.start = start_channels;
   return &handler;
 }
 
@@ -282,7 +300,7 @@ static int oops_getopts(sox_effect_t *effp, int argc, char **argv)
 {
   char *args[] = {0, "1,2i", "1,2i"};
   args[0] = argv[0];
-  return --argc? lsx_usage(effp) : create(effp, 3, args);
+  return --argc? lsx_usage(effp) : create_remix(effp, 3, args);
 }
 
 sox_effect_handler_t const * lsx_oops_effect_fn(void)

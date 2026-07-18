@@ -1,0 +1,257 @@
+'\" t
+'\" The line above instructs most `man' programs to invoke tbl
+'\"
+'\" Separate paragraphs; not the same as PP which resets indent level.
+.de SP
+.if t .sp .5
+.if n .sp
+..
+'\"
+'\" Replacement em-dash for nroff (default is too short).
+.ie n .ds m " -
+.el .ds m \(em
+'\"
+'\" Placeholder macro for if longer nroff arrow is needed.
+.ds RA \(->
+'\"
+'\" Decimal point set slightly raised
+.if t .ds d \v'-.15m'.\v'+.15m'
+.if n .ds d .
+'\"
+'\" Enclosure macro for examples
+'\" From groff-1.23 CW is undeclared by default but nroff is CW anyway
+.if n .ftr CW R
+.de XE
+.SP
+.nf
+.ft CW
+..
+.de XX
+.ft R
+.SP
+.fi
+..
+.TH LIBSOXEFFECT_NG 3 "January 5, 2026" "SoX" "Sound eXchange_ng"
+.SH NAME
+libsoxeffect_ng \- SoX effect handlers' internals
+.SH SYNOPSIS
+.XE
+#include "sox_i.h"
+
+typedef struct {
+    ...
+} priv_t;
+
+static int getopts(sox_effect_r * effp, int argc, char **argv);
+static int start(sox_effect_r * effp);
+static int flow(sox_effect_t * effp, sox_sample_t * ibuf,
+                sox_sample_t * obuf, size_t * isamp, size_t * osamp);
+static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp);
+static int stop(sox_effect_t * effp);
+static int kill(sox_effect_t * effp);
+static char *get(sox_effect_t * effp, char *name);
+static char *set(sox_effect_t * effp, char *name, char *value);
+
+sox_effect_handler_t * effect(void)
+{
+  static char const usage[] = "[options]";
+  static char const * const extra_usage = {
+    "...",
+    NULL
+  };
+  int const flags = 0;
+  static sox_effect_handler_t handler = {
+    "effect", usage, extra_usage, flags,
+    getopt, start, flow, drain, stop, kill,
+    sizeof(priv_t), get, set
+  }
+  return &handler;
+}
+.XX
+.SH DESCRIPTION
+How SoX effects work internally and how to write a new one.
+.P
+SoX's formats and effects operate with an internal sample format of
+signed 32-bit integers. The data processing routines are called with
+buffers of these samples and buffer sizes which refer to the number
+of samples processed. File readers translate
+input samples to signed 32-bit integers and return the number of
+samples read. For example, data in linear signed byte format is
+left-shifted 24 bits.
+.P
+For effects that handle multiple channels simultaneously
+(see \fBSOX_EFF_MCHAN\fR), stereo data is stored with the
+left and right channels' data in successive samples and
+quadraphonic data is stored left front, right front, left rear, right rear
+and the number of samples that are available or have been processed is
+a count of mono samples, not of multichannel sample frames.
+.P
+Each effect runs with one input and one output stream and its
+implementation comprises six principal functions that are called
+according to the following pseudocode:
+.XE
+   LOOP (invocations with different parameters)
+     getopts
+     LOOP (invocations with the same parameters)
+       LOOP (channels)
+         start
+       LOOP (while there is input audio to process)
+         LOOP (channels)
+           flow
+       LOOP (while there is output audio to generate)
+         LOOP (channels)
+           drain
+       LOOP (channels)
+         stop
+     kill
+.XX
+Any function that an effect does not need can be NULL and
+any missing methods are automatically set to the appropriate
+\fBnothing\fR method.
+.TP
+.B getopts
+is called once when the effect is created, with an argv-like array
+of string arguments where
+\fBargv[0]\fR is the effect's name and \fBargv[1]\fR onward contain
+the effect's options as strings, the same as on the SoX command line,
+except for \fRinput\fR and \fRoutput\fR where \fBargv[1]\fR is a pointer
+to the \fBsox_format_t\fR they should read or write.
+.TP
+.B start
+is called with the signal parameters for the input and output
+streams.
+.TP
+.B flow
+is called with input and output data buffers,
+and (by reference) the input and output data buffer sizes.
+It processes the input buffer into the output buffer,
+and sets the size variables to the numbers of samples
+actually processed: the number read and the number written.
+It is under no obligation to read from the input buffer or
+write to the output buffer during the same call.
+If the call returns \fBSOX_SUCCESS\fR it will we calle again;
+if it returns \fBSOX_EOF\fR, this means that the effect will
+not read any more data and can be switched to drain mode.
+.TP
+.B drain
+is called when there are no more input data samples.
+If the effect wishes to generate more data samples,
+it copies the generated data into the given buffer
+and writes the number of samples generated into \fB*osamp\fR.
+If it returns \fBSOX_SUCCESS\fR, it will be called again;
+\fBSOX_EOF\fR means it has no more samples to write.
+.TP
+.B stop
+is called when there are no more input samples and no more output
+samples to process.
+It is typically used to close or free resources such as
+memory and temporary files that were allocated during
+.IR start .
+.TP
+.B kill
+is called to allow resources allocated by
+.I getopts
+to be released.
+.TP
+.B get
+is used by the \fBkeymap\fR mechanism to read the value of one of the
+effect's parameters from its \fBpriv_t\fR, returned as a string
+formatted with \fBsprintf\fR in \f(CW"%g"\fR format
+in mallocked memory that it is the caller's responsibility to free,
+or NULL if there is no such readable parameter.
+.TP
+.B set
+is used to set a parameter's value. The \fIname\fR of the parameter
+should match what it is called in the effect's \fBusage\fR string
+but with underscores instead of hyphens. and numerical values
+are passed as numeric strings (\fBsprintf(3)\fR's \f(CW%g\fR format
+is recommended).
+.SP
+It returns a mallocked string version of the value that was actually set
+and which it is the caller's rsponsibility to free.
+The return values are sprintfed with \f(CW"%g"\fR so, if the caller does
+the same it can \fBstrcmp()\fR the strings to see it it was set to the
+requested value or something different, which happens if the specified value
+is outside the parameter's range, in which case the maximum or minimum is set.
+It returns NULL is there is not a settable field of that name
+or if the value is garbage.
+.PP
+Effects that can have multiple stages, like \fBecho\fR and \fBchorus\fR,
+accept field names like \fBdecay2\fR to adjust only the \fBdecay\fR of
+the second stage; otherwise the parameter is changed in all of its stages.
+.SH FLAGS
+The \fBflags\fR field tell SoX more about how the effect behaves.
+It is the logical OR of a number of bits:
+.TP
+.B SOX_EFF_CHAN
+The effect might alter the number of channels.
+.TP
+.B SOX_EFF_RATE
+The effect might alter the sample rate.
+.TP
+.B SOX_EFF_PREC
+The effect does its own calculation of output sample precision; otherwise
+a default value is taken, depending on the presence of SOX_EFF_MODIFY.
+.TP
+.B SOX_EFF_LENGTH
+The effect might alter the length of the audio
+as measured in time units, not necessarily in samples.
+.TP
+.B SOX_EFF_MCHAN
+If \fBSOX_EFF_MCHAN\fR is not included in an effect's \fBflags\fR,
+the middle four functions are called once per channel with mono data,
+the channels may be processed in parallel, each channel has its own copy
+of the \fRpriv_t\fB that was filled in by \fBstart\fR and
+\fBeffp->flow\fR tells them which channel they are working on
+(0 and 1 in the case of stereo).
+.SP
+If \fBSOX_EFF_MCHAN\fR is included, the effect does not use the LOOP (channels)
+lines and its \fBstart\fR, \fBflow\fR, \fBdrain\fR and \fBstop\fR functions
+are called once to process multichannel data with the samples interleaved,
+there is only one copy of its \fBpriv_t\fR and \fBeffp->flow\fR is always zero.
+.TP
+.B SOX_EFF_NULL
+The effect does nothing.
+The \fBstart\fR function can return this value to say it can be
+optimized out of the chain.
+This is done, for example, by \fBvol\ 1\fR and \fRtrim 0\fB.
+.TP
+.B SOX_EFF_GAIN
+The effect does not support the \fBgain\ \-h\fR ... \fBgain\ \-r\fR mechanism
+whereby \fBgain\ \-h\fR automatically provides headroom for effects between
+itself and the \fBgain\ \-r\fR or the end of the effects chain.
+.SP
+This works through the \fBmult\fR field of \fBsox_effect_t\fR which is
+set to point to the volume adjustment of the \fBgain\ \-h\fR effect and is
+copied forwards from each effect to the next so that the \fBgain\ \-r\fR
+can 
+.SP
+Effects that know the maximum gain they could apply, at the end of their
+\fBstart\fR function, divide \fB*effp->in_signal.mult\fR by whatever
+their linear amplification is or if, for example, they know that their
+maximum output has half the amplitude of their maximum input,
+they multiply it by two. If there is no previous \fBgain\ \-h\fR in the
+effects chain, \fBmult\fR is NULL.
+.SP
+Effects that do not affect the maximum signal amplitude do not include
+\fBSOX_EFF_GAIN\fR in their flags and need do nothing else; the pointer
+to \fBgain\ \-h\fR's volume adjustment is copied forwards in the chain for them.
+.SP
+Confusingly, \fBSOX_EFF_GAIN\fR means "I \fIdon't\fR support what \fB\-h\fR and \fB\-r\fR
+need because I don't know how much I might change the maximum amplitude by
+and I neither copy the pointer forwards nor modify what it points to";
+such an effect breaks the link between \fBgain\ \-h\fR and \fBgain\ \-r\fR
+and a warning will be issued to advise of this.
+.TP
+.B SOX_EFF_MODIFY
+The effect does not modify sample values but might remove or duplicate
+samples or insert zeros.
+.TP
+.B SOX_EFF_INTERNAL
+The effect is present in libSoX but is not valid for use by
+the SoX command-line tools. It applies to \fBinput\fR and \fBoutput\fR.
+.SH SEE ALSO
+.BR sox_ng (1),
+.BR libsox_ng (3),
+.BR soxeffect_ng (7) and
+\f(CWsrc/skeleff.c\fR in the SoX source code.

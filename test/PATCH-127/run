@@ -8,7 +8,7 @@
 
 # 42b355
 
-rm -f core out.*
+rm -f core core.* out.*
 
 ${sox:-sox} crash-fpe-voc out.wav
 status=$?
@@ -18,6 +18,6 @@ then
     status=1
 fi
 
-rm -f core out.*
+rm -f core core.* out.*
 
 exit $status

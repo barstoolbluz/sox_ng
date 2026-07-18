@@ -12,12 +12,12 @@
 #
 # Debian's 14.4.2 still has Eric Wong's patch for this, "wavpack check errors".
 
-rm -f core out.*
+rm -f core core.* out.*
 
 ${sox:-sox} poc out.wav bass +3
 status=$?
 
-rm -f core out.*
+rm -f core core.* out.*
 
 case "$status" in
 0) status=255;;

@@ -19,6 +19,8 @@
 .if n .ds d .
 '\"
 '\" Enclosure macro for examples
+'\" From groff-1.23 CW is undeclared by default but nroff is CW anyway
+.if n .ftr CW R
 .de XE
 .SP
 .nf
@@ -29,9 +31,9 @@
 .SP
 .fi
 ..
-.TH SoX 7 "November 28, 2024" "soxformat_ng" "Sound eXchange_ng"
+.TH SOXFORMAT_NG 7 "November 28, 2024" "SoX" "Sound eXchange_ng"
 .SH NAME
-SoX \- Sound eXchange_ng, another Swiss Army knife of audio manipulation
+soxformat_ng \- Audio file formats supported by sox_ng and libsox_ng
 .SH DESCRIPTION
 This manual describes the file formats and audio device types supported by SoX;
 the SoX manual set starts with
@@ -49,7 +51,7 @@ the external program \fBffmpeg\fR are marked `(with ffmpeg)'
 .SP
 Formats for which SoX has internal drivers but that are also supported
 by \fBsndfile\fR or \fBffmpeg\fR are marked
-(also with \fB-t sndfile\fR) or (also with \fB-t ffmpeg\fR).
+(also with \fB\-t\ sndfile\fR) or (also with \fB\-t\ ffmpeg\fR).
 This might be
 useful if you have a file that doesn't work with SoX's built-in
 readers and writers.
@@ -58,9 +60,15 @@ To see if SoX has support for an optional format or device, enter
 .B sox_ng \-h
 and look for its name under
 `AUDIO FILE FORMATS' or `AUDIO DEVICE DRIVERS'.
-.SS FORMATS & DEVICE DRIVERS
+.SP
+To know everything about a format \- whether it reads it or writes it or both
+and what encodings it can write \- enter something like
+.B \-\-help\-format wav
+or, to see details for all formats,
+.BR \-\-help\-format\ all .
+.SH FORMATS & DEVICE DRIVERS
 .TP
-\fB.raw\fR (also with \fB\-t sndfile\fR), \
+\fB.raw\fR (also with \fB\-t\ sndfile\fR), \
 \fB.f32\fR, \fB.f64\fR, \
 \fB.s8\fR, \fB.s16\fR, \fB.s24\fR, \fB.s32\fR, \
 \fB.u8\fR, \fB.u16\fR, \fB.u24\fR, \fB.u32\fR, \
@@ -108,8 +116,14 @@ Third Generation Partnership Project format.
 \fB.3g2\fR, \fB.3gp2\fR, \fB.3gpp2\fR (with ffmpeg)
 Third Generation Partnership Project 2 format.
 .TP
-\fB.8svx\fR (also with \fB\-t sndfile\fR)
+\fB.8svx\fR (also with \fB\-t\ sndfile\fR)
 Amiga 8SVX musical instrument description format.
+.TP
+\fB.aa\fR (with ffmpeg)
+Audible Audiobook format.
+.SP
+SoX can autodetect this format but, if it's coming from a pipe,
+\fBffmpeg\fR fails to decode it.
 .TP
 \fB.aac\fR (with ffmpeg)
 Advanced Audio Coding format.
@@ -117,10 +131,13 @@ Advanced Audio Coding format.
 \fB.ac3\fR (with ffmpeg)
 Audio Codec 3 (Dolby Digital) format.
 .TP
+\fB.act\fR (with ffmpeg)
+G729a compressed speech recorded by some Chinese-made MP3 players.
+.TP
 \fB.adts\fR (with ffmpeg)
 Audio Data Transport Stream format.
 .TP
-\fB.aiff\fR, \fB.aif\fR (also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fR)
+\fB.aiff\fR, \fB.aif\fR (also with \fB\-t\ sndfile\fR or \fB\-t\ ffmpeg\fR)
 AIFF files as used on old Apple Macs, Apple IIc/IIgs and SGI.
 SoX's AIFF support does not include multiple audio chunks
 nor the 8SVX musical instrument description format.
@@ -129,7 +146,7 @@ can have multiple audio and picture chunks;
 you may need a separate archiver to work with them.
 On MacOS X, AIFF has been superseded by CAF.
 .TP
-\fB.aiffc\fR, \fB.aifc\fR (also with \fB\-t sndfile\fR)
+\fB.aiffc\fR, \fB.aifc\fR (also with \fB\-t\ sndfile\fR)
 AIFF-C is based on AIFF but also handles compressed audio.
 It can also handle little-endian uncompressed linear data
 that is often referred to as
@@ -168,7 +185,7 @@ See http://www.ambisonia.com/Members/mleese/file-format-for-b-format for
 details.  It is up to you to get the channels together in the right
 order and at the correct amplitude.
 .TP
-\fB.amr\-nb\fR, \fB.amr\-wb\fR (both optional)
+\fB.amr\-nb\fR, \fB.amr\-wb\fR (both optional, also with \fB\-t\ ffmpeg\fR)
 Adaptive Multi Rate Narrow and Wide Band are lossy formats for speech
 used in 3rd generation mobile telephony and defined in 3GPP TS\ 26.071
 and TS\ 26.171
@@ -204,7 +221,8 @@ configured directly; instead, libao configuration files must be used.
 The filename is used to determine which libao plugin to
 use and normally, you should specify `default'.  If that
 doesn't give the desired behavior, you can specify the short name
-for a given plugin (such as \fBpulse\fR for the PulseAudio plugin).
+for a given plugin (such as \fBpulse\fR for the PulseAudio plugin
+or \fBnull\fR for testing. See http://xiph.org/ao).
 Examples:
 .XE
 	sox_ng infile \-t ao
@@ -234,7 +252,7 @@ Advanced / Active Streaming Format.
 \fB.ast\fR (with ffmpeg)
 AST Audio Stream format.
 .TP
-\fB.au\fR, \fB.snd\fR (also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fR)
+\fB.au\fR, \fB.snd\fR (also with \fB\-t\ sndfile\fR or \fB\-t\ ffmpeg\fR)
 Sun Microsystems AU files.
 There are many types of AU file;
 DEC has invented its own with a different magic number
@@ -260,32 +278,44 @@ options, in which case SoX will issue a warning about the mismatch.
 \fB.avi\fR (with ffmpeg)
 Audio Video Interleaved format.
 .TP
-.B .avr
+\fB.avr\fR (also with \fB\-t\ ffmpeg\fR or \fB\-t\ sndfile\fR)
 Audio Visual Research format,
 used by a number of commercial packages on the Mac.
 .TP
-\fB.caf\fR (with sndfile, also with \fB\-t ffmpeg\fR)
+\fB.caf\fR (with sndfile, also with \fB\-t\ ffmpeg\fR)
 Apple's Core Audio File format.
 .TP
-\fB.cdda\fR, \fB.cdr\fR
+\fB.cdda\fR, \fB.cda\fR, \fB.cdr\fR
 `Red Book' Compact Disc Digital Audio (raw audio).  CDDA has two audio
 channels formatted as 16-bit big-endian signed integers at a sample
 rate of 44\*d1\ kHz.  The number of stereo samples in each CDDA
 track is always a multiple of 588.
+.SP
+By default, SoX expects and produces CDDA in big-endian format.
+However, the endianess of CDDA files can vary depending on the tools
+and hardware used.
+To produce and to read little-endian CDDA files, predece the filename
+with the \fB\-L\fP option.
 .TP
 \fBcoreaudio\fR (optional)
 The MacOS X CoreAudio device driver supports both playing and recording.
-If a filename is not specific or if the name is "default",
-the default audio device is selected.  Any other name will be used
-to select a specific device.  The valid names can be seen in the
-System Preferences->Sound menu and then under the Output and Input tabs.
+If a filename is not specified or is "default",
+the default audio device is selected.
+Any other name will be used to select a specific device.
 .SP
 Examples:
 .XE
-	sox_ng infile \-t coreaudio
-	sox_ng infile \-t coreaudio default
-	sox_ng infile \-t coreaudio "Internal Speakers"
+    sox_ng infile \-t coreaudio
+    sox_ng infile \-t coreaudio "Internal Speakers"
 .XX
+You can also select a device by its number; to see the device numbers:
+.XE
+    sox_ng \-V \-n \-t coreaudio nonexistent
+.XX
+It is reported that SoX's \fBcoreaudio\fR code gets the number
+of channels wrong if the audio device has more that eight inputs
+but attempts to fix this are waiting for someone able to test
+alternative code variants.
 .TP
 \fB.cvsd\fR, \fB.cvs\fR
 Continuously Variable Slope Delta modulation is a headerless format 
@@ -316,7 +346,7 @@ for each channel.
 .SP
 Values are normalized so the maximum and minimum are 1 and \-1.
 This file format can be used to create data files for external programs
-such as FFT analysers or graph routines.  SoX can also convert
+such as FFT analyzers or graph routines.  SoX can also convert
 a file in this format back into one of the other formats.
 .SP
 Example containing only 2 stereo samples of silence:
@@ -329,7 +359,7 @@ Example containing only 2 stereo samples of silence:
 .XX
 .TP
 \fB.dfpwm\fR (with ffmpeg)
-DFPWM1a format.
+Dynamic Filter Pulse Width Modulation format 1a.
 .SP
 SoX can only autodetect this type of file from its filename extension;
 if it is read from `standard input' (stdin) or from a file whose name
@@ -346,16 +376,26 @@ does not end in `.dts', you will need to prefix it with `\fB-t\ ffmpeg\fR'.
 Direct Stream Digital Interchange File Format (DSDIFF) is a format
 defined by Philips for storing 1-bit DSD data, used in SACD mastering
 and occasionally for online distribution.
+SoX can write single-, double- and quad-sample rates of
+64, 128 and 256 times 44100Hz (2822400, 5644800 and 11289600Hz),
+known as DSD64, DSD128 and DSD256,
+but not the octuple- and sexdecuple- variants (DSD512 and DSD1024).
 .TP
 \fB.dsf\fR, \fB.wsd\fR
-DSD Stream File is a format defined by Sony for storing 1-bit DSD data,
-commonly used for online distribution of audiophile recordings.
+DSD Stream File and Wideband Single-bit Data are formats defined by Sony
+and by Sharp and Pioneer for storing 1-bit DSD data,
+commonly used for online distribution of audiophile recordings,
+supporting the same sample rates as \fBdff\fP.
+The \fBwsd\fR variant can be read but not written.
 .TP
 \fB.dvms\fR, \fB.vms\fR
 The Digital Voice Messaging System format is used in Germany
 to compress speech audio for voice mail.
 It is a self-describing variant of
 .BR cvsd .
+.TP
+\fB.ea\fR (with ffmpeg)
+Electronic Arts Multimedia format.
 .TP
 \fB.eac3\fR (with ffmpeg)
 Enhanced AC-3 Audio.
@@ -371,12 +411,12 @@ See
 \fBffmpeg\fR (optional)
 This is a pseudo-type that uses the external program \fBffmpeg\fP
 if it is installed. It can only read files, not write them,
-and wil extract the sound track from many video file formats.
+and will extract the sound track from many video file formats.
 \fBffmpeg\fR deduces the actual file type from the file's contents
 with a far more advanced algorithm than that used by SoX,
 which only recognizes up to two fixed byte sequences at fixed offsets.
 .TP
-\fB.flac\fR (optional; also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fB)
+\fB.flac\fR (optional; also with \fB\-t\ sndfile\fR or \fB\-t\ ffmpeg\fB)
 Xiph.org's Free Lossless Audio Codec compressed audio.
 FLAC is an open, patent-free codec designed for compressing
 music.  It is similar to MP3 and Ogg Vorbis but lossless,
@@ -417,23 +457,28 @@ writing only A-Law and \(*m-law.  E.g.
    play ring.bin
 .XX
 .TP
-\fB.gsm\fR (optional; also with \fB\-t sndfile\fR)
+\fB.gsm\fR (optional; also with \fB\-t\ sndfile\fR or \fB\-t\ ffmpeg\fR))
 GSM 06.10 Lossy Speech Compression.
-A lossy format for compressing speech which is used in the
-Global Standard for Mobile telecommunications (GSM).  It's good
-for its purpose, shrinking audio data size, but it will introduce
-lots of noise when an audio signal is encoded and decoded
-multiple times.  This format is used by some voice mail applications
-and is rather CPU intensive.
+A lossy format for compressing speech, used in the
+Global Standard for Mobile telecommunications (GSM) and in
+some voice mail applications, with a fixed sample rate of 8kHz.
+.SP
+Although SoX can create \fBgsm\fR files with up to sixteen channels,
+it is a headerless format so input is assumed to be mono unless
+it is told otherwise.
 .TP
 \fB.gxf\fR (with ffmpeg)
 General eXchange Format.
 .TP
-.B .hcom
+\fB.hcom\fR (also with \fB\-t ffmpeg\fR)
 Macintosh HCOM files.
 These are Mac FSSD files with Huffman compression.
 .TP
-.B .htk (alsp with \fB\-t sndfile\fR)
+\fB.hip\fR
+The \fB\-t\ hip\fR format forces decoding of MP3 to use \fBmp3lame\fR's
+decoder based on mpglib by Michael Hipp.
+.TP
+\fB.htk\fR (also with \fB\-t sndfile\fR)
 Single channel 16-bit PCM format used by HTK,
 a toolkit for building Hidden Markov Model speech processing tools.
 .TP
@@ -480,7 +525,7 @@ See [1] for details of this format.
 .B .maud
 An IFF-conforming audio file type registered by
 MS MacroSystem Computer GmbH and published along
-with the `Toccata' sound-card on the Amiga
+with the `Toccata' sound card on the Amiga
 allows 8bit linear, 16bit linear, A-Law and \(*m-law
 in mono and stereo.
 .TP
@@ -494,20 +539,86 @@ Matroska video format.
 \fB.mlp\fR (with ffmpeg)
 Meridian Lossless Packing format.
 .TP
+\fB.mod\fR
+Amiga Module format, typically created with Protracker, decoding only.
+.TP
 \fB.mov\fR (with ffmpeg)
 MPEG-1 Systems / MPEG program stream format.
 .TP
-\fB.mp3\fR, \fB.mp2\fR (optional, also with \-t sndfile\fR or \fB\-t ffmpeg\fR)
-MP2 and MP3 compressed audio (MPEG 1 Layers 2 and 3) are part of the
+\fB.mp1\fR, \fB.m1a\fR, \fB.mp2\fR, \fB.mp3\fR (optional, also with \fB-t\ sndfile\fR, \fB\-t\ ffmpeg\fR or \fB\-t\ hip)
+MP1, MP2 and MP3 compressed audio (MPEG 1 Layers 1, 2 and 3) are part of the
 MPEG standards for audio and video compression whose patents have expired.
-It is a lossy compression format that achieves good compression rates
+They are lossy compression formats that achieve good compression rates
 with little quality loss.
 .SP
-When reading MP3 files, up to 28 bits of precision is stored although
-only 16 bits are returned. This is to give the default behavior
-of writing 16-bit output files but you can specify a higher precision
-for the output file to prevent loss of this extra information.  MP3
-output files use up to 24 bits of precision while encoding.
+.B Decoding
+.SP
+\fBlibmad\fR, which SoX uses to decode MPEG files, does not work on files
+with a bit-rate higher than 192K but you can read those using:
+.RS
+.TP
+\fB\-t\ sndfile\fR
+which uses libmpg123, generally gives better quality results,
+is better at decoding damaged or corrupt files and is twice as fast
+as \fBlibmad\fR if you have an FPU;
+.TP
+\fB\-t\ ffmpeg\fR
+which uses yet another decoder, the one in \fBlibavcodec\fR;
+.TP
+\fB\-t\ hip\fR
+which uses LAME's internal libmpg
+but the LAME program is able to decode more MPEG files
+than \fB\-t\ hip\fR as it decodes the file header itself
+before calling the hip decoder, whereas SoX makes the decoder
+do all the work.
+.RE
+.\" Without .RE/.RS here, the rest of the section is hard-left indented.
+.\" No idea why.
+.RS
+.SP
+Yet more ways to decode MPEG files are input filenames like:
+.XE
+   '|madplay -q --no-tty-control -o wav:- in.mp3'
+   '|mpg123 -q --no-control --wav - in.mp3'
+   '|lame --quiet --decode in.mp3 -'
+   '|ffmpeg -loglevel quiet -nostdin -i in.mp3 -'
+.XX
+As these piped commands cannot rewind their output pipe to fix the file length
+in the header, you may prefer to add \fB--ignore-length\fR before them,
+which makes SoX warn "premature EOF on input file" but keeps reading to the end.
+.SP
+The decoding speeds of the default libmad, \fB\-t\ hip\fP and \fB\-t\ sndfile\fP
+are in proportions 1:2:2.5 with an FPU.
+Without one, libmad will be the fastest instead of the slowest.
+.SP
+With \fBmad\fR or \fBsndfile\fR, SoX decodes MPEG files with a precision of
+28 bits but it declares a precision of 16 bits so that decoding MP3s to WAVs
+gives the CD quality that most people expect. You can specify
+a higher precision before the output filename to keep this extra information.
+.SP
+.B Encoding
+.SP
+SoX can only read MP1 files, not write them.
+.SP
+SoX uses \fBtwolame\fR to write MP2 files, and the target bit rate is set
+using the \fB\-C\fR option in kbps:
+32, 48, 56, 64, 80, 96, 112, 128, 160 or 192 for a constant bit rate (CBR)
+for mono files and double those for stereo ones.
+Variable bit rate encoding (VBR) is selected by values from \(mi50 to \50
+(of which only \(mi10 to 10 are said to be useful); if you really want
+VBR at qualities 32 or 48, use something like 32.01 or 48.01.
+.SP
+Unfortunately, \fBtwolame\fR outputs 0.005 seconds of quiet garbage
+at the start and truncates the end by 0.002 seconds.
+.SP
+It can also encode MP2s with \fB\-t\ sndfile\fR, which also uses
+\fBtwolame\fR and has the same defect.
+.SP
+SoX uses libmp3lame to write MP3 files and can use up to
+25 bits of precision but, at present, SoX's use of libmp3lame
+adds 0.01 seconds of quiet garbage
+at the start and at the end;
+encoding with \fB\-t\ sndfile\fR gets the length right and no garbage.
 .SP
 MP3 compression parameters can be selected using SoX's \fB\-C\fR option
 as follows:
@@ -526,7 +637,7 @@ Because the \fB\-C\fR value is a float, the fractional part is used
 to select quality. 128.2 selects 128 kbps encoding with a quality
 of 2. There is one problem with this approach. We need 128 to specify
 128 kbps encoding with default quality, so 0 means use default. Instead
-of 0 you have to use .01 (or .99) to specify the highest quality
+of 0 you have to use .01 (or .99) to specify the highest or lowest quality
 (128.01 or 128.99).
 .SP
 LAME uses bitrate to specify a constant bitrate but higher quality
@@ -536,22 +647,19 @@ quality, larger files and 9 for smaller files of lower quality. 4 is
 the default.
 .SP
 In order to squeeze the selection of VBR into the the \fB\-C\fR value
-float we use negative numbers to select VBR. -4.2 would select default
+we use negative numbers to select VBR. -4.2 would select default
 VBR encoding (size) with high quality (speed). One special case is 0,
 which is a valid VBR encoding parameter but not a valid bitrate.
 Compression value of 0 is always treated as a high quality VBR, as a
 result both -0.2 and 0.2 are treated as highest quality VBR (size) and
 high quality (speed).
 .SP
-SoX does not use twolame's VBR encoding yet, only CBR.
-.SP
-SoX can only autodetect mp2 files from their filename extension;
-if they are read from `standard input' (stdin) or from a file whose name
-does not end in `.mp2', you will need to prefix them with `-t mp2'.
-.SP
 See
 .B Ogg Vorbis
-for a similar format.
+and
+.B opus
+for similar formats that achieve higher signal quality with less bandwidth.
+.RE
 .TP
 \fB.mp4\fR (with ffmpeg)
 MPEG-4 video format.
@@ -562,10 +670,13 @@ MPEG-1 Systems / MPEG program stream format.
 \fB.mpegts\fR (with ffmpeg)
 MPEG-TS (MPEG-2 Transport Stream) format.
 .TP
+\fB.mul\fR
+Tomb Raider Multiplex Stream (write-only support).
+.TP
 \fB.mxf\fR, \fB.mxf_opatom\fR (with ffmpeg)
 Material eXchange Format Operational Pattern OP1A "OP-Atom" format (SMPTE 390M).
 .TP
-\fB.nist\fR (also with \fB\-t sndfile\fR)
+\fB.nist\fR (also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fR)
 See \fB.sph\fR.
 .TP
 \fB.nsp\fR (also with \fB\-t ffmpeg\fR)
@@ -622,7 +733,7 @@ sometimes together with alternative sound systems (such as ALSA).  Examples:
 	sox_ng \-b 16 \-t oss /dev/dsp outfile
 .XX
 .TP
-\fB.paf\fR, \fB.fap\fR (with sndfile)
+\fB.paf\fR, \fB.fap\fR (with sndfile, also with \fB\-t ffmpeg\fB)
 Ensoniq PARIS file format (big and little-endian respectively).
 .TP
 .B .pls
@@ -642,6 +753,16 @@ specify the audio type manually, e.g.
 and SoX does not know about alternative servers\*mhit Ctrl-C twice in
 quick succession to quit.
 .TP
+.B .pcm
+Audio track format for the MSU-1 (Media Streaming Unit, revision 1),
+an enhancement chip specification for the Super Nintendo Entertainment System
+(SNES) / Super Famicom (SFC), designed by the late Byuu (aka Near).
+Audio files are 44.1 kHz, 16-bit stereo uncompressed signed PCM in
+little-endian order ("Red Book" CD audio is big-endian), left channel first.
+They begin with an 8-byte header: the first four bytes are "MSU1" in ASCII
+and the next four are a 32-bit unsigned integer that define the loop point
+in samples.
+.TP
 .B .prc
 Psion Record are used in Psion EPOC PDAs (Series 5, Revo and similar) for
 System alarms and recordings made by the built-in Record application.
@@ -654,7 +775,29 @@ which causes the sound to glitch every tenth of a second.
 \fBpulseaudio\fR (optional)
 PulseAudio is a cross-platform networked sound server.
 The PulseAudio driver supports both playing and recording of audio.
-If a file name is specified with this driver, it is ignored.  Examples:
+.SP
+If a file name is given to this driver, it selects the pulse server,
+the audio source or sink device and/or the application name under which SoX
+registers itself with PulseAudio.
+\fBapp:foo\fR changes the application name
+from the default of \fBSoX\fR, anything else with a colon on it
+is a server name and anything without a colon is the device name.
+To specify more than one of these, or multiple servers to try in sequence,
+use a single filename with the entries separated by spaces;
+as application names can contain spaces, an "app:" field must come last.
+For example:
+.XE
+sox_ng in.au \-t pulseaudio alsa_output.pci-0000_01_00.1.hdmi-stereo
+.XX
+.SP
+Where \fBpactl list sinks short\fR gives a list of playing devices and
+\fBpactl list sources short\fR a list of recording devices.
+.SP
+You can also set the PulseAudio device with SoX's \fBAUDIODEV\fP
+and PulseAudio's \fBPULSE_SOURCE\fR and \fBPULSE_SINK\fR environment variables
+(\fBAUDIODEV\fR overrides \fBPULSE_*\fR and a filename overrides both) and
+the server with \fBPULSE_SERVER\fR. For details of the server name's syntax,
+search for "pulseaudio format of server strings".
 .TP
 \fB.pvf\fR (with sndfile)
 Portable Voice Format.
@@ -673,19 +816,19 @@ Lego Mindstorms RSO format.
 .SP
 SoX can only autodetect this type of file from its filename extension;
 if it is read from `standard input' (stdin) or from a file whose name
-does not end in `.rso', you will need to prefix it with `-t ffmpeg'.
+does not end in `.rso', you will need to prefix it with `-t\ ffmpeg'.
 .TP
 \fB.sbc\fR (with ffmpeg)
 Bluetooth SIG low-complexity subband audio format.
 .SP
 SoX can only autodetect this type of file from its filename extension;
 if it is read from `standard input' (stdin) or from a file whose name
-does not end in `.sbc', you will need to prefix it with `-t ffmpeg'.
+does not end in `.sbc', you will need to prefix it with `-t\ ffmpeg'.
 .TP
 \fB.sd2\fR (with sndfile)
 Sound Designer 2 format.
 .TP
-\fB.sds\fR (with sndfile)
+\fB.sds\fR (with sndfile, also with \fB\-t ffmpeg\fR)
 MIDI Sample Dump Standard.
 .TP
 \fB.sf\fR (also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fR)
@@ -693,7 +836,7 @@ IRCAM SDIF (Institut de Recherche et Coordination Acoustique/Musique
 Sound Description Interchange Format) is used by academic music software
 such as the CSound package and the MixView sound sample editor.
 .TP
-\fB.sln\fR
+\fB.sln\fR (also with \fB\-t ffmpeg\fR)
 Asterisk PBX `signed linear' 8khz, 16-bit signed integer, little-endian
 raw format.
 .TP
@@ -771,7 +914,7 @@ IEC 61937 S/PDIF format.
 .SP
 SoX can only autodetect this type of file from its filename extension;
 if it is read from `standard input' (stdin) or from a file whose name
-does not end in `.spdif', you will need to prefix it with `-t ffmpeg'.
+does not end in `.spdif', you will need to prefix it with `-t\ ffmpeg'.
 .TP
 \fB.sph\fR, \fB.nist\fR (also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fR)
 SPHERE (SPeech HEader REsources) is a file format defined by NIST
@@ -786,7 +929,7 @@ pipes to encompasses the data and then pass the result to SoX for processing.
 \fB.spx\fR, \fB.speex\fR (with ffmpeg)
 Ogg Speex format is for high compression of speech that, in VBR mode,
 achieves higher quality than AMR or GSM, but is now considered
-superceded by their more recent Opus codec.
+superseded by their more recent Opus codec.
 .TP
 \fBsunau\fR (optional)
 The Sun /dev/audio device driver supports both playing and
@@ -813,7 +956,9 @@ Sony PS2 VAG format.
 .TP
 .B .txw
 TXW is a file format from the Yamaha TX-16W sampling keyboard which wrote
-IBM/PC-format 3\*d5\(dq floppies.
+samples onto IBM/PC-format 3\*d5\(dq floppies at sample rates of 16kHz,
+33kHz and 50kHz, all exact divisors of 100kHz.
+.SP
 SoX handles reading of files which do not have the sample rate field set
 to one of the expected rates by looking at some other bytes
 in the attack/loop length fields
@@ -845,7 +990,7 @@ and files containing \(*m-law, A-law and 2/3/4-bit ADPCM samples.
 See
 .BR .ogg .
 .TP
-\fB.vox\fR (also with \fB\-t sndfile\fR)
+\fB.vox\fR
 Headerless files of Dialogic/OKI ADPCM audio data commonly come with the
 extension .vox.  This ADPCM data has 12-bit precision packed into only 4-bits.
 .SP
@@ -863,7 +1008,7 @@ Sonic Foundry's 64-bit RIFF/WAV format.
 .SP
 SoX can only autodetect this type of file from its filename extension;
 if it is read from `standard input' (stdin) or from a file whose name
-does not end in `.w64', you will need to prefix it with `-t w64'.
+does not end in `.w64', you will need to prefix it with `-t\ w64'.
 .TP
 \fB.wav\fR (also with \fB\-t sndfile\fR or \fB\-t ffmpeg\fR)
 Microsoft .WAV RIFF files are the native audio file format of Windows
@@ -884,10 +1029,16 @@ read by SoX by overriding the file type, e.g.
 .XE
    play \-t mp3 mp3\-encoded.wav
 .XX
+.SP
+Natively, SoX can only read WAV files with a bit-depth of 8, 16, 24 or 32;
+files with other bit-depths can be read by preceding them with \f(CW\-t\ sndfile\fR.
+.SP
 Big endian versions of RIFF files, called RIFX, are also supported.
 To write a RIFX file, use the
 .B \-B
 output file option.
+.SP
+See also \fB.wavpcm\fR.
 .TP
 \fBwaveaudio\fR (optional)
 The MS-Windows native audio device driver.  Examples:
@@ -955,19 +1106,15 @@ the RIFF header is not necessarily preserved losslessly, though the audio is.
 \fB.wve\fR (also with \fB\-t sndfile\fR)
 Psion 8-bit A-law is used on Psion SIBO PDAs (Series 3 and similar).
 .TP
-.B .xa
+\fB.xa\fR (also with \fB\-t ffmpeg\fR)
 Maxis XA files are 16-bit ADPCM audio files used by Maxis games.
 Writing \fB.xa\fR files is currently not supported,
 although adding write support should not be very difficult.
 .TP
 \fB.xi\fR (with sndfile)
 Fasttracker 2 Extended Instrument format.
-.SH SEE ALSO
-.BR sox_ng (1),
-.BR soxi_ng (1).
-.SP
-The SoX web site at https://codeberg.org/sox_ng
-.SS References
+.ne 3
+.SH REFERENCES
 .TP
 [1]
 Wikipedia,
@@ -978,6 +1125,10 @@ http://en.wikipedia.org/wiki/M3U
 Wikipedia,
 .IR "PLS" ,
 http://en.wikipedia.org/wiki/PLS_(file_format)
+.ne 2
+.SH SEE ALSO
+.BR sox_ng (1),
+\f(CWhttps://codeberg.org/sox_ng\fR
 .SH AUTHORS
 Lance Norskog, Chris Bagwell and many other authors and contributors
 listed in the README file that is distributed with the source code.

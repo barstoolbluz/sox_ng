@@ -43,7 +43,7 @@ int main(int argc, char * argv[])
 
   for (i = 1; i < argc - 1; ++i) { /* For each input file... */
     sox_format_t * input;
-    static sox_signalinfo_t signal; /* static quashes `uninitialised' warning.*/
+    static sox_signalinfo_t signal; /* static quashes `uninitialized' warning.*/
 
     /* The (maximum) number of samples that we shall read/write at a time;
      * chosen as a rough match to typical operating system I/O buffer size: */

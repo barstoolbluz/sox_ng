@@ -23,7 +23,7 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
 {
   sample_t const * input = stage_read_p(p);
   int i, num_out = (stage_occupancy(p) + 1) / 2;
-  sample_t * output = fifo_reserve(output_fifo, num_out);
+  sample_t * output = lsx_fifo_reserve(output_fifo, num_out);
 
   for (i = 0; i < num_out; ++i, input += 2) {
     int j = 0;
@@ -31,7 +31,7 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
     CONVOLVE
     output[i] = sum;
   }
-  fifo_read(&p->fifo, 2 * num_out, NULL);
+  lsx_fifo_read(&p->fifo, 2 * num_out, NULL);
 }
 #undef _
 #undef COEFS

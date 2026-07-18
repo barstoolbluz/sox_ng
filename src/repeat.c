@@ -24,7 +24,7 @@ typedef struct {
   FILE          * tmp_file;
 } priv_t;
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_repeat(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   p->num_repeats = 1;
@@ -37,7 +37,7 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   return argc? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static int start_repeat(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   if (!p->num_repeats)
@@ -57,7 +57,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_repeat(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -72,7 +72,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+static int drain_repeat(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
   size_t odone = 0, n;
@@ -98,7 +98,7 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
   return p->remaining_samples || p->remaining_repeats? SOX_SUCCESS : SOX_EOF;
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_repeat(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   lsx_close_tmpfile(p->tmp_file);
@@ -108,12 +108,14 @@ static int stop(sox_effect_t * effp)
 sox_effect_handler_t const * lsx_repeat_effect_fn(void)
 {
   static char const * const extra_usage[] = {
-    "-  repeat indefinitely",
+    "-   Repeat indefinitely",
     NULL
   };
   static sox_effect_handler_t effect = {
-    "repeat", "[count(1)|-]", extra_usage,
+    "repeat", "[count(1)|-]",
     SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_MODIFY,
-    create, start, flow, drain, stop, NULL, sizeof(priv_t)};
+    create_repeat, start_repeat, flow_repeat, drain_repeat, stop_repeat, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL,
+  };
   return &effect;
 }

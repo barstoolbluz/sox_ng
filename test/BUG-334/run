@@ -17,12 +17,14 @@
 
 # Check that flac format is included
 ${sox:-sox} 2>&1 | grep -q '^AUDIO FILE FORMATS.*flac' || exit 254
+# and writable
+${sox:-sox} --help-format flac 2>&1 | grep -q '^Writes:$' || exit 254
 
-rm -f core out.*
+rm -f core core.* out.*
 
 ${sox:-sox} SEGV-rate_close-rate-504 out.flac remix - norm -3 highpass 22 gain -3 rate 48k norm -3 dither
 status=$?
 
-rm -f core out.*
+rm -f core core.* out.*
 
 exit $status

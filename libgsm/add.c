@@ -4,7 +4,7 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/* $Header: /cvsroot/sox/sox/libgsm/add.c,v 1.1 2007/09/06 16:50:55 cbagwell Exp $ */
+/* $Header: /tmp_amd/presto/export/kbs/jutta/src/gsm/RCS/add.c,v 1.6 1996/07/02 09:57:33 jutta Exp $ */
 
 /*
  *  See private.h for the more commonly used macro versions.
@@ -15,29 +15,30 @@
 
 #include	"private.h"
 #include	"gsm.h"
+#include	"proto.h"
 
 #define	saturate(x) 	\
 	((x) < MIN_WORD ? MIN_WORD : (x) > MAX_WORD ? MAX_WORD: (x))
 
-word gsm_add (word a, word b)
+word gsm_add P2((a,b), word a, word b)
 {
 	longword sum = (longword)a + (longword)b;
 	return saturate(sum);
 }
 
-word gsm_sub (word a, word b)
+word gsm_sub P2((a,b), word a, word b)
 {
 	longword diff = (longword)a - (longword)b;
 	return saturate(diff);
 }
 
-word gsm_mult (word a, word b)
+word gsm_mult P2((a,b), word a, word b)
 {
 	if (a == MIN_WORD && b == MIN_WORD) return MAX_WORD;
 	else return SASR( (longword)a * (longword)b, 15 );
 }
 
-word gsm_mult_r (word a, word b)
+word gsm_mult_r P2((a,b), word a, word b)
 {
 	if (b == MIN_WORD && a == MIN_WORD) return MAX_WORD;
 	else {
@@ -47,18 +48,18 @@ word gsm_mult_r (word a, word b)
 	}
 }
 
-word gsm_abs (word a)
+word gsm_abs P1((a), word a)
 {
 	return a < 0 ? (a == MIN_WORD ? MAX_WORD : -a) : a;
 }
 
-longword gsm_L_mult (word a, word b)
+longword gsm_L_mult P2((a,b),word a, word b)
 {
 	assert( a != MIN_WORD || b != MIN_WORD );
 	return ((longword)a * (longword)b) << 1;
 }
 
-longword gsm_L_add (longword a, longword b)
+longword gsm_L_add P2((a,b), longword a, longword b)
 {
 	if (a < 0) {
 		if (b >= 0) return a + b;
@@ -74,7 +75,7 @@ longword gsm_L_add (longword a, longword b)
 	}
 }
 
-longword gsm_L_sub (longword a, longword b)
+longword gsm_L_sub P2((a,b), longword a, longword b)
 {
 	if (a >= 0) {
 		if (b >= 0) return a - b;
@@ -87,7 +88,7 @@ longword gsm_L_sub (longword a, longword b)
 	}
 	else if (b <= 0) return a - b;
 	else {
-		/* a<0, b>0 */  
+		/* a<0, b>0 */
 
 		ulongword A = (ulongword)-(a + 1) + b;
 		return A >= MAX_LONGWORD ? MIN_LONGWORD : -(longword)A - 1;
@@ -113,13 +114,13 @@ static unsigned char const bitoff[ 256 ] = {
 	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-word gsm_norm (longword a )
+word gsm_norm P1((a), longword a )
 /*
  * the number of left shifts needed to normalize the 32 bit
  * variable L_var1 for positive values on the interval
  *
  * with minimum of
- * minimum of 1073741824  (01000000000000000000000000000000) and 
+ * minimum of 1073741824  (01000000000000000000000000000000) and
  * maximum of 2147483647  (01111111111111111111111111111111)
  *
  *
@@ -140,7 +141,7 @@ word gsm_norm (longword a )
 		a = ~a;
 	}
 
-	return    a & 0xffff0000 
+	return    a & 0xffff0000
 		? ( a & 0xff000000
 		  ?  -1 + bitoff[ 0xFF & (a >> 24) ]
 		  :   7 + bitoff[ 0xFF & (a >> 16) ] )
@@ -149,7 +150,7 @@ word gsm_norm (longword a )
 		  :  23 + bitoff[ 0xFF & a ] );
 }
 
-longword gsm_L_asl (longword a, int n)
+longword gsm_L_asl P2((a,n), longword a, int n)
 {
 	if (n >= 32) return 0;
 	if (n <= -32) return -(a < 0);
@@ -157,7 +158,7 @@ longword gsm_L_asl (longword a, int n)
 	return a << n;
 }
 
-word gsm_asl (word a, int n)
+word gsm_asl P2((a,n), word a, int n)
 {
 	if (n >= 16) return 0;
 	if (n <= -16) return -(a < 0);
@@ -165,7 +166,7 @@ word gsm_asl (word a, int n)
 	return a << n;
 }
 
-longword gsm_L_asr (longword a, int n)
+longword gsm_L_asr P2((a,n), longword a, int n)
 {
 	if (n >= 32) return -(a < 0);
 	if (n <= -32) return 0;
@@ -179,7 +180,7 @@ longword gsm_L_asr (longword a, int n)
 #	endif
 }
 
-word gsm_asr (word a, int n)
+word gsm_asr P2((a,n), word a, int n)
 {
 	if (n >= 16) return -(a < 0);
 	if (n <= -16) return 0;
@@ -193,7 +194,7 @@ word gsm_asr (word a, int n)
 #	endif
 }
 
-/* 
+/*
  *  (From p. 46, end of section 4.2.5)
  *
  *  NOTE: The following lines gives [sic] one correct implementation
@@ -202,7 +203,7 @@ word gsm_asr (word a, int n)
  *	  >= num > 0
  */
 
-word gsm_div (word num, word denum)
+word gsm_div P2((num,denum), word num, word denum)
 {
 	longword	L_num   = num;
 	longword	L_denum = denum;

@@ -4,7 +4,7 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/* $Header: /cvsroot/sox/sox/libgsm/preprocess.c,v 1.1 2007/09/06 16:50:55 cbagwell Exp $ */
+/* $Header: /tmp_amd/presto/export/kbs/jutta/src/gsm/RCS/preprocess.c,v 1.2 1994/05/10 20:18:45 jutta Exp $ */
 
 #include	<stdio.h>
 #include	<assert.h>
@@ -12,9 +12,10 @@
 #include "private.h"
 
 #include	"gsm.h"
+#include 	"proto.h"
 
 /*	4.2.0 .. 4.2.3	PREPROCESSING SECTION
- *  
+ *
  *  	After A-law to linear conversion (or directly from the
  *   	Ato D converter) the following scaling is assumed for
  * 	input to the RPE-LTP algorithm:
@@ -25,12 +26,12 @@
  *	Where S is the sign bit, v a valid bit, and * a "don't care" bit.
  * 	The original signal is called sop[..]
  *
- *      out:   0.1................... 12 
+ *      out:   0.1................... 12
  *	     S.S.v.v.v.v.v.v.v.v.v.v.v.v.0.0
  */
 
 
-void Gsm_Preprocess (
+void Gsm_Preprocess P3((S, s, so),
 	struct gsm_state * S,
 	word		 * s,
 	word 		 * so )		/* [0..159] 	IN/OUT	*/
@@ -49,7 +50,9 @@ void Gsm_Preprocess (
 	word		SO;
 
 	longword	ltmp;		/* for   ADD */
+#if 0
 	ulongword	utmp;		/* for L_ADD */
+#endif
 
 	register int		k = 160;
 
@@ -65,7 +68,7 @@ void Gsm_Preprocess (
 
 
 	/*  4.2.2   Offset compensation
-	 * 
+	 *
 	 *  This part implements a high-pass filter and requires extended
 	 *  arithmetic precision for the recursive part of this filter.
 	 *  The input of this procedure is the array so[0...159] and the

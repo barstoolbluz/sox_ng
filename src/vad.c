@@ -19,7 +19,7 @@
 
 typedef struct {
   double    * dftBuf, * noiseSpectrum, * spectrum, * measures, meanMeas;
-} channel_t;
+} vad_channel_t;
 
 typedef struct {                /* Configuration parameters: */
   double    bootTime, noiseTcUp, noiseTcDown, noiseReductionAmount;
@@ -36,15 +36,18 @@ typedef struct {                /* Configuration parameters: */
   double    noiseTcUpMult, noiseTcDownMult;
   double    measureTcMult, triggerMeasTcMult;
   double    * spectrumWindow, * cepstrumWindow;
-  channel_t * channels;
+  vad_channel_t * channels;
 } priv_t;
 
 #define GETOPT_FREQ(optstate, c, name, min) \
     case c: p->name = lsx_parse_frequency(optstate.arg, &parseIndex); \
-      if (p->name < min || *parseIndex) return lsx_usage(effp); \
+      if (p->name < min || *parseIndex) { \
+        lsx_fail("cannot parse frequency `%s'", optstate.arg); \
+        return SOX_EOF; \
+      } \
       break;
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_vad(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   #define opt_str "+b:N:n:r:f:m:M:h:l:H:L:T:t:s:g:p:"
@@ -95,7 +98,66 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   return optstate.ind !=argc? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static char *
+get_vad(sox_effect_t *effp, char *name)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+
+  if (!strcmp(name, "trigger_level")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->triggerLevel);
+  }
+  if (!strcmp(name, "trigger_time")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->triggerTc);
+  }
+  if (!strcmp(name, "gap")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->gapTime);
+  }
+
+  return s;
+}
+
+static char *
+set_vad(sox_effect_t *effp, char *name, char *value)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+  char *endptr = value;
+  double v = lsx_strtod(value, &endptr);
+
+  if (endptr == value || *endptr != '\0') return NULL;
+
+  if (!strcmp(name, "trigger_level")) {
+    if (v < 0)  v = 0;
+    if (v > 20) v = 20;
+    p->triggerLevel = v;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+  if (!strcmp(name, "trigger_time")) {
+    if (v < 0.01) v = 0.01;
+    if (v > 1.0)  v = 1.0;
+    p->triggerTc = v;
+    p->triggerMeasTcMult = exp(-1 / (p->triggerTc * p->measureFreq));
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+  if (!strcmp(name, "gap")) {
+    if (v < 0.1) v = 0.1;
+    if (v > 1.0) v = 1.0;
+    p->gapTime = v;
+    p->gapLen = p->gapTime * p->measureFreq + .5;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+
+  return s;
+}
+
+static int start_vad(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i, fixedPreTriggerLen_ns, searchPreTriggerLen_ns;
@@ -120,7 +182,7 @@ static int start(sox_effect_t * effp)
 
   lsx_vcalloc(p->channels, effp->in_signal.channels);
   for (i = 0; i < effp->in_signal.channels; ++i) {
-    channel_t * c = &p->channels[i];
+    vad_channel_t * c = &p->channels[i];
     lsx_vcalloc(c->dftBuf, p->dftLen_ws);
     lsx_vcalloc(c->spectrum, p->dftLen_ws);
     lsx_vcalloc(c->noiseSpectrum, p->dftLen_ws);
@@ -184,7 +246,7 @@ static int flowFlush(sox_effect_t * effp, sox_sample_t const * ibuf,
 }
 
 static double measure(
-    priv_t * p, channel_t * c, size_t index_ns, unsigned step_ns, int bootCount)
+    priv_t * p, vad_channel_t * c, size_t index_ns, unsigned step_ns, int bootCount)
 {
   double mult, result = 0;
   size_t i;
@@ -215,7 +277,7 @@ static double measure(
   return max(0, 21 + result);
 }
 
-static int flowTrigger(sox_effect_t * effp, sox_sample_t const * ibuf,
+static int flow_vad(sox_effect_t * effp, sox_sample_t const * ibuf,
     sox_sample_t * obuf, size_t * ilen, size_t * olen)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -225,7 +287,7 @@ static int flowTrigger(sox_effect_t * effp, sox_sample_t const * ibuf,
   while (idone < *ilen && !hasTriggered) {
     p->measureTimer_ns -= effp->in_signal.channels;
     for (i = 0; i < effp->in_signal.channels; ++i, ++idone) {
-      channel_t * c = &p->channels[i];
+      vad_channel_t * c = &p->channels[i];
       p->samples[p->samplesIndex_ns++] = *ibuf++;
       if (!p->measureTimer_ns) {
         size_t x = (p->samplesIndex_ns + p->samplesLen_ns - p->measureLen_ns) % p->samplesLen_ns;
@@ -272,19 +334,19 @@ static int flowTrigger(sox_effect_t * effp, sox_sample_t const * ibuf,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * olen)
+static int drain_vad(sox_effect_t * effp, sox_sample_t * obuf, size_t * olen)
 {
   size_t ilen = 0;
   return effp->handler.flow(effp, NULL, obuf, &ilen, olen);
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_vad(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   unsigned i;
 
   for (i = 0; i < effp->in_signal.channels; ++i) {
-    channel_t * c = &p->channels[i];
+    vad_channel_t * c = &p->channels[i];
     free(c->measures);
     free(c->noiseSpectrum);
     free(c->spectrum);
@@ -303,29 +365,31 @@ sox_effect_handler_t const * lsx_vad_effect_fn(void)
 
   static char const * const extra_usage[] = {
 "FLAG RANGE   DEFAULT  DESCRIPTION",
-"-t   0.1-20    7      trigger level",
-"-T   0.01-1    0.25   trigger time constant",
-"-s   0.1-4     1      search time",
-"-g   0.1-1     0.25   allowed gap",
-"-p   0-4       0      pre-trigger time",
+"-t   0.1-20    7      Trigger level",
+"-T   0.01-1    0.25   Trigger time constant",
+"-s   0.1-4     1      Search time",
+"-g   0.1-1     0.25   Allowed gap",
+"-p   0-4       0      Pre-trigger time",
 "Advanced options:",
-"-b   0.1-10    0.35   noise estimate boot time",
-"-N   0.1-10    0.1    noise estimate time constant up",
-"-n   0.001-0.1 0.01   noise estimate time constant down",
-"-r   0-2       1.35   noise reduction amount",
-"-f   5-50      20     measurement frequency",
-"-m   0.01-1    0.1    measurement duration",
-"-M   0.1-1     0.4    measurement time constant",
-"-h   10-       50     high-pass filter frequency",
-"-l   1000-     6000   low-pass filter frequency",
-"-H   10-       150    high-pass lifter frequency",
-"-L   1000-     2000   low-pass lifter frequency",
+"-b   0.1-10    0.35   Noise estimate boot time",
+"-N   0.1-10    0.1    Noise estimate time constant up",
+"-n   0.001-0.1 0.01   Noise estimate time constant down",
+"-r   0-2       1.35   Noise reduction amount",
+"-f   5-50      20     Measurement frequency",
+"-m   0.01-1    0.1    Measurement duration",
+"-M   0.1-1     0.4    Measurement time constant",
+"-h   10-       50     High-pass filter frequency",
+"-l   1000-     6000   Low-pass filter frequency",
+"-H   10-       150    High-pass lifter frequency",
+"-L   1000-     2000   Low-pass lifter frequency",
+"Keymaps: vad.(trigger_level|trigger_time|gap)",
     NULL
   };
 
   static sox_effect_handler_t handler = {
-    "vad", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_MODIFY,
-    create, start, flowTrigger, drain, stop, NULL, sizeof(priv_t)
+    "vad", usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_MODIFY,
+    create_vad, start_vad, flow_vad, drain_vad, stop_vad, NULL,
+    sizeof(priv_t), extra_usage, get_vad, set_vad,
   };
 
   return &handler;

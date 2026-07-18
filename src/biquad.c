@@ -40,12 +40,43 @@ int lsx_biquad_getopts(sox_effect_t * effp, int argc, char **argv,
   --argc, ++argv;
 
   p->filter_type = filter_type;
-  if (argc < min_args || argc > max_args ||
-      (argc > fc_pos    && ((p->fc = lsx_parse_frequency(argv[fc_pos], &dummy_p)) <= 0 || *dummy_p)) ||
-      (argc > width_pos && ((unsigned)(sscanf(argv[width_pos], "%lf%c %c", &p->width, &width_type, &dummy)-1) > 1 || p->width <= 0)) ||
-      (argc > gain_pos  && sscanf(argv[gain_pos], "%lf %c", &p->gain, &dummy) != 1) ||
-      !strchr(allowed_width_types, width_type) || (width_type == 's' && p->width > 1))
-    return lsx_usage(effp);
+  if (argc < min_args) { lsx_fail("not enough arguments"); return lsx_usage(effp); }
+  if (argc > max_args) { lsx_fail("too many arguments"); return lsx_usage(effp); }
+  if (argc > fc_pos) {
+    p->fc = lsx_parse_frequency(argv[fc_pos], &dummy_p);
+    if (p->fc <= 0 || *dummy_p) {
+      lsx_fail("invalid frequency `%s'", argv[fc_pos]);
+      return SOX_EOF;
+    }
+  }
+
+  if (argc > width_pos) {
+    if ((unsigned)(sscanf(argv[width_pos], "%lf%c %c", &p->width, &width_type, &dummy)-1) > 1) {
+      lsx_fail("cannot parse width `%s'", argv[width_pos]);
+      return SOX_EOF;
+    }
+    if (p->width <= 0) {
+      lsx_fail("width `%s' must be positive", argv[width_pos]);
+      return SOX_EOF;
+    }
+    if (!strchr(allowed_width_types, width_type)) {
+      lsx_fail("width type `%c' is not one of [%s]",
+	       width_type, allowed_width_types);
+      return SOX_EOF;
+    }
+    if (width_type == 's' && p->width > 1) {
+      lsx_fail("width type `s' must have a width <= 1");
+      return SOX_EOF;
+    }
+  }
+
+  if (argc > gain_pos) {
+    if (sscanf(argv[gain_pos], "%lf %c", &p->gain, &dummy) != 1) {
+      lsx_fail("cannot parse gain `%s'", argv[gain_pos]);
+      return SOX_EOF;
+    }
+  }
+
   p->width_type = strchr(all_width_types, width_type) - all_width_types;
   if ((size_t)p->width_type >= strlen(all_width_types))
     p->width_type = 0;
@@ -162,16 +193,26 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   char               c;
 
   --argc, ++argv;
-  if (argc == 6)
-    for (; argc && sscanf(*argv, "%lf%c", d, &c) == 1; --argc, ++argv, ++d);
-  return argc? lsx_usage(effp) : SOX_SUCCESS;
+  if (argc != 6) {
+    lsx_fail("six coefficients are required");
+    return SOX_EOF;
+  }
+
+  for (; argc ; --argc, ++argv, ++d) {
+    if (sscanf(*argv, "%lf%c", d, &c) != 1) {
+      lsx_fail("invalid coefficient `%s'", *argv);
+      return SOX_EOF;
+    }
+  }
+  return SOX_SUCCESS;
 }
 
 sox_effect_handler_t const * lsx_biquad_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "biquad", "b0 b1 b2 a0 a1 a2", NULL, 0,
-    create, lsx_biquad_start, lsx_biquad_flow, NULL, NULL, NULL, sizeof(priv_t)
+    "biquad", "b0 b1 b2 a0 a1 a2", 0,
+    create, lsx_biquad_start, lsx_biquad_flow, NULL, NULL, NULL,
+    sizeof(priv_t), NULL, NULL, NULL,
   };
   return &handler;
 }

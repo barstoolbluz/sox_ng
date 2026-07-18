@@ -25,12 +25,12 @@
 # sox FAIL formats: can't open input file `crash00': AIFF: no sound data on input file
 # and exits 2
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} -D crash00 /dev/null
 status=$?
 
-rm -f core
+rm -f core core.*
 
 case "$status" in
 0) status=255;;

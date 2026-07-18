@@ -32,6 +32,8 @@ libdolbyb, a Dolby B encoding and decoding library
 .P
 .B char *dolbyb_start(&dolbyb);
 .P
+.B char *dolbyb_restart(&dolbyb);
+.P
 .B char *dolbyb_encode(&dolbyb, void *in, void *out, size_t nframes);
 .P
 .B char *dolbyb_decode(&dolbyb, void *in, void *out, size_t nframes);
@@ -142,6 +144,11 @@ seems to work best, hence it is the default mode.
 \fBdolbyb_start()\fR can only fail (and return a non-zero value)
 if you set parameters to out-of-range values or
 if there is no memory available for the few buffers it needs to allocate.
+.TP
+.B dolbyb_restart
+Can be called in the middle of an encoding or decoding session if you change
+\f(CWdolbyb.{ThGndB,DecAdB,UpSamp,AllHig,FltTyp}\fR, to update internal values
+that depend on them.
 .TP
 .B dolbyb_encode
 Dolby B encodes a buffer of audio samples with 1, 2 or 3 bytes per sample,

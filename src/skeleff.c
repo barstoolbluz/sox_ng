@@ -134,8 +134,11 @@ const sox_effect_handler_t *lsx_skel_effect_fn(void)
    * and NULL used in place of the its name below.
    */
   static sox_effect_handler_t sox_skel_effect = {
-    "skel", "[OPTION]", NULL, SOX_EFF_MCHAN,
-    getopts, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    "skel", "OPTION", SOX_EFF_MCHAN,
+    getopts, start, flow, drain, stop, lsx_kill, sizeof(priv_t),
+    NULL, /* extra_usage */
+    NULL, /* get */
+    NULL, /* set */
   };
   return &sox_skel_effect;
 }

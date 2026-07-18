@@ -10,17 +10,23 @@
 #
 # See https://sourceforge.net/p/sox/mailman/message/33196362
 
-rm -f core sweep.wav spectrogram.png
+rm -f core core.* sweep.wav spectrogram.png
 
 # Check whether sox was compiled with the spectrogram effect
 ${sox:-sox} 2>&1 | grep -q '^EFFECTS:.*spectrogram' || exit 254
 
 # Make a swept sinusoid
-${sox:-sox} -D -n -b 16 -e signed sweep.wav synth 10 sine 27.5/14080
+${sox:-sox} -D -n -b 16 -e signed sweep.wav synth 1 sine 27.5/14080
 
-${sox:-sox} sweep.wav -n spectrogram -X 1001
+${sox:-sox} sweep.wav -n spectrogram -x 1001   # Should not SEGV
 status=$?
+case $status in
+0)
+    ${sox:-sox} sweep.wav -n spectrogram -X 1001   # Should not SEGV
+    status=$?
+    ;;
+esac
 
-rm -f core sweep.wav spectrogram.png
+rm -f core core.* sweep.wav spectrogram.png
 
 exit $status

@@ -4,18 +4,19 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/* $Header: /cvsroot/sox/sox/libgsm/decode.c,v 1.1 2007/09/06 16:50:55 cbagwell Exp $ */
+/* $Header: /tmp_amd/presto/export/kbs/jutta/src/gsm/RCS/decode.c,v 1.1 1992/10/28 00:15:50 jutta Exp $ */
 
 #include <stdio.h>
 
 #include	"private.h"
 #include	"gsm.h"
+#include	"proto.h"
 
 /*
  *  4.3 FIXED POINT IMPLEMENTATION OF THE RPE-LTP DECODER
  */
 
-static void Postprocessing (
+static void Postprocessing P2((S,s),
 	struct gsm_state	* S,
 	register word 		* s)
 {
@@ -32,7 +33,7 @@ static void Postprocessing (
 	S->msr = msr;
 }
 
-void Gsm_Decoder (
+void Gsm_Decoder P8((S,LARcr, Ncr,bcr,Mcr,xmaxcr,xMcr,s),
 	struct gsm_state	* S,
 
 	word		* LARcr,	/* [0..7]		IN	*/

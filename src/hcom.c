@@ -77,7 +77,7 @@ static int dictvalid(int n, unsigned size, int left, int right)
         return (unsigned)left < size && (unsigned)right < size;
 }
 
-static int startread(sox_format_t * ft)
+static int startread_hcom(sox_format_t * ft)
 {
         priv_t *p = (priv_t *) ft->priv;
         int i;
@@ -129,20 +129,20 @@ static int startread(sox_format_t * ft)
 	  return SOX_EOF;
         if (compresstype > 1)
         {
-                lsx_fail_errno(ft,SOX_EHDR,"bad compression type in HCOM header");
+                lsx_fail_errno(ft,SOX_EHDR,"bad compression type");
                 return (SOX_EOF);
         }
         if (lsx_readdw(ft, &divisor))
 	  return SOX_EOF;
         if (divisor == 0 || divisor > 4)
         {
-                lsx_fail_errno(ft,SOX_EHDR,"bad sampling rate divisor in HCOM header");
+                lsx_fail_errno(ft,SOX_EHDR,"bad sampling rate divisor");
                 return (SOX_EOF);
         }
         if (lsx_readw(ft, &dictsize) ||
             dictsize == 0 || dictsize > 511)
         {
-                lsx_fail_errno(ft, SOX_EHDR, "implausible dictionary size in HCOM header");
+                lsx_fail_errno(ft, SOX_EHDR, "implausible dictionary size");
                 return SOX_EOF;
         }
 
@@ -188,10 +188,12 @@ static int startread(sox_format_t * ft)
         p->dictentry = 0;
         p->nrbits = -1; /* Special case to get first byte */
 
+        ft->data_start = lsx_tell(ft);
+
         return (SOX_SUCCESS);
 }
 
-static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
+static size_t read_samples_hcom(sox_format_t * ft, sox_sample_t *buf, size_t len)
 {
         register priv_t *p = (priv_t *) ft->priv;
         int done = 0;
@@ -253,7 +255,7 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
         return done;
 }
 
-static int stopread(sox_format_t * ft)
+static int stopread_hcom(sox_format_t * ft)
 {
         register priv_t *p = (priv_t *) ft->priv;
 
@@ -274,7 +276,7 @@ static int stopread(sox_format_t * ft)
 
 #define BUFINCR (10*BUFSIZ)
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_hcom(sox_format_t * ft)
 {
   priv_t * p = (priv_t *) ft->priv;
 
@@ -284,7 +286,7 @@ static int startwrite(sox_format_t * ft)
   return SOX_SUCCESS;
 }
 
-static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t len)
+static size_t write_samples_hcom(sox_format_t * ft, const sox_sample_t *buf, size_t len)
 {
   priv_t *p = (priv_t *) ft->priv;
   sox_sample_t datum;
@@ -446,7 +448,7 @@ static void compress(sox_format_t * ft, unsigned char **df, int32_t *dl)
 
 /* End of hcom utility routines */
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_hcom(sox_format_t * ft)
 {
   priv_t *p = (priv_t *) ft->priv;
   unsigned char *compressed_data = p->data;
@@ -455,7 +457,7 @@ static int stopwrite(sox_format_t * ft)
 
   if (p->pos > INT32_MAX) {
     free(p->data);
-    lsx_fail_errno(ft, ERANGE, "file too large for HCOM header");
+    lsx_fail_errno(ft, ERANGE, "file too large");
     return SOX_EOF;
   }
   compressed_len = p->pos;
@@ -475,7 +477,7 @@ static int stopwrite(sox_format_t * ft)
   lsx_writedw(ft, 0); /* rsrc size */
   lsx_padbytes(ft, (size_t) 128 - 91);
   if (lsx_error(ft)) {
-    lsx_fail_errno(ft, errno, "write error in HCOM header");
+    lsx_fail_errno(ft, errno, "write error");
     rc = SOX_EOF;
   } else if (lsx_writebuf(ft, compressed_data, compressed_len) != (size_t)compressed_len) {
     /* Write the compressed_data fork */
@@ -500,8 +502,8 @@ LSX_FORMAT_HANDLER(hcom)
   static sox_format_handler_t handler = {SOX_LIB_VERSION_CODE,
     "Mac FSSD files with Huffman compression",
     names, SOX_FILE_BIG_END|SOX_FILE_MONO,
-    startread, read_samples, stopread,
-    startwrite, write_samples, stopwrite,
+    startread_hcom, read_samples_hcom, stopread_hcom,
+    startwrite_hcom, write_samples_hcom, stopwrite_hcom,
     NULL, write_encodings, write_rates, sizeof(priv_t)
   };
   return &handler;

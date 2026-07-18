@@ -14,12 +14,12 @@
 
 # sox_ng-14.5.0
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} --single-threaded poc_file -t aiff /dev/null
 status=$?
 
-rm -f core
+rm -f core core.*
 
 case $status in
 0) status=255;;

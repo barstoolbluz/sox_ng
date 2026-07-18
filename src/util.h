@@ -259,7 +259,7 @@ static inline void *sox_aligned_alloc_m(size_t align, size_t size)
 #define M_LN10  2.30258509299404568402  /* natural log of 10 */
 #endif
 #ifndef M_SQRT2
-#define M_SQRT2  sqrt(2.)
+#define M_SQRT2 1.41421356237309504880  /* square root of 2 */
 #endif
 
 #define sqr(a) ((a) * (a))
@@ -274,11 +274,15 @@ static inline void *sox_aligned_alloc_m(size_t align, size_t size)
 
 extern int lsx_strcasecmp(const char *s1, const char *st);
 extern int lsx_strncasecmp(char const *s1, char const *s2, size_t n);
+extern double lsx_strtod(char const *nptr, char **endptr);
 
 #ifndef HAVE_STRCASECMP
 #define strcasecmp(s1, s2) lsx_strcasecmp((s1), (s2))
 #define strncasecmp(s1, s2, n) lsx_strncasecmp((s1), (s2), (n))
 #endif
+#define strtod(nptr, endptr) lsx_strtod((nptr), (endptr))
 
 extern int lsx_sscanf(const char *str, const char *format, ...);
 #define sscanf lsx_sscanf
+
+extern FILE *lsx_popen(char **argv, char type, int filename_index);

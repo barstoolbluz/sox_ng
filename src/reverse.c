@@ -17,7 +17,7 @@ typedef struct {
   FILE          * tmp_file;
 } priv_t;
 
-static int start(sox_effect_t * effp)
+static int start_reverse(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   p->pos = 0;
@@ -29,7 +29,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_reverse(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -41,7 +41,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
+static int drain_reverse(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
   int i, j;
@@ -69,7 +69,7 @@ static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
   return p->pos? SOX_SUCCESS : SOX_EOF;
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_reverse(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   lsx_close_tmpfile(p->tmp_file);
@@ -79,8 +79,9 @@ static int stop(sox_effect_t * effp)
 sox_effect_handler_t const * lsx_reverse_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "reverse", NULL, NULL, SOX_EFF_MODIFY,
-    NULL, start, flow, drain, stop, NULL, sizeof(priv_t)
+    "reverse", NULL, SOX_EFF_MODIFY,
+    NULL, start_reverse, flow_reverse, drain_reverse, stop_reverse, NULL,
+    sizeof(priv_t), NULL, NULL, NULL,
   };
   return &handler;
 }

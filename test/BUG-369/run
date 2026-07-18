@@ -16,7 +16,7 @@
 # sox_ng-14.5.0
 # Exits 0 and creates a file of 4 samples
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} --single-threaded poc_file -t aiff /dev/null
 status=$?

@@ -221,7 +221,7 @@ lsx_getopt(
                     { /* No match */
                         if (oerr)
                         {
-                            lsx_fail("option `%s' not recognized", current);
+                            lsx_fail("invalid option `%s'", current);
 			    exit(1);
                         }
                         state->ind++;
@@ -254,7 +254,7 @@ lsx_getopt(
         { /* ':' is never a valid short option character */
             if (oerr)
             {
-                lsx_fail("option `%c' not recognized", state->opt);
+                lsx_fail("invalid option `-%c'", state->opt);
 		exit(1);
             }
             state->curpos++;
@@ -270,7 +270,7 @@ lsx_getopt(
             { /* unrecognized option */
                 if (oerr)
                 {
-                    lsx_fail("option `%c' not recognized", state->opt);
+                    lsx_fail("invalid option `-%c'", state->opt);
 		    exit(1);
                 }
                 CheckCurPosEnd(state);
@@ -287,21 +287,19 @@ lsx_getopt(
             { /* Option requires a value */
                 state->curpos = NULL;
                 state->ind++;
-                state->arg = state->argv[state->ind];
-                state->ind++;
-                if (state->ind <= state->argc)
-                { /* A value was present, so we're good. */
+                if (state->ind < state->argc) {
+                    /* A value was present, so we're good. */
+                    state->arg = state->argv[state->ind];
+                    state->ind++;
                     return state->opt;
                 }
-                else
-                {  /* Missing required value. */
-                    if (oerr)
-                    {
-                        lsx_warn("option `%c' requires an argument",
-                            state->opt);
-                    }
-                    return state->shortopts[0] == ':' ? ':' : '?';
+                /* Missing required value. */
+                if (oerr)
+                {
+                    lsx_warn("option `%c' requires an argument",
+                        state->opt);
                 }
+                return state->shortopts[0] == ':' ? ':' : '?';
             }
             else
             { /* Option without a value. */
