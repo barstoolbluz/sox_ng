@@ -4,7 +4,9 @@ A specialized build of `sox_ng` supporting extremely large sinc filters for audi
 
 ## What is sox-sinc?
 
-sox-sinc is a modified build of [sox_ng](https://codeberg.org/sox_ng/sox_ng) that removes the standard limitation on sinc filter lengths. Where standard builds limit filters to 32,767 taps, this build supports up to approximately 1 billion taps, enabling the implementation of extremely steep filter characteristics.
+sox-sinc is a build of [sox_ng](https://codeberg.org/sox_ng/sox_ng) oriented around extremely large sinc filters for audio resampling. Where the classic SoX limits filters to 32,767 taps, this build supports up to approximately 1 billion taps, enabling the implementation of extremely steep filter characteristics.
+
+> **Note:** As of sox_ng 14.7.x, large sinc filter support is **native upstream** — this build no longer needs to patch it in. What this fork now provides is a curated, reproducible packaging of sox_ng: a drop-in binary named `sox`, bundled FFmpeg and DSD support, and Nix/Flox builds with locked dependencies. See [Relationship to sox_ng](#relationship-to-sox_ng) and [Differences from Standard sox_ng](#differences-from-standard-sox_ng).
 
 ## Important Context
 
@@ -20,15 +22,15 @@ The computational cost of these extreme filters is substantial—processing time
 
 ## Technical Specifications
 
-- **Filter length**: Up to ~1 billion taps (vs 32,767 in standard builds)
-- **FFT size**: Supports up to 2^30 points for DFT-based convolution
+- **Filter length**: Up to ~1 billion taps (vs 32,767 in classic SoX)
+- **FFT size**: Supports up to 2^31 points for DFT-based convolution
 - **Memory usage**: Scales linearly with filter length (~8 bytes per tap)
-- **Base**: Built on sox_ng, the actively maintained fork of SoX
-- **Compatibility**: Functions as a drop-in replacement for standard sox
+- **Base**: Built on sox_ng 14.8.0.1, the actively maintained fork of SoX
+- **Compatibility**: Functions as a drop-in replacement for classic sox
 
 ## Key Features
 
-- **Large Sinc Filters**: Up to ~1 billion taps (1,073,741,823 vs 32,767 standard)
+- **Large Sinc Filters**: Up to ~1 billion taps (1,073,741,823 vs 32,767 in classic SoX; native in sox_ng 14.7.x+)
 - **DSD Audio Support**: Native Direct Stream Digital format support (DSF, DSDIFF)
 - **Full Codec Support**: FFmpeg integration for comprehensive format compatibility
 - **Drop-in Replacement**: Binary named `sox` for seamless replacement of legacy SoX
@@ -64,10 +66,6 @@ cd sox_ng
 # Build with Flox (Nix expression - cross-platform)
 flox build sox_ng
 ./result-sox_ng/bin/sox --version
-
-# OR build with manifest (platform-specific)
-flox build sox_ng-linux   # For Linux
-flox build sox_ng-darwin  # For macOS
 
 # Add to your PATH
 export PATH="$PWD/result-sox_ng/bin:$PATH"
@@ -132,7 +130,7 @@ Sets the number of coefficients ("taps") in the FIR filter kernel. 0 or "auto" a
 **Typical Use:**
 Specify a value only if you need to reproduce a particular filter or are experimenting. "Auto" is optimal for general use.
 
-**sox-sinc enhancement:** Supports up to ~1 billion taps (vs 32,767 in standard sox/sox_ng)
+**Large-filter support:** Up to ~1 billion taps (vs 32,767 in classic SoX; native in sox_ng 14.7.x+, inherited by this build)
 
 #### Transition Band
 **Description:**
@@ -225,7 +223,7 @@ Remember that the audible benefits of extreme filter lengths are debatable and l
 
 | Filter Taps | Processing Time* | RAM Usage |
 |------------|------------------|----------|
-| 32,767 (standard) | <5 seconds | ~1 MB |
+| 32,767 (classic SoX limit) | <5 seconds | ~1 MB |
 | 65,536 | ~10 seconds | ~1 MB |
 | 262,144 | ~40 seconds | ~2 MB |
 | 1,638,400 | 2-5 minutes | ~13 MB |
@@ -237,30 +235,33 @@ Note the exponential increase in processing time with filter length.
 
 ## Implementation Details
 
-This build modifies three constraints in the sox_ng codebase:
+The large-filter capability rests on three constraints in the sox_ng codebase, **all now native upstream** (sox_ng 14.7.x+); earlier releases of this fork patched them in, but no longer:
 
-1. **FFT Size Limit**: `FFT4G_MAX_SIZE` increased from 262,144 to 1,073,741,824
-2. **Working Array Size**: `ip[]` arrays in FFT routines increased from 256 to 16,384 elements
-3. **Filter Length Limit**: Maximum sinc filter taps increased from 32,767 to 1,073,741,823
+1. **FFT Size Limit**: `FFT4G_MAX_SIZE` is `1U << 31` (2,147,483,648) upstream
+2. **FFT Work Arrays**: upstream's reworked `fft4g` routines size their bit-reversal work areas for large transforms
+3. **Filter Length Limit**: maximum sinc filter taps is 1,073,741,823 upstream
 
-These changes allow the DFT-based convolution engine to handle much larger filters at the cost of increased memory usage and computation time.
+The build's `postPatch` now simply **asserts** these are present, so the build fails loudly if a future upstream release ever regresses them. These allow the DFT-based convolution engine to handle much larger filters at the cost of increased memory usage and computation time.
 
 ## Differences from Standard sox_ng
 
-- Increased maximum filter length from 32,767 to ~1 billion taps
-- Proportionally increased memory allocation for FFT operations
-- No changes to default behavior or standard usage patterns
-- Fully backward compatible with existing sox scripts and workflows
+The large-filter support that once distinguished this fork is now part of sox_ng itself. What this build adds on top of upstream sox_ng is packaging and curation:
+
+- Exposed as a drop-in `sox` (plus `play`/`rec`/`soxi`) via `--enable-replace`
+- Bundled FFmpeg (`ffmpeg-full`) for broad format coverage out of the box
+- DSD (DSF/DSDIFF) support enabled
+- Reproducible Nix flake + Flox builds with locked dependencies
+- No changes to default behavior; fully backward compatible with sox scripts
 
 ## Relationship to sox_ng
 
-sox-sinc is a specialized build of [sox_ng](https://codeberg.org/sox_ng/sox_ng), which is itself an actively maintained fork of the original SoX project. sox_ng:
+sox-sinc is a build of [sox_ng](https://codeberg.org/sox_ng/sox_ng), which is itself an actively maintained fork of the original SoX project. sox_ng:
 - Imports, compares and refines bug fixes from 50+ distributions
 - Makes regular releases with a six-monthly cadence
-- Maintains compatibility while fixing long-standing issues
+- Maintains compatibility while fixing long-standing issues (including native large sinc filter support since 14.7.x)
 - Lives at [codeberg.org/sox_ng/sox_ng](https://codeberg.org/sox_ng/sox_ng)
 
-This build adds extreme FIR filter capabilities on top of sox_ng's improvements.
+This build packages sox_ng as a reproducible, FFmpeg-enabled, `sox`-named drop-in tuned for extreme resampling.
 
 ## Building from Source
 
@@ -293,7 +294,7 @@ See [INSTALL](INSTALL) for detailed instructions.
 
 ## Summary
 
-sox-sinc is a specialized tool that extends the already capable sox_ng resampling engine to support extremely large filter implementations. While standard sox provides excellent quality for virtually all practical applications, this build exists for those who wish to explore the theoretical limits of FIR filtering or who believe they require filter characteristics beyond what standard implementations provide.
+sox-sinc packages the already capable sox_ng resampling engine — which natively supports extremely large filter implementations — as a reproducible, FFmpeg-enabled, drop-in `sox`. While classic sox provides excellent quality for virtually all practical applications, this build is tuned for those who wish to explore the theoretical limits of FIR filtering or who believe they require filter characteristics beyond what classic implementations provide.
 
 Users should carefully consider whether the substantial increase in processing time is justified for their specific use case.
 
