@@ -102,7 +102,7 @@ static long callback_tell(void* ft_data)
  *      size and encoding of samples,
  *      mono/stereo/quad.
  */
-static int startread(sox_format_t * ft)
+static int startread_vorbis(sox_format_t * ft)
 {
   priv_t * vb = (priv_t *) ft->priv;
   vorbis_info *vi;
@@ -192,7 +192,7 @@ static int refill_buffer(priv_t * vb)
  * Return number of samples read.
  */
 
-static size_t read_samples(sox_format_t * ft, sox_sample_t * buf, size_t len)
+static size_t read_samples_vorbis(sox_format_t * ft, sox_sample_t * buf, size_t len)
 {
   priv_t * vb = (priv_t *) ft->priv;
   size_t i;
@@ -224,7 +224,7 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t * buf, size_t len)
  * Do anything required when you stop reading samples.
  * Don't close input file!
  */
-static int stopread(sox_format_t * ft)
+static int stopread_vorbis(sox_format_t * ft)
 {
   priv_t * vb = (priv_t *) ft->priv;
 
@@ -239,12 +239,15 @@ static int stopread(sox_format_t * ft)
  * oggenc.   Returns the number of bytes written. */
 static int oe_write_page(ogg_page * page, sox_format_t * ft)
 {
-  int written;
+  size_t written;
+  size_t written2;
 
   written = lsx_writebuf(ft, page->header, (size_t) page->header_len);
-  written += lsx_writebuf(ft, page->body, (size_t) page->body_len);
+  if (written != (size_t) page->header_len) return 0;
+  written2 = lsx_writebuf(ft, page->body, (size_t) page->body_len);
+  if (written2 != (size_t) page->body_len) return 0;
 
-  return written;
+  return written + written2;
 }
 
 /* Write out the header packets.  Derived mostly from encode.c in oggenc.
@@ -263,11 +266,11 @@ static int write_vorbis_header(sox_format_t * ft, vorbis_enc_t * ve)
     lsx_vcalloc(vc.comment_lengths, vc.comments);
     lsx_vcalloc(vc.user_comments, vc.comments);
     for (i = 0; i < vc.comments; ++i) {
-      static const char prepend[] = "Comment=";
-      char * text = lsx_calloc(strlen(prepend) + strlen(ft->oob.comments[i]) + 1, sizeof(*text));
-      /* Prepend `Comment=' if no field-name already in the comment */
+      static const char prefix[] = "Comment=";
+      char * text = lsx_calloc(strlen(prefix) + strlen(ft->oob.comments[i]) + 1, sizeof(*text));
+      /* Prefix `Comment=' if no field-name already in the comment */
       if (!strchr(ft->oob.comments[i], '='))
-        strcpy(text, prepend);
+        strcpy(text, prefix);
       vc.user_comments[i] = strcat(text, ft->oob.comments[i]);
       vc.comment_lengths[i] = strlen(text);
     }
@@ -293,7 +296,7 @@ cleanup:
   return ret;
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_vorbis(sox_format_t * ft)
 {
   priv_t * vb = (priv_t *) ft->priv;
   vorbis_enc_t *ve;
@@ -311,13 +314,13 @@ static int startwrite(sox_format_t * ft)
   rate = ft->signal.rate;
   if (rate)
     lsx_fail_errno(ft, SOX_EHDR,
-      "Error setting-up Ogg Vorbis encoder; check sample-rate & # of channels");
+      "error setting up the encoder; check sample rate and number of channels");
 
   /* Use encoding to average bit rate of VBR as specified by the -C option */
   if (ft->encoding.compression != HUGE_VAL) {
     if (ft->encoding.compression < -1 || ft->encoding.compression > 10) {
       lsx_fail_errno(ft, SOX_EINVAL,
-                     "Vorbis compression quality nust be between -1 and 10");
+                     "compression quality nust be between -1 and 10");
       return SOX_EOF;
     }
     quality = ft->encoding.compression;
@@ -326,7 +329,7 @@ static int startwrite(sox_format_t * ft)
   if (vorbis_encode_init_vbr(&ve->vi, (long)(ft->signal.channels), (long)(ft->signal.rate + .5), (float)(quality / 10)))
 #include "ignore-warning.h"
   {
-    lsx_fail_errno(ft, SOX_EFMT, "libVorbis cannot encode this sample-rate or # of channels");
+    lsx_fail_errno(ft, SOX_EFMT, "cannot encode this sample-rate or number of channels");
     return SOX_EOF;
   }
 
@@ -336,16 +339,15 @@ static int startwrite(sox_format_t * ft)
   ogg_stream_init(&ve->os, INT_MAX & (int)RANQD1);  /* Random serial number */
 
   if (write_vorbis_header(ft, ve) == HEADER_ERROR) {
-    lsx_fail_errno(ft, SOX_EHDR,
-                   "Error writing header for Ogg Vorbis audio stream");
+    lsx_fail_errno(ft, SOX_EHDR, "error writing header");
     return (SOX_EOF);
   }
 
   return (SOX_SUCCESS);
 }
 
-static size_t write_samples(sox_format_t * ft, const sox_sample_t * buf,
-                        size_t len)
+static size_t write_samples_vorbis(sox_format_t * ft, const sox_sample_t * buf,
+                                   size_t len)
 {
   priv_t * vb = (priv_t *) ft->priv;
   vorbis_enc_t *ve = vb->vorbis_enc_data;
@@ -395,13 +397,13 @@ static size_t write_samples(sox_format_t * ft, const sox_sample_t * buf,
   return (len);
 }
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_vorbis(sox_format_t * ft)
 {
   priv_t * vb = (priv_t *) ft->priv;
   vorbis_enc_t *ve = vb->vorbis_enc_data;
 
   /* Close out the remaining data */
-  write_samples(ft, NULL, (size_t) 0);
+  write_samples_vorbis(ft, NULL, (size_t) 0);
 
   ogg_stream_clear(&ve->os);
   vorbis_block_clear(&ve->vb);
@@ -412,7 +414,7 @@ static int stopwrite(sox_format_t * ft)
   return (SOX_SUCCESS);
 }
 
-static int seek(sox_format_t * ft, sox_uint64_t offset)
+static int seek_vorbis(sox_format_t * ft, sox_uint64_t offset)
 {
   priv_t * vb = (priv_t *) ft->priv;
 
@@ -425,9 +427,9 @@ LSX_FORMAT_HANDLER(vorbis)
   static const unsigned encodings[] = {SOX_ENCODING_VORBIS, 0, 0};
   static sox_format_handler_t handler = {SOX_LIB_VERSION_CODE,
     "Xiph.org's ogg-vorbis lossy compression", names, 0,
-    startread, read_samples, stopread,
-    startwrite, write_samples, stopwrite,
-    seek, encodings, NULL, sizeof(priv_t)
+    startread_vorbis, read_samples_vorbis, stopread_vorbis,
+    startwrite_vorbis, write_samples_vorbis, stopwrite_vorbis,
+    seek_vorbis, encodings, NULL, sizeof(priv_t)
   };
   return &handler;
 }

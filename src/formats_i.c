@@ -124,7 +124,7 @@ size_t lsx_readbuf(sox_format_t * ft, void *buf, size_t len)
   }
 
   if (ret != len && ferror((FILE*)ft->fp))
-    lsx_fail_errno(ft, errno, "lsx_readbuf");
+    lsx_fail_errno(ft, errno, "read error on `%s'", ft->filename);
   ft->tell_off += ret;
   return ret;
 }
@@ -186,7 +186,7 @@ size_t lsx_readbuf_rewind(sox_format_t * ft, void *buf, size_t len)
     /* We don't need to "consume" them from the buffer because
      * readbuf_rewind called twice wuold return the same again
      */
-    if (bytes_read < len) lsx_warn("Won't be able to rewind again");
+    if (bytes_read < len) lsx_warn("won't be able to rewind again");
   }
 
   clearerr((FILE*)ft->fp);  /* So that we can read again from a file being written */
@@ -202,7 +202,7 @@ size_t lsx_readbuf_rewind(sox_format_t * ft, void *buf, size_t len)
 
   ret = bytes_read;
   if (ret != len && ferror((FILE*)ft->fp))
-    lsx_fail_errno(ft, errno, "lsx_readbuf");
+    lsx_fail_errno(ft, errno, "read error on `%s'", ft->filename);
 
   if (!ft->seekable) {
     /* Remember the bytes that were returned so that we can return them again
@@ -240,19 +240,18 @@ int lsx_padbytes(sox_format_t * ft, size_t n)
   return (SOX_SUCCESS);
 }
 
-/* See if a data buffer contains all zero bytes.
- * There must be a faster way to do this,
- * like memcmp against a constant zeroed buffer.
- */
+/* See if a data buffer contains all zero bytes. */
 static sox_bool is_zero(void const *buf, size_t len)
 {
-  char const *bufp = (char *)buf;
+  static char zerobuf[1024];
+  char const *bufp = buf;
 
   while (len > 0) {
-    if (*bufp++) return 0;
-    len--;
+    size_t n = min(len, sizeof(zerobuf));
+    if (memcmp(bufp, zerobuf, n) != 0) return sox_false;
+    bufp += n; len -= n;
   }
-  return 1;
+  return sox_true;
 }
 
 /* Write a buffer of data of length bytes.
@@ -370,7 +369,15 @@ int lsx_seeki(sox_format_t * ft, off_t offset, int whence)
           ft->last_byte_was_zero = sox_false;
         }
 
-        if (fseeko((FILE*)ft->fp, offset, whence))
+        /* There is a bug in glibc < 2.22 with SEEK_END on a stream created
+         * by fmemopen(): the offset was subtracted from the end-of-stream
+         * position instead of being added.
+         * Workaround: in this case, seek to the end and then seek back.
+         */
+        if (whence == SEEK_END
+            ? (fseeko((FILE*)ft->fp, (off_t)0, whence) ||
+               fseeko((FILE*)ft->fp, offset, SEEK_CUR))
+            : fseeko((FILE*)ft->fp, offset, whence))
             lsx_fail_errno(ft,errno, "%s", strerror(errno));
         else {
             ft->tell_off = lsx_tell(ft);

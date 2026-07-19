@@ -28,6 +28,11 @@
 # include <strings.h>
 #endif
 
+/* Extra declarations for C89/C90 */
+#if HAVE_STRDUP
+extern char *strdup(const char *s);
+#endif
+
 /*
  * Some of these are also included in win32-glob.c and win32-unicode.c
  * because they can't include "xmalloc.h" for lack of LSX_RETURN_VALID

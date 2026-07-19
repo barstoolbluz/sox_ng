@@ -41,7 +41,7 @@ static int getopts(sox_effect_t *effp, int argc, char **argv)
   lsx_getopt_init(argc, argv, "+n:", NULL, lsx_getopt_flag_none, 1, &optstate);
 
   while ((c = lsx_getopt(&optstate)) != -1) switch (c) {
-    GETOPT_NUMERIC(optstate, 'n', taps, 3, 32767)
+    GETOPT_NUMERIC(optstate, 'n', taps, 3, 1073741823)
     default: lsx_fail("invalid option `-%c'", optstate.opt); return lsx_usage(effp);
   }
   if (p->taps && p->taps%2 == 0) {

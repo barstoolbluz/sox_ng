@@ -167,8 +167,9 @@ typedef struct {
 
 } dolbyb_t;
 
-extern void dolbyb_init(dolbyb_t *);  /* Call before doing anything */
+extern void dolbyb_init(dolbyb_t *);   /* Call before doing anything */
 extern char *dolbyb_start(dolbyb_t *); /* Call when BDepth, NumChn and SmpSec are set */
+extern char *dolbyb_restart(dolbyb_t *); /* Call midstream if ThGain changes */
 extern char *dolbyb_encode(dolbyb_t *, void *in, void *out, size_t nframes);
 extern char *dolbyb_decode(dolbyb_t *, void *in, void *out, size_t nframes);
 extern void dolbyb_free(dolbyb_t *);

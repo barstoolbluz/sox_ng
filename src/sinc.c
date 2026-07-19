@@ -25,6 +25,7 @@ typedef struct {
   double             att, beta, phase, Fc0, Fc1, tbw0, tbw1;
   int                num_taps[2];
   sox_bool           round;
+  sox_bool           delete;
 } priv_t;
 
 static int create(sox_effect_t * effp, int argc, char * * argv)
@@ -32,44 +33,41 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   priv_t * p = (priv_t *)effp->priv;
   dft_filter_priv_t * b = &p->base;
   char * parse_ptr = argv[0];
-  int i = 0;
+  char * frequency_range_argument; /* For error reporting */
+  int i = 0; /* How many of the two frequency range specifiers have we seen? */
 
   lsx_getopt_t optstate;
-  lsx_getopt_init(argc, argv, "+ra:b:p:MILt:n:", NULL, lsx_getopt_flag_none, 1, &optstate);
+  lsx_getopt_init(argc, argv, "+ra:b:p:MILt:n:d", NULL, lsx_getopt_flag_none, 1, &optstate);
 
   b->filter_ptr = &b->filter;
   p->phase = 50;
   p->beta = -1;
   while (i < 2) {
     int c = 1;
-    while (c && (c = lsx_getopt(&optstate)) != -1) {
-      /* Make error messages say "`att' must be from X to Y"
-       * instead of "`p->att' must be from X to Y"
-       * or "`p->num_taps[1]' must be from X to Y"
-       */
-      double att = p->att, beta = p->beta, phase=p->phase;
-      int taps = p->num_taps[1];
+    int taps = p->num_taps[1]; /* Local alias for better usage message */
 
+    while (c && (c = lsx_getopt(&optstate)) != -1) {
       switch (c) {
         char * parse_ptr2;
       case 'r': p->round = sox_true; break;
-      GETOPT_LOCAL_NUMERIC(optstate, 'a', att,  40 , 180)
-      GETOPT_LOCAL_NUMERIC(optstate, 'b', beta,  0 , 256)
-      GETOPT_LOCAL_NUMERIC(optstate, 'p', phase, 0, 100)
-      case 'M': phase =  0; break;
-      case 'I': phase = 25; break;
-      case 'L': phase = 50; break;
-      GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 32767)
+      GETOPT_NUMERIC(optstate, 'a', att,  40 , 180)
+      GETOPT_NUMERIC(optstate, 'b', beta,  0 , 256)
+      GETOPT_NUMERIC(optstate, 'p', phase, 0, 100)
+      case 'M': p->phase =  0; break;
+      case 'I': p->phase = 25; break;
+      case 'L': p->phase = 50; break;
+      GETOPT_LOCAL_NUMERIC(optstate, 'n', taps, 11, 1073741823)
       case 't': p->tbw1 = lsx_parse_frequency(optstate.arg, &parse_ptr2);
         if (p->tbw1 < 1) {
           lsx_fail("transition bandwidth must be 1 Hz or more");
           return SOX_EOF;
         }
         if (*parse_ptr2) {
-          lsx_fail("don't understand `%s' after -t", parse_ptr2);
+          lsx_fail("invalid transition bandwidth `%s'", parse_ptr2);
           return SOX_EOF;
         }
         break;
+      case 'd': p->delete = sox_true; break;
       case '?': case ':':
         if (optstate.ind < argc) {
 	  /* '-' and more than one character or something that doesn't
@@ -83,30 +81,29 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
               goto endwhile;
 	  }
 	}
-        if (optstate.ind > argc) {
-          /* Missing obligatory parameter */
-          lsx_fail("%s requires an argument", argv[optstate.ind - 2]);
-          return SOX_EOF;
-        }
-        if (isdigit(argv[optstate.ind - 1][1])) {
+        if (isdigit((unsigned char)argv[optstate.ind - 1][1])) {
           /* -1 to -9: optstate.ind advances for an unknown single-char flag */
 	  /* Not sure what -0 is supposed to mean - it gives silence */
           optstate.ind--;
           goto endwhile;
         }
+        if (optstate.ind >= argc) {
+          /* Missing obligatory parameter */
+          lsx_fail("%s requires an argument", argv[optstate.ind - 1]);
+          return SOX_EOF;
+        }
         /* Invalid option flag */
-        lsx_fail("unknown option `-%c'", optstate.opt);
+        lsx_fail("invalid option `-%c'", optstate.opt);
 	return lsx_usage(effp);
 
       default: goto endwhile; /* Alas, poor "break" */
       }
-      p->att = att; p->beta = beta; p->phase = phase;
-      p->num_taps[1] = taps;
     }
 endwhile: /* Alas, poor "break" */
+    p->num_taps[1] = taps;
 
     if (p->att && p->beta >= 0) {
-      lsx_fail("You can only give one of -a and -b");
+      lsx_fail("you can only give one of -a and -b");
       return SOX_EOF;
     }
     if (p->tbw1 && p->num_taps[1]) {
@@ -116,6 +113,7 @@ endwhile: /* Alas, poor "break" */
     if (!i || !p->Fc1)
       p->tbw0 = p->tbw1, p->num_taps[0] = p->num_taps[1];
     if (!i++ && optstate.ind < argc) {
+      frequency_range_argument = argv[optstate.ind];
       if (*(parse_ptr = argv[optstate.ind++]) != '-')
         p->Fc0 = lsx_parse_frequency(parse_ptr, &parse_ptr);
       if (*parse_ptr == '-')
@@ -131,15 +129,15 @@ endwhile: /* Alas, poor "break" */
     return SOX_EOF;
   }
   if (p->Fc0 < 0 || p->Fc1 < 0) {
-    lsx_fail("invalid frequency range");
+    lsx_fail("invalid frequency range `%s'", frequency_range_argument);
     return SOX_EOF;
   }
   if (*parse_ptr) {
-    /* If nothing has been parsed with it, it's still pointing at "sinc" */
+    /* If no frequencies have been parsed, it's still pointing at "sinc" */
     if (parse_ptr == argv[0])
-      lsx_fail("no frequency range was given");
-    /* Otherwise the parsing of a low or high frequency failed */
-    else lsx_fail("invalid frequency scalar `%s'", parse_ptr);
+      lsx_fail("a frequency range is required");
+    else /* Otherwise the parsing of a low or high frequency failed */
+      lsx_fail("invalid frequency range `%s'", frequency_range_argument);
     return SOX_EOF;
   }
 
@@ -165,7 +163,7 @@ static double * lpf(double Fn, double Fc, double tbw, int * num_taps, double att
   lsx_kaiser_params(att, Fc, (tbw? tbw / Fn : .05) * .5, beta, num_taps);
   if (!n) {
     n = *num_taps;
-    *num_taps = range_limit(n, 11, 32767);
+    *num_taps = range_limit(n, 11, 1073741823);
     if (round)
       *num_taps = 1 + 2 * (int)((int)((*num_taps / 2) * Fc + .5) / Fc + .5);
     lsx_report("num taps = %i (from %i)", *num_taps, n);
@@ -181,9 +179,16 @@ static int start(sox_effect_t * effp)
   if (!f->num_taps) {
     double Fn = effp->in_signal.rate * .5;
     double * h[2];
-    int i, n, post_peak, longer;
+    int i, n;
+    size_t post_peak;
+    int longer;
 
     if (p->Fc0 >= Fn || p->Fc1 >= Fn) {
+      /* If low-pass filtering at a frequency above the sample rate
+       * and -d, pass data through unmodified (i.e. remove ourselves)
+       */
+      if (p->Fc0 == 0 && p->delete) return SOX_EFF_NULL;
+
       lsx_fail("filter frequency must be less than sample-rate / 2");
       return SOX_EOF;
     }
@@ -225,12 +230,12 @@ static char const usage[] = "[-a att|-b beta] [-p phase|-M|-I|-L] [-t tbw|-n tap
 static char const * const extra_usage[] = {
   "OPTION   RANGE    DEFAULT  DESCRIPTION",
   "-a att   40-180     120    Stop band attentuation in dB",
-  "-b beta   0-256  variable  Kaiser window's `beta' parameter",
+  "-b beta   0-256    varies  Kaiser window's `beta' parameter",
   "-p phase  0-100      50    Phase response: 0=minimum, 25=intermediate",
   "                                          50=linear, 100=maximum",
   "-M/-I/-L                   Phase response: minimum/intermediate/linear",
   "-t tbw    1-      5% band  Transition bandwidth",
-  "-n taps  11-32767  varies  Number of filter taps",
+  "-n taps  11-1e9    varies  Number of filter taps",
   "freq(s): 3k=high-pass; -4k=low-pass; 3k-4k=band-pass; 4k-3k=band-reject",
   "-t or -n before frequency range applies to both; after only affects freqLP",
 

@@ -30,6 +30,15 @@
 #include "HPF2.h"
 #include "DiodeClip.h"
 
+#include <math.h>
+
+/* This is not declared when compiling -ansi (C90) */
+extern double round(double x);
+
+/* Decibels-to-Gain and Gain-to-Decibels conversions */
+#define ConvertDb(dB) pow(10, (dB) / 20)
+#define ConvertGain(Gain) (log10(Gain) * 20)
+
 #define SidePathNumberOfPaths  ParamMaxChnl
 
 char *SidePathInit(dolbyb_t *Param)

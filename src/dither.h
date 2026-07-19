@@ -29,7 +29,7 @@ static int NAME(sox_effect_t * effp, const sox_sample_t * ibuf,
   while (len--) {
     if (p->auto_detect) {
       p->history = (p->history << 1) +
-          !!(*ibuf & (((unsigned)-1) >> p->prec));
+          !!(*ibuf & (((unsigned)-1) >> p->precision));
       if (p->history && p->dither_off) {
         p->dither_off = sox_false;
         lsx_debug("flow %" PRIuPTR ": on  @ %" PRIu64, effp->flow, p->num_output);
@@ -42,7 +42,7 @@ static int NAME(sox_effect_t * effp, const sox_sample_t * ibuf,
     }
 
     if (!p->dither_off) {
-      int32_t r1 = RANQD1 >> p->prec, r2 = RANQD1 >> p->prec; /* Defer add! */
+      int32_t r1 = RANQD1 >> p->precision, r2 = RANQD1 >> p->precision; /* Defer add! */
 #ifdef IIR
       double d1, d, output = 0;
 #else
@@ -56,15 +56,15 @@ static int NAME(sox_effect_t * effp, const sox_sample_t * ibuf,
       d = *ibuf++ - output;
       p->previous_outputs[p->pos + N] = p->previous_outputs[p->pos] = output;
 #endif
-      d1 = (d + r1 + r2) / (1 << (32 - p->prec));
+      d1 = (d + r1 + r2) / (1 << (32 - p->precision));
       i = d1 < 0? d1 - .5 : d1 + .5;
       p->previous_errors[p->pos + N] = p->previous_errors[p->pos] =
-          (double)i * (1 << (32 - p->prec)) - d;
-      if (i < (int)((unsigned)-1 << (p->prec-1)))
+          (double)i * (1 << (32 - p->precision)) - d;
+      if (i < (int)((unsigned)-1 << (p->precision-1)))
         ++effp->clips, *obuf = SOX_SAMPLE_MIN;
-      else if (i > (int)SOX_INT_MAX(p->prec))
-        ++effp->clips, *obuf = SOX_INT_MAX(p->prec) << (32 - p->prec);
-      else *obuf = i << (32 - p->prec);
+      else if (i > (int)SOX_INT_MAX(p->precision))
+        ++effp->clips, *obuf = SOX_INT_MAX(p->precision) << (32 - p->precision);
+      else *obuf = i << (32 - p->precision);
       ++obuf;
     }
     else

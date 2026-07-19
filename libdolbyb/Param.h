@@ -5,6 +5,9 @@
 
 #include <math.h>  /* for pow() */
 
+/* This is not declared when compiling -ansi (C90) */
+extern double round(double x);
+
 #define ParamMaxChnl    2   /* Maximum number of channels allowed */
 
 /* Advanced parameters */

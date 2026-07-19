@@ -74,7 +74,7 @@ static const char read_error_msg[] = "file is truncated";
  *      size and encoding of samples,
  *      mono/stereo/quad.
  */
-static int startread(sox_format_t * ft)
+static int startread_tx16w(sox_format_t * ft)
 {
     int c;
     char filetype[7];
@@ -121,6 +121,7 @@ static int startread(sox_format_t * ft)
     /*
      * We should now be pointing at start of raw sample data in file
      */
+    ft->data_start = lsx_tell(ft);
 
     /* Check to make sure we got a good filetype ID from file */
     lsx_debug("Found header filetype %s",filetype);
@@ -175,6 +176,7 @@ static int startread(sox_format_t * ft)
     ft->signal.channels = 1 ; /* not sure about stereo sample data yet ??? */
     ft->encoding.bits_per_sample = 12;
     ft->encoding.encoding = SOX_ENCODING_SIGN2;
+    ft->signal.length = num_samp_bytes * 3 / 2;  /* 12 bits per sample */
 
     return(SOX_SUCCESS);
 }
@@ -186,7 +188,7 @@ static int startread(sox_format_t * ft)
  * Return number of samples read.
  */
 
-static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
+static size_t read_samples_tx16w(sox_format_t * ft, sox_sample_t *buf, size_t len)
 {
     priv_t * sk = (priv_t *) ft->priv;
     size_t done = 0;
@@ -243,7 +245,7 @@ static const char write_error_msg[] = "write error";
     return(SOX_EOF); \
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_tx16w(sox_format_t * ft)
 {
     priv_t * sk = (priv_t *) ft->priv;
     struct WaveHeader_ WH;
@@ -268,7 +270,7 @@ static int startwrite(sox_format_t * ft)
     return(SOX_SUCCESS);
 }
 
-static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t len0)
+static size_t write_samples_tx16w(sox_format_t * ft, const sox_sample_t *buf, size_t len0)
 {
   priv_t * sk = (priv_t *) ft->priv;
   size_t last_i, i = 0, len = min(len0, TXMAXLEN - sk->samples_out);
@@ -301,7 +303,7 @@ static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t l
   return i;
 }
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_tx16w(sox_format_t * ft)
 {
   priv_t * sk = (priv_t *) ft->priv;
     struct WaveHeader_ WH;
@@ -309,7 +311,7 @@ static int stopwrite(sox_format_t * ft)
 
     if (sk->odd_flag) {
       sox_sample_t pad = 0;
-      if (write_samples(ft, &pad, (size_t) 1) != 1)
+      if (write_samples_tx16w(ft, &pad, (size_t) 1) != 1)
         write_error();
     }
 
@@ -335,7 +337,7 @@ static int stopwrite(sox_format_t * ft)
     else                            WH.sample_rate = 2;
 
     if (sk->samples_out >= TXMAXLEN) {
-        lsx_warn("Sound too large. Truncating, Loop Off");
+        lsx_warn("sound too large. Truncating, Loop Off");
         AttackLength       = TXMAXLEN/2;
         LoopLength         = TXMAXLEN/2;
     }
@@ -381,11 +383,20 @@ static int stopwrite(sox_format_t * ft)
     WH.rpt_length[2] = (0x01 & (LoopLength >> 16)) +
         magic2[WH.sample_rate];
 
-    lsx_rewind(ft);
-    if (lsx_writebuf(ft, &WH, (size_t) 32) != 32)
-        write_error();
+    /* If a memopen()ed file is closed with the seek pointer before the end,
+     * the file gets truncated and fseek(SEEK_END) doesn't work, so
+     * remember the length, rewrite the header and seek to the end again.
+     */
+    {
+        off_t o = ftell(ft->fp);
 
-    return(SOX_SUCCESS);
+        lsx_rewind(ft);
+        if (lsx_writebuf(ft, &WH, (size_t) 32) != 32)
+            write_error();
+        fseek(ft->fp, o, SEEK_SET);
+
+        return(SOX_SUCCESS);
+    }
 }
 
 LSX_FORMAT_HANDLER(txw)
@@ -395,8 +406,8 @@ LSX_FORMAT_HANDLER(txw)
   static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 12, 0, 0};
   static sox_format_handler_t const handler = {SOX_LIB_VERSION_CODE,
     "Yamaha TX-16W sampler", names, SOX_FILE_MONO,
-    startread, read_samples, NULL,
-    startwrite, write_samples, stopwrite,
+    startread_tx16w, read_samples_tx16w, NULL,
+    startwrite_tx16w, write_samples_tx16w, stopwrite_tx16w,
     NULL, write_encodings, write_rates, sizeof(priv_t)
   };
   return &handler;

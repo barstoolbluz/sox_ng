@@ -38,7 +38,7 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
 {
   sample_t const * input = stage_read_p(p);
   int i, num_in = stage_occupancy(p), max_num_out = 1 + num_in*p->out_in_ratio;
-  sample_t * output = fifo_reserve(output_fifo, max_num_out);
+  sample_t * output = lsx_fifo_reserve(output_fifo, max_num_out);
 
 #if defined HI_PREC_CLOCK
   if (p->use_hi_prec_clock) {
@@ -55,7 +55,7 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
       CONVOLVE
       output[i] = sum;
     }
-    fifo_read(&p->fifo, (int)at, NULL);
+    lsx_fifo_read(&p->fifo, (int)at, NULL);
     p->at.hi_prec_clock = at - (int)at;
   } else
 #endif
@@ -72,11 +72,11 @@ static void FUNCTION(stage_t * p, fifo_t * output_fifo)
       CONVOLVE
       output[i] = sum;
     }
-    fifo_read(&p->fifo, p->at.parts.integer, NULL);
+    lsx_fifo_read(&p->fifo, p->at.parts.integer, NULL);
     p->at.parts.integer = 0;
   }
   assert(max_num_out - i >= 0);
-  fifo_trim_by(output_fifo, max_num_out - i);
+  lsx_fifo_trim_by(output_fifo, max_num_out - i);
 }
 
 #undef _

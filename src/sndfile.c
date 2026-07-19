@@ -46,11 +46,7 @@ static const char* const sndfile_library_names[] =
   #define SNDFILE_FUNC_STOP LSX_DLENTRY_STUB
 #else
   #define SNDFILE_FUNC      LSX_DLENTRY_STATIC
-#ifdef HACKED_LSF
-  #define SNDFILE_FUNC_STOP LSX_DLENTRY_STATIC
-#else
   #define SNDFILE_FUNC_STOP LSX_DLENTRY_STUB
-#endif
 #endif /* DL_SNDFILE */
 
 #define SNDFILE_FUNC_ENTRIES(f,x) \
@@ -132,6 +128,7 @@ static int ft_enc(unsigned size, sox_encoding_t e)
   if (e == SOX_ENCODING_VORBIS)   return SF_FORMAT_VORBIS;
 #endif
 #ifdef HAVE_SF_FORMAT_MPEG
+  if (e == SOX_ENCODING_MP2)      return SF_FORMAT_MPEG_LAYER_II;
   if (e == SOX_ENCODING_MP3)      return SF_FORMAT_MPEG_LAYER_III;
 #endif
   return 0; /* Bad encoding */
@@ -175,8 +172,12 @@ static sox_encoding_t sox_enc(int ft_encoding, unsigned * size)
     case SF_FORMAT_VORBIS   : *size =  0; return SOX_ENCODING_VORBIS;
 #endif
 #if HAVE_SF_FORMAT_MPEG
+    /* By default, SoX declares MP3 precision as 16-bit so that
+     * decoding them gives CD quality, which is what people expect. */
+    case SF_FORMAT_MPEG_LAYER_I
+                            : *size = 16; return SOX_ENCODING_MP1;
     case SF_FORMAT_MPEG_LAYER_II
-                            : *size = 16; return SOX_ENCODING_MP3;
+                            : *size = 16; return SOX_ENCODING_MP2;
     case SF_FORMAT_MPEG_LAYER_III
                             : *size = 16; return SOX_ENCODING_MP3;
 #endif
@@ -194,20 +195,8 @@ static struct {
   { "wav",      SF_FORMAT_WAV },
   { "au",       SF_FORMAT_AU },
   { "snd",      SF_FORMAT_AU },
-  { "caf",      SF_FORMAT_CAF },
-  { "flac",     SF_FORMAT_FLAC },
-  { "wve",      SF_FORMAT_WVE },  /* Probably broken before 1.0.18 */
-#ifdef HAVE_SF_FORMAT_OGG
-  { "ogg",      SF_FORMAT_OGG | SF_FORMAT_VORBIS },  /* From 1.0.16 */
-#endif
-#ifdef HAVE_SF_FORMAT_MPC2K
-  { "mpc2k",    SF_FORMAT_MPC2K },  /* From 1.0.25 */
-#endif
-#ifdef HAVE_SF_FORMAT_MPEG
-  { "mp3",      SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III },  /* From 1.1.0 */
-#endif
-  { "svx",      SF_FORMAT_SVX },
-  { "8svx",     SF_FORMAT_SVX },
+  { "svx",      SF_FORMAT_SVX | SF_FORMAT_PCM_S8 },
+  { "8svx",     SF_FORMAT_SVX | SF_FORMAT_PCM_S8 },
   { "paf",      SF_ENDIAN_BIG | SF_FORMAT_PAF },
   { "fap",      SF_ENDIAN_LITTLE | SF_FORMAT_PAF },
   { "gsm",      SF_FORMAT_RAW | SF_FORMAT_GSM610 },
@@ -223,9 +212,31 @@ static struct {
   { "mat",      SF_FORMAT_MAT4 },
   { "pvf",      SF_FORMAT_PVF },
   { "sds",      SF_FORMAT_SDS },
-  { "sd2",      SF_FORMAT_SD2 },
   { "vox",      SF_FORMAT_RAW | SF_FORMAT_VOX_ADPCM },
-  { "xi",       SF_FORMAT_XI }
+  { "xi",       SF_FORMAT_XI },
+#ifdef HAVE_SF_FORMAT_SD2
+  { "sd2",      SF_FORMAT_SD2 }, /* From 1.0.11 */
+#endif
+#ifdef HAVE_SF_FORMAT_CAF
+  { "caf",      SF_FORMAT_CAF }, /* From 1.0.12 */
+#endif
+#ifdef HAVE_SF_FORMAT_FLAC
+  { "flac",     SF_FORMAT_FLAC }, /* From 1.0.12 */
+#endif
+#ifdef HAVE_SF_FORMAT_WVE
+  { "wve",      SF_FORMAT_WVE },  /* Probably broken before 1.0.18 */
+#endif
+#ifdef HAVE_SF_FORMAT_OGG
+  { "ogg",      SF_FORMAT_OGG | SF_FORMAT_VORBIS },  /* From 1.0.18 */
+#endif
+#ifdef HAVE_SF_FORMAT_MPC2K
+  { "mpc",      SF_FORMAT_MPC2K },  /* From 1.0.25 */
+  { "mpc2k",    SF_FORMAT_MPC2K },  /* From 1.0.25 */
+#endif
+#ifdef HAVE_SF_FORMAT_MPEG
+  { "mp2",      SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_II },  /* From 1.1.0 */
+  { "mp3",      SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III },  /* From 1.1.0 */
+#endif
 };
 
 static int sf_stop_stub(SNDFILE *sndfile UNUSED)
@@ -300,7 +311,7 @@ static int name_to_format(const char *name)
   return 0;
 }
 
-static int start(sox_format_t * ft)
+static int start_sndfile(sox_format_t * ft)
 {
   priv_t * sf = (priv_t *)ft->priv;
   int subtype = ft_enc(ft->encoding.bits_per_sample? ft->encoding.bits_per_sample : ft->signal.precision, ft->encoding.encoding);
@@ -331,6 +342,8 @@ static int start(sox_format_t * ft)
     switch (sf->sf_info->format) {
     case SF_FORMAT_OGG | SF_FORMAT_VORBIS:
 #if HAVE_SF_FORMAT_MPEG
+    case SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_I:
+    case SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_II:
     case SF_FORMAT_MPEG | SF_FORMAT_MPEG_LAYER_III:
 #endif
       break;
@@ -350,7 +363,7 @@ static int start(sox_format_t * ft)
 /*
  * Close file for libsndfile (this doesn't close the file handle)
  */
-static int stop(sox_format_t * ft)
+int stop_sndfile(sox_format_t * ft)
 {
   priv_t * sf = (priv_t *)ft->priv;
   sf->sf_stop(sf->sf_file);
@@ -392,7 +405,7 @@ static int check_read_params(sox_format_t * ft, unsigned channels,
 /*
  * Open file in sndfile.
  */
-static int startread(sox_format_t * ft)
+int startread_sndfile(sox_format_t * ft)
 {
   priv_t * sf = (priv_t *)ft->priv;
   unsigned bits_per_sample;
@@ -400,7 +413,7 @@ static int startread(sox_format_t * ft)
   sox_rate_t rate;
   const char *extension = lsx_find_file_extension(ft->filename);
 
-  if (start(ft) == SOX_EOF)
+  if (start_sndfile(ft) == SOX_EOF)
       return SOX_EOF;
 
   /*
@@ -452,18 +465,18 @@ static int startread(sox_format_t * ft)
  * Read up to len samples of type sox_sample_t from file into buf[].
  * Return number of samples read.
  */
-static size_t read_samples(sox_format_t * ft, sox_sample_t *buf, size_t len)
+size_t read_samples_sndfile(sox_format_t * ft, sox_sample_t *buf, size_t len)
 {
   priv_t * sf = (priv_t *)ft->priv;
   /* FIXME: We assume int == sox_sample_t here */
   return (size_t)sf->sf_read_int(sf->sf_file, (int *)buf, (sf_count_t)len);
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_sndfile(sox_format_t * ft)
 {
   priv_t * sf = (priv_t *)ft->priv;
 
-  if (start(ft) == SOX_EOF)
+  if (start_sndfile(ft) == SOX_EOF)
       return SOX_EOF;
 
   /* If output format is invalid, try to find a sensible default */
@@ -485,6 +498,7 @@ static int startwrite(sox_format_t * ft)
 
     if (!sf->sf_format_check(sf->sf_info)) {
       lsx_fail("cannot find a usable output encoding");
+      stop_sndfile(ft);
       return SOX_EOF;
     }
     if ((sf->sf_info->format & SF_FORMAT_TYPEMASK) != SF_FORMAT_RAW 
@@ -509,7 +523,7 @@ static int startwrite(sox_format_t * ft)
   if (sf->sf_file == NULL) {
     memset(ft->sox_errstr, 0, sizeof(ft->sox_errstr));
     strncpy(ft->sox_errstr, sf->sf_strerror(sf->sf_file), sizeof(ft->sox_errstr)-1);
-    free(sf->sf_file);
+    stop_sndfile(ft);
     return SOX_EOF;
   }
 
@@ -525,14 +539,14 @@ static int startwrite(sox_format_t * ft)
  * Write len samples of type sox_sample_t from buf[] to file.
  * Return number of samples written.
  */
-static size_t write_samples(sox_format_t * ft, const sox_sample_t *buf, size_t len)
+static size_t write_samples_sndfile(sox_format_t * ft, const sox_sample_t *buf, size_t len)
 {
   priv_t * sf = (priv_t *)ft->priv;
   /* FIXME: We assume int == sox_sample_t here */
   return (size_t)sf->sf_write_int(sf->sf_file, (int *)buf, (sf_count_t)len);
 }
 
-static int seek(sox_format_t * ft, sox_uint64_t offset)
+int seek_sndfile(sox_format_t * ft, sox_uint64_t offset)
 {
   priv_t * sf = (priv_t *)ft->priv;
   sf->sf_seek(sf->sf_file, (sf_count_t)(offset / ft->signal.channels), SEEK_CUR);
@@ -542,23 +556,47 @@ static int seek(sox_format_t * ft, sox_uint64_t offset)
 LSX_FORMAT_HANDLER(sndfile)
 {
   static char const * const names[] = {
-    "sndfile", /* Special type to force use of sndfile for the following: */
-  /* LSF implementation of formats built in to SoX: */
-    /* "aif", */
-    /* "au", */
-    /* "gsm", */
-    /* "mp3", */
-    /* "nist", */
-    /* "raw", */
-    /* "sf", "ircam", */
-    /* "snd", */
-    /* "svx", */
-    /* "voc", */
-    /* "vox", */
-    /* "wav", */
-    /* "wve", */
-  /* LSF wrappers of formats already wrapped in SoX: */
-    /* "flac", */
+    "sndfile",
+    /* Formats for which SoX does not have an internal handler
+     * and for which libsndfile is the preferred handler,
+     * with format-specific handlers below */
+    "caf",
+    "fap",
+    "mat4",
+    "mat5",
+#ifdef HAVE_SF_FORMAT_MPC2K
+    "mpc",
+    "mpc2k",
+#endif
+    "paf",
+    "pvf",
+    "sd2",
+    "sds",
+    "w64",
+    "xi",
+    /* Other extensions that it can code that have always-static built-in
+     * handlers */
+    "aif", "au",
+#ifdef HAVE_SF_FORMAT_AVR
+    "avr",
+#endif
+    "ircam",
+    "nist",
+    "raw", "sf", "snd", "svx", "voc", "vox", "wav", "wve",
+    /* Other extensions that can be dynamically loaded, omitted here
+     * otherwise "configure --with-dyn-default --with-sndfile=yes"
+     * makes it the default handler instead of using the dynamic module.
+    "gsm",
+#ifdef HAVE_SF_FORMAT_FLAC
+    "flac",
+#endif
+#ifdef HAVE_SF_FORMAT_MPEG
+    "mp1", "mp2", "mp3",
+#endif
+#ifdef HAVE_SF_FORMAT_OGG
+    "ogg",
+#endif
+     */
     NULL
   };
 
@@ -572,17 +610,180 @@ LSX_FORMAT_HANDLER(sndfile)
     SOX_ENCODING_MS_ADPCM, 4, 0,
     SOX_ENCODING_OKI_ADPCM, 4, 0,
     SOX_ENCODING_GSM, 0,
+    SOX_ENCODING_MP2, 0,
     SOX_ENCODING_MP3, 0,
     0};
 
   static sox_format_handler_t const format = {SOX_LIB_VERSION_CODE,
     "Pseudo format to use libsndfile", names, 0,
-    startread, read_samples, stop,
-    startwrite, write_samples, stop,
-    seek, write_encodings, NULL, sizeof(priv_t)
+    startread_sndfile, read_samples_sndfile, stop_sndfile,
+    startwrite_sndfile, write_samples_sndfile, stop_sndfile,
+    seek_sndfile, write_encodings, NULL, sizeof(priv_t)
   };
 
   return &format;
+}
+
+#if HAVE_SF_FORMAT_CAF
+LSX_FORMAT_HANDLER(caf)
+{
+  static char const * const names[] = {"caf", NULL};
+  static unsigned const write_encodings[] = {
+    SOX_ENCODING_SIGN2, 16, 24, 32, 8, 0,
+    SOX_ENCODING_FLOAT, 32, 64, 0,
+    SOX_ENCODING_ALAW, 8, 0,
+    SOX_ENCODING_ULAW, 8, 0,
+    0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Apples's Core Audio Format";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+#endif
+
+LSX_FORMAT_HANDLER(fap)
+{
+  static char const * const names[] = {"fap", NULL};
+  static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 24, 16, 8,0,0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description =
+    "Ensoniq PARIS digital audio editing system (little endian)";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+LSX_FORMAT_HANDLER(mat4)
+{
+  static char const * const names[] = {"mat4", "mat", NULL};
+  static unsigned const write_encodings[] = {
+    SOX_ENCODING_SIGN2, 16, 32, 0,
+    SOX_ENCODING_FLOAT, 32, 64, 0,
+    0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Gnu Octave 2.0 format";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+LSX_FORMAT_HANDLER(mat5)
+{
+  static char const * const names[] = {"mat5", NULL};
+  static unsigned const write_encodings[] = {
+    SOX_ENCODING_SIGN2, 16, 32, 0,
+    SOX_ENCODING_FLOAT, 32, 64, 0,
+    0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Gnu Octave 2.1 format";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+#if HAVE_SF_FORMAT_MPC2K
+LSX_FORMAT_HANDLER(mpc2k)
+{
+  static char const * const names[] = { "mpc2k", "mpc", NULL };
+  static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 16, 0, 0};
+  static sox_format_handler_t handler;
+
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Akai MPC-2000 format";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+#endif
+
+LSX_FORMAT_HANDLER(paf)
+{
+  static char const * const names[] = {"paf", NULL};
+  static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 24, 16, 8,0,0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description =
+    "Ensoniq PARIS digital audio editing system (big endian)";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+LSX_FORMAT_HANDLER(pvf)
+{
+  static char const * const names[] = {"pvf", NULL};
+  static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 32, 16, 8,0,0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Portable Voice Format";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+#if HAVE_SF_FORMAT_SD2
+LSX_FORMAT_HANDLER(sd2)
+{
+  static char const * const names[] = {"sd2", NULL};
+  static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 24, 16, 8,0,0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Sound Designer II";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+#endif
+
+LSX_FORMAT_HANDLER(sds)
+{
+  static char const * const names[] = {"sds", NULL};
+  /* SDS can encode from 8 to 28 bits */
+  static unsigned const write_encodings[] = {SOX_ENCODING_SIGN2, 24, 16, 8,0,0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "MIDI Sample Dump Standard";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+LSX_FORMAT_HANDLER(w64)
+{
+  static char const * const names[] = {"w64", NULL};
+  static unsigned const write_encodings[] = {
+    SOX_ENCODING_SIGN2, 16, 24, 32, 0,
+    SOX_ENCODING_UNSIGNED, 8, 0,
+    SOX_ENCODING_FLOAT, 32, 64, 0,
+    SOX_ENCODING_ALAW, 8, 0,
+    SOX_ENCODING_ULAW, 8, 0,
+    SOX_ENCODING_IMA_ADPCM, 4, 0,
+    SOX_ENCODING_MS_ADPCM, 4, 0,
+    SOX_ENCODING_GSM, 0,
+    0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Sound Forge Audio Format";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
+}
+
+LSX_FORMAT_HANDLER(xi)
+{
+  static char const * const names[] = {"xi", NULL};
+  static unsigned const write_encodings[] = {SOX_ENCODING_DPCM, 16, 8, 0, 0};
+  static sox_format_handler_t handler;
+  handler = *lsx_sndfile_format_fn();
+  handler.description = "Fasttracker 2";
+  handler.names = names;
+  handler.write_formats = write_encodings;
+  return &handler;
 }
 
 #endif

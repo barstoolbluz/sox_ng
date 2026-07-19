@@ -10,6 +10,7 @@
  */
 
 #include "sox_i.h"
+#include <ctype.h>   /* for isdigit() */
 
 /* Private data */
 
@@ -25,46 +26,70 @@
  */
 typedef struct {
         int     *counter;
-        int     num_delays;
-        float   **delay_buf;
-        float   gain_in, gain_out;
+        unsigned num_delays;
+        float  **delay_buf;
+        float    gain_in, gain_out;
         float   *delay, *decay;
         ptrdiff_t *samples;
-        size_t sumsamples;
+        size_t   sumsamples;
 } priv_t;
 
 /*
  * Process options
  */
-static int sox_echos_getopts(sox_effect_t * effp, int argc, char **argv)
+static int echos_getopts(sox_effect_t * effp, int argc, char **argv)
 {
         priv_t * echos = (priv_t *) effp->priv;
+        char *endptr;
         int i;
 
         echos->num_delays = 0;
         echos->delay = echos->decay = NULL;
 
         --argc, ++argv;
-        if ((argc < 4) || (argc % 2))
-          return lsx_usage(effp);
+        if (argc < 4) {
+	  lsx_fail("gain_in, gain_out and one delay decay pair are required");
+          return SOX_EOF;
+	}
+	if (argc % 2) {
+	  lsx_fail("each delay requires a decay");
+          return SOX_EOF;
+	}
 
         i = 0;
-        sscanf(argv[i++], "%f", &echos->gain_in);
-        sscanf(argv[i++], "%f", &echos->gain_out);
+        echos->gain_in = lsx_strtod(endptr = argv[i], &endptr);
+        if (endptr == argv[i] || *endptr) {
+          lsx_fail("gain-in `%s' is not a number", argv[i]);
+          return SOX_EOF;
+        }
+        i++;
+        echos->gain_out = lsx_strtod(endptr = argv[i], &endptr);
+        if (endptr == argv[i] || *endptr) {
+          lsx_fail("gain-out `%s' is not a number", argv[i]);
+          return SOX_EOF;
+        }
+        i++;
         while (i < argc) {
 		float delay, decay;
 
-                if (sscanf(argv[i], "%f", &delay) != 1) {
+                delay = lsx_strtod(endptr = argv[i], &endptr);
+                if (endptr == argv[i] || *endptr) {
                         lsx_fail("delay `%s' is not a number", argv[i]);
                         return (SOX_EOF);
                 }
-                if (delay < 0 || !isfinite(delay)) {
-                        lsx_fail("delays must be positive");
+                if (delay < 0) {
+                        lsx_fail("delays can't be negative");
                         return (SOX_EOF);
                 }
 		i++;
-                if (sscanf(argv[i], "%f", &decay) != 1) {
+
+                decay = lsx_strtod(endptr = argv[i], &endptr);
+                if (endptr == argv[i] || *endptr) {
                         lsx_fail("decay `%s' is not a number", argv[i]);
+                        return (SOX_EOF);
+                }
+                if (decay < 0 || decay > 1) {
+                        lsx_fail("decays must be from 0 to 1");
                         return (SOX_EOF);
                 }
 		i++;
@@ -78,13 +103,102 @@ static int sox_echos_getopts(sox_effect_t * effp, int argc, char **argv)
         return (SOX_SUCCESS);
 }
 
+static char *
+get_echos(sox_effect_t *effp, char *name)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+
+  if (!strcmp(name, "gain_in")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->gain_in);
+  }
+  if (!strcmp(name, "gain_out")) {
+    s = lsx_malloc(16);
+    sprintf(s, "%g", p->gain_out);
+  }
+
+  /* An array-based parameter */
+  if (!strncmp(name, "decay", 5)) {
+    unsigned i;
+    unsigned nth = 0; /* 0 for "decay", non-zero for "decay1" etc. */
+
+    if (isdigit((unsigned char)name[5])) {
+      nth = atoi(name + 5);
+      if (nth == 0) {
+        lsx_warn("keymaps for individual decays start at 1");
+        return NULL;
+      }
+    }
+
+    for (i=0; i < p->num_delays; i++) {
+      if (nth == 0 || nth == i+1) {
+        /* If they ask for "decay" and there are several,
+         * return the first one */
+        s = lsx_malloc(16);
+        sprintf(s, "%g", p->decay[i]);
+        return s;
+      }
+    }
+  }
+
+  return s;
+}
+
+static char *
+set_echos(sox_effect_t *effp, char *name, char *value)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+  char *endptr = value;
+  double v = lsx_strtod(value, &endptr);
+
+  if (endptr == value || *endptr != '\0') return NULL;
+
+  if (!strcmp(name, "gain_in")) {
+    p->gain_in = v;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+  if (!strcmp(name, "gain_out")) {
+    p->gain_out = v;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", v);
+  }
+
+  /* An array-based parameter */
+  if (!strncmp(name, "decay", strlen("decay"))) {
+    unsigned i;
+    unsigned nth = 0; /* 0 for "decay", non-zero for "decay1" etc. */
+
+    if (isdigit((unsigned char)name[5])) {
+      nth = atoi(name + 5);
+      if (nth == 0) {
+        lsx_warn("keymaps for individual decays start at 1");
+        return NULL;
+      }
+    }
+    for (i=0; i < p->num_delays; i++) {
+      if (nth == 0 || nth == i+1) {
+        p->decay[i] = v;
+
+        /* If we adjust several, return the last one,
+         * after all, they'll all be the same */
+        if (!s) s = lsx_malloc(16);
+        sprintf(s, "%g", p->decay[i]);
+      }
+    }
+  }
+  return s;
+}
+
 /*
  * Prepare for processing.
  */
-static int sox_echos_start(sox_effect_t * effp)
+static int echos_start(sox_effect_t * effp)
 {
         priv_t * echos = (priv_t *) effp->priv;
-        int i;
+        unsigned i;
         float sum_in_volume;
 
 	lsx_vcalloc(echos->counter, echos->num_delays);
@@ -111,7 +225,11 @@ static int sox_echos_start(sox_effect_t * effp)
                 lsx_warn("the output may saturate; a safe gain-out is %g",
                          1.0 / fabsf(sum_in_volume));
 
-        effp->out_signal.length = SOX_UNKNOWN_LEN; /* TODO: calculate actual length */
+        if (effp->in_signal.length == SOX_UNKNOWN_LEN)
+                effp->out_signal.length = SOX_UNKNOWN_LEN;
+        else
+                effp->out_signal.length =
+                        effp->in_signal.length + echos->sumsamples;
 
         return (SOX_SUCCESS);
 }
@@ -120,11 +238,11 @@ static int sox_echos_start(sox_effect_t * effp)
  * Processed signed long samples from ibuf to obuf.
  * Return number of samples processed.
  */
-static int sox_echos_flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
+static int echos_flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
                 size_t *isamp, size_t *osamp)
 {
         priv_t * echos = (priv_t *) effp->priv;
-        int j;
+        unsigned j;
         float d_in, d_out;
         size_t len = min(*isamp, *osamp);
         *isamp = *osamp = len;
@@ -158,11 +276,11 @@ static int sox_echos_flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sam
 /*
  * Drain out reverb lines.
  */
-static int sox_echos_drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
+static int echos_drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
 {
         priv_t * echos = (priv_t *) effp->priv;
         float d_out;
-        int j;
+        unsigned j;
         size_t done;
 
         done = 0;
@@ -197,12 +315,12 @@ static int sox_echos_drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osam
 }
 
 /*
- * Clean up echos effect.
+ * Clean up echos effect per-flow.
  */
-static int sox_echos_stop(sox_effect_t * effp)
+static int echos_stop(sox_effect_t * effp)
 {
         priv_t * echos = (priv_t *) effp->priv;
-	int i;
+	unsigned i;
 
         free(echos->counter);
         free(echos->samples);
@@ -210,6 +328,18 @@ static int sox_echos_stop(sox_effect_t * effp)
 	    free(echos->delay_buf[i]);
         free(echos->delay_buf);
         echos->delay_buf = NULL;
+        return (SOX_SUCCESS);
+}
+
+/*
+ * Clean up echos effect per-effect.
+ */
+static int echos_kill(sox_effect_t * effp)
+{
+        priv_t * echos = (priv_t *) effp->priv;
+
+        free(echos->delay);
+        free(echos->decay);
         return (SOX_SUCCESS);
 }
 
@@ -232,22 +362,23 @@ const sox_effect_handler_t *lsx_echos_effect_fn(void)
 "     |        |                               * decay 2 |   |",
 "     +--------+---------------------------------------->|   |",
 "                                              * decay 1 |___|",
-"         RANGE  DESCRIPTION",
-"gain-in   0-1   Proportion of input signal delivered clean to adder",
-"gain-out  0-    Final volume adjustment",
-"delay     0-    Delay in milliseconds",
-"decay     0-1   Proportion of delayed signal delivered to adder",
+"           RANGE   DESCRIPTION",
+"gain-in  -inf-inf  Proportion of input signal delivered clean to adder",
+"gain-out -inf-inf  Final volume adjustment",
+"delay       0-     Delay in milliseconds",
+"decay       0-1    Proportion of delayed signal delivered to adder",
 "",
 "When decay is close to 1.0, samples can clip and the output can saturate.",
 "Hint: gain-out < 1 / (gain-in + decay1 + ... + decayN)",
+"Keymaps: echos.(gain_in|gain_out)",
     NULL
   };
 
   static sox_effect_handler_t handler = {
-    "echos", usage, extra_usage, SOX_EFF_LENGTH | SOX_EFF_GAIN,
-    sox_echos_getopts,
-    sox_echos_start, sox_echos_flow, sox_echos_drain, sox_echos_stop,
-    NULL, sizeof(priv_t)
+    "echos", usage, SOX_EFF_LENGTH | SOX_EFF_GAIN,
+    echos_getopts,
+    echos_start, echos_flow, echos_drain, echos_stop, echos_kill,
+    sizeof(priv_t), extra_usage, get_echos, set_echos,
   };
 
   return &handler;

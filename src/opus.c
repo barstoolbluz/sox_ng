@@ -110,7 +110,7 @@ static int startread(sox_format_t * ft)
   /* Init the decoder */
   vb->of = op_open_callbacks(ft, &callbacks, NULL, (size_t) 0, NULL);
   if (vb->of == NULL) {
-    lsx_fail_errno(ft, SOX_EHDR, "input not an Ogg Opus audio stream");
+    lsx_fail_errno(ft, SOX_EHDR, "input is not an Ogg Opus audio stream");
     return (SOX_EOF);
   }
 
@@ -165,7 +165,7 @@ static int refill_buffer(sox_format_t * ft)
     if (num_read == 0)
       return (BUF_EOF);
     else if (num_read == OP_HOLE)
-      lsx_warn("Warning: hole in stream; probably harmless");
+      lsx_warn("hole in stream; probably harmless");
     else if (num_read < 0)
       return (BUF_ERROR);
     else

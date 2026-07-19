@@ -27,6 +27,13 @@
 #include "LPFAdj.h"
 
 #include <stdlib.h>  /* for malloc() etc */
+#include <math.h>
+
+/* These are not defined/declared when compiling -ansi (C90) */
+#ifndef M_PI
+# define M_PI 3.14159265358979323846
+#endif
+extern double round(double x);
 
 #define SetGatesMaxAlpVal 1000000L
 #define SetGateMax64      9000000000000000000.0

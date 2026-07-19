@@ -7,11 +7,11 @@ non-POSIX compilers (such as MSVC) used to be supported via
 the `CMake' build utility - see older version if you are interested.
 For other compilers/systems, it is often possible to
 manually construct a custom `soxconfig.h' and `Makefile' for that
-system (the minimum requirements are 32-bit CPU, 64-bit FPU, C89
-compiler).
+system (the minimum requirements are a 32-bit CPU, a 64-bit FPU
+and a C89 compiler).
 
-Note that the `play_ng', `rec_ng', and `soxi_ng' programs are in fact just
-copies-of or links-to (depending on OS) `sox_ng'.
+Note that the `play_ng', `rec_ng', and `soxi_ng' programs are in fact
+just copies of (or links to, depending on your OS) `sox_ng'.
 
 SoX optionally makes use of some external libraries to obtain support
 for additional file formats and/or effects.  Optional libraries should
@@ -21,34 +21,40 @@ their licence types, is as follows:
 
 OpencoreAMR-NB/WB http://sourceforge.net/projects/opencore-amr  Apache
 AO                http://xiph.org/ao                    GPL
+FFTW              http://fftw.org                       GPL
 FLAC              http://flac.sourceforge.net           BSD
 LADSPA            http://www.ladspa.org                 LGPL + plugins' licence
-Lame MP3 encoder  http://lame.sourceforge.net           LGPL
-Twolame MP2 enc.  http://www.twolame.org                LGPL
-libltdl           http://www.gnu.org/software/libtool   LGPL
+LAME MP3 encoder  http://lame.sourceforge.net           LGPL
+Libltdl           http://www.gnu.org/software/libtool   LGPL
+libmagic          http://www.darwinsys.com/file         BSD
 MAD MP3 decoder   http://www.underbit.com/products/mad  GPL
 mpg123 decoder    http://mpg123.org                     LGPL
 MP3 ID3 tags      http://www.underbit.com/products/mad  GPL
-Magic             http://www.darwinsys.com/file         BSD
 Ogg Vorbis        http://www.vorbis.com                 BSD
 Opus              http://www.opus-codec.org/            BSD
 PNG               http://www.libpng.org/pub/png         zlib (BSD-like)
 Sndfile           http://www.mega-nerd.com/libsndfile   LGPL
+Speex             http://speex.org                      BSD
+Speexdsp          http://gitlab.xiph.org/xiph/speexdsp  BSD
+Twolame MP2 enc.  http://www.twolame.org                LGPL
 WavPack           http://www.wavpack.com                BSD
-FFTW              http://fftw.org                       GPL
+
+and at runtime, SoX can read dozens more audio (and video!) files with
+
+FFMPEG            http://ffmpeg.org                     GPL
 
 
 
 Compiling and installing on a POSIX system
 ------------------------------------------
 
-First install any optional libraries that you need for SoX.  Some
-libraries may require pkg-config to be installed to be properly
-detected by SoX.
+First install any optional libraries that you need for SoX.
+Some libraries may require pkg-config to be installed to be detected 
+properly by SoX.
 
 [Only if you're compiling the git sources, first make sure you have
-the GNU autotools installed (automake >= 1.9, autoconf >= 2.62) and
-run
+the GNU autotools installed (automake >= 1.9, autoconf >= 2.62 and
+libtool) and run
 
 	autoreconf -i
 
@@ -150,21 +156,16 @@ You can run "cygcheck.exe src/sox.exe" after compiling to see which
 dynamic DLL's will be required to be distributed with the cygwin
 executable.
 
-Alternatively, you can make use of the "cygbuild" script distributed
-with SoX source that is used to automate all steps of building
-a win32 package.  "osxbuild" script is used to automate all steps
-of building a MacOS X package.
-
-Newer versions of SoX include support for loading libraries for
-file formats at runtime.  The main usage of this feature is to
-allow shipping SoX without dependencies on external libraries
-that are not globally used or have redistribution restrictions.
+SoX includes support for loading libraries for file formats at runtime.
+The main usage of this feature is to allow shipping SoX without
+dependencies on external libraries that are not globally used
+or have redistribution restrictions.
 If you experience problems with this then you may wish to disable
 this feature:
 
 ./configure --without-libltdl
 
-Also, the default behavior even when libltdl is used is to link
+The default behavior, even when libltdl is used, is to link
 all file format handlers into libsox as there is a performance
 hit when dynamically loading external libraries.  To force a format
 handler to be built as a dynamically loaded module, pass "dyn" to
@@ -173,11 +174,15 @@ an external dynamic library:
 
 ./configure --with-pulseaudio=dyn
 
-A subset of external libraries can be configured to be dlopen()'ed
-at run time instead of being linked in.  This will allow one to
+and to build all the optional file formats as dynnamic libraries:
+
+./configure --with-dyn-default
+
+A subset of the external libraries can be configured to be dlopen'ed 
+at run time instead of being linked in.  This allows one to
 distribute a binary with optional features that only require
-a user to install the missing libraries into their system.  This
-can be enabled using:
+a user to install the missing libraries into their system.
+These can be enabled using:
 
 --enable-dl-lame
 --enable-dl-mad
@@ -191,15 +196,15 @@ Testing
 N.B.: If SoX is configured and compiled to load some file-formats
 dynamically, then it will not be able to load them when running SoX
 executables from within the source file directory until after SoX has
-been installed (temporarily configuring with --without-libltdl removes
+been installed (temporarily configuring --without-libltdl removes
 this restriction).
 
-After successfully compiling SoX, try translating a sound file.  You
-should also playback the new file to make sure it sounds like the
-original.  You can either use an external program or SoX itself
-if compiled with playback support.
+After successfully compiling SoX, try translating a sound file.
+You should also play the new file back to make sure it sounds like
+the original.  You can either use an external program or SoX itself
+if it was compiled with playback support.
 
-To work with widest range of playback programs, you should chose a
+To work with widest range of playback programs, you should choose a
 format that is native to your OS; such as .wav for Windows or .aiff for
 MacOS.  In the following example, we'll use .xxx as the extension of
 your preferred format.
@@ -211,7 +216,7 @@ You may have to give the word size and rate for the file. For example,
 this command will make a sound file with a data rate of 12,500 samples
 per second and the data formatted as 2-byte (16-bit) signed integers:
 
-	./sox_ng monkey.wav -r 12500 -2 -s monkey.xxx
+	./sox_ng monkey.wav -r 12500 -b 16 -e signed monkey.xxx
 
 If playback support was compiled in then it can be played like this:
 
@@ -226,24 +231,20 @@ congratulations! SoX works.
 
 If you're adding new features to SoX or want to perform advanced tests
 on a new platform then you can use the scripts "tests.sh" and
-"testall.sh" to stress SoX.
+"testall.sh" to stress SoX, or say "make check".
 
 
 
 Compiling using Microsoft's Visual C
 ------------------------------------
 
-To compile a full-featured build of SoX with Visual Studio 2008 (msvc9),
-Visual Studio 2010 (msvc10), or the Windows SDK 7.1, you may be able to use the
-preconfigured solution found in the sox\msvc9 (VS2008) or sox\msvc10 (VS2010 or
-Windows SDK 7.1) folder. See sox\msvc9\readme.txt or sox\msvc10\readme.txt for
-details on building using the corresponding Microsoft C compiler. If the
-preconfigured solution doesn't work for you, build with CMake as follows:
+SoX used to ship with unmaintained msvc9 and msvc10 files.
+Now you may be able to make an msvc/ directory with cmake:
 
 o Install cmake (http://www.cmake.org/HTML/Download.html)
 o Install any optional libraries to use with SoX
-o Unpack the SoX sources (...tar.gz) to say c:\sox
-o Type cd c:\sox
+o Unpack the SoX sources (...tar.gz) to say c:\sox_ng
+o Type cd c:\sox_ng
 o Type cmake -G "compiler" .   (type cmake --help for list of compilers)
 
 This should generate project build files for use with Visual C.
@@ -253,12 +254,9 @@ This should generate project build files for use with Visual C.
 Appendix: How To Compile SoX with MP3 Support on Win32
 ------------------------------------------------------
 
-The solution files in msvc9 and msvc10 will build SoX to dynamically load
-libmad.dll and libmp3lame.dll at runtime.
-
 The following text, untested by the SoX team, was originally written
-by `Enter AG' and released to the public domain. It includes instructions for
-building SoX with MP3 support linked directly into the SoX executable.
+by `Enter AG' and released to the public domain. It includes instructions
+for building SoX with MP3 support linked directly into the SoX executable.
 
 = How To Compile Sox with MP3 Support =
 
@@ -334,7 +332,7 @@ o Edit the CMakeLists.txt in the SoX top directory:
   set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} -lm)
   endif(NEED_LIBM)
 
-o Open the windows command line console and change into the SoX top directory.
+o Open the Windows command line console and change into the SoX top directory.
 
 o Execute cmake like this:
   cmake.exe ./ -G "Visual Studio 9 2008"
@@ -369,5 +367,5 @@ o Now build libsox
 
 o and then sox.
 
-o Sox now prompts "mp3, mp2" in the usage output in the section "SUPPORTED FILE
+o Sox now says "mp2 mp3" in the usage output in the section "SUPPORTED FILE
   FORMATS".

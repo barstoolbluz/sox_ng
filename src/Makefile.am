@@ -76,26 +76,31 @@ sox_sample_test_SOURCES = sox_sample_test.c sox_sample_test.h
 
 # Format handlers and utils source
 libsox_ng_la_SOURCES = adpcms.c adpcms.h aiff.c aiff.h cvsd.c cvsd.h cvsdfilt.h \
-	  g711.c g711.h g721.c g723_24.c g723_40.c g72x.c g72x.h vox.c vox.h \
-	  raw.c raw.h formats.c formats.h formats_i.c sox_i.h \
-	  xmalloc.c xmalloc.h getopt.c util.c util.h libsox_ng.c libsox_i.c \
-	  sox-fmt.c soxomp.h win32-unicode.c win32-unicode.h
+	g711.c g711.h g721.c g723_24.c g723_40.c g72x.c g72x.h vox.c vox.h \
+	mod.c mod.h mod-tabs.c msupcm.c mul.c raw.c raw.h \
+	formats.c formats.h formats_i.c sox_i.h keymap.c \
+	xmalloc.c xmalloc.h getopt.c util.c util.h libsox_ng.c libsox_i.c \
+	sox-fmt.c soxomp.h win32-unicode.c win32-unicode.h
 
 # Effects source
 libsox_ng_la_SOURCES += \
-	band.h bend.c biquad.c biquad.h biquads.c chorus.c compand.c \
-	compandt.c compandt.h contrast.c dcshift.c delay.c dft_filter.c \
-	dft_filter.h dither.c dither.h dolbyb.c dop.c downsample.c earwax.c \
-	echo.c echos.c effects.c effects.h effects_i.c effects_i_dsp.c \
-	fade.c ffmpeg.c fft4g.c fft4g.h fifo.h fir.c firfit.c flanger.c gain.c \
-	hilbert.c input.c ladspa.h ladspa.c loudness.c mcompand.c \
-	mcompand_xover.h noiseprof.c noisered.c \
-	noisered.h output.c overdrive.c pad.c phaser.c rate.c \
-	rate_filters.h rate_half_fir.h rate_poly_fir0.h rate_poly_fir.h \
-	remix.c repeat.c reverb.c reverse.c silence.c sinc.c \
-	sdm.c sdm.h sdm_x86.h softvol.c softvol.h \
-	speed.c speexdsp.c splice.c stat.c stats.c stretch.c swap.c \
-	synth.c tempo.c tremolo.c trim.c upsample.c vad.c vol.c \
+	band.h bend.c biquad.c biquad.h biquads.c \
+        centercut.c chorus.c compand.c compandt.c compandt.h contrast.c \
+        dcshift.c delay.c dft_filter.c dft_filter.h dither.c dither.h \
+        dolbyb.c dop.c downsample.c \
+        earwax.c echo.c echos.c \
+        effects.c effects.h effects_i.c effects_i_dsp.c \
+        fade.c ffmpeg.c fft4g.c fft4g.h fifo.c fifo.h \
+        fir.c firfit.c flanger.c \
+        gain.c hilbert.c input.c ladspa.h ladspa.c loudness.c \
+        mcompand.c mcompand_xover.h noiseprof.c noisered.c noisered.h \
+        output.c overdrive.c pad.c phaser.c \
+        rate.c rate_filters.h rate_half_fir.h rate_poly_fir0.h rate_poly_fir.h \
+	remix.c repeat.c reverb.c reverse.c \
+        saturation.c silence.c sinc.c sdm.c sdm.h sdm_x86.h \
+        softvol.c softvol.h speed.c speexdsp.c splice.c stat.c stats.c \
+        stretch.c swap.c synth.c \
+        tempo.c tremolo.c trim.c upsample.c vad.c vol.c \
 	ignore-warning.h
 if HAVE_PNG
     libsox_ng_la_SOURCES += spectrogram.c
@@ -118,7 +123,7 @@ libsox_ng_la_LIBADD += @GOMP_LIBS@
 
 libsox_ng_la_CFLAGS = @WARN_CFLAGS@
 libsox_ng_la_LDFLAGS = @APP_LDFLAGS@ -version-info @SHLIB_VERSION@ \
-  -export-symbols-regex '^(sox_.*|create_lpc10_(en|de)coder_state|lpc10_(en|de)code|lsx_(adjust_softvol|gsm_(create|destroy|encode|decode)|([cm]|re)alloc.*|check_read_params|(close|open)_dllibrary|(debug(_more|_most)?|fail|report|warn)_impl|eof|error|fail_errno|filelength|find_(enum_(text|value)|file_extension)|flush|clearerr|getopt(_init)?|id3(_read_tag|tagmap)|raw(read|write)|read(_b_buf|buf|chars)|unreadbuf|realloc|realloc_array|rewind|seeki|sigfigs3p?|sscanf|strcasecmp|strncasecmp|strdup|tell|unreadb|write(b|_b_buf|buf|s)))$$'
+  -export-symbols-regex '^((sox|lsx)_.*|create_lpc10_(en|de)coder_state|lpc10_(en|de)code|gsm_(create|destroy|encode|decode))$$'
 
 if HAVE_WIN32_LTDL
   libsox_ng_la_SOURCES += win32-ltdl.c win32-ltdl.h
@@ -139,15 +144,17 @@ endif
 #libsox_ng_la_SOURCES += coreaudio.c sndio.c sunaudio.c
 #libsox_ng_la_CFLAGS += -Ibit-rot
 
-libsox_ng_la_SOURCES += raw-fmt.c s1-fmt.c s2-fmt.c s3-fmt.c \
-  s4-fmt.c u1-fmt.c u2-fmt.c u3-fmt.c u4-fmt.c al-fmt.c la-fmt.c ul-fmt.c \
-  lu-fmt.c 8svx.c aiff-fmt.c aifc-fmt.c au.c avr.c cdr.c cvsd-fmt.c \
-  dvms-fmt.c dat.c hcom.c htk.c maud.c prc.c sf.c smp.c \
-  sounder.c soundtool.c sphere.c tx16w.c voc.c vox-fmt.c ima-fmt.c adpcm.c adpcm.h \
-  id3.c id3.h dsf.c dsdiff.c \
-  ima_rw.c ima_rw.h wav.c wve.c xa.c nulfile.c f4-fmt.c f8-fmt.c gsrt.c nsp.c
+libsox_ng_la_SOURCES += raw-fmt.c \
+  f4-fmt.c f8-fmt.c s1-fmt.c s2-fmt.c s3-fmt.c s4-fmt.c \
+  u1-fmt.c u2-fmt.c u3-fmt.c u4-fmt.c al-fmt.c la-fmt.c ul-fmt.c lu-fmt.c \
+  8svx.c adpcm.c adpcm.h aiff-fmt.c aifc-fmt.c au.c avr.c cdr.c cvsd-fmt.c \
+  dat.c dsf.c dsdiff.c dvms-fmt.c gsrt.c hcom.c htk.c id3.c id3.h \
+  ima-fmt.c ima_rw.c ima_rw.h maud.c nsp.c nulfile.c prc.c \
+  sf.c smp.c sounder.c soundtool.c sphere.c tx16w.c \
+  voc.c vox-fmt.c wav.c wav-formats.h wve.c xa.c
 
 libsox_ng_la_LIBADD += @DOLBYB_LIBS@ @LIBDOLBYB_LIBADD@
+libsox_ng_la_LIBADD += @EBUR128_LIBS@ @LIBEBUR128_LIBADD@
 libsox_ng_la_LIBADD += @GSM_LIBS@ @LIBGSM_LIBADD@
 libsox_ng_la_LIBADD += @LPC10_LIBS@ @LIBLPC10_LIBADD@
 
@@ -171,7 +178,6 @@ example5_LDADD = ${sox_ng_LDADD}
 example6_LDADD = ${sox_ng_LDADD}
 
 EXTRA_DIST = monkey.wav optional-fmts.am \
-	     CMakeLists.txt soxconfig.h.cmake \
 	     tests.sh testall.sh tests.bat testall.bat test-comments
 
 all: sox_ng$(EXEEXT) play_ng$(EXEEXT) rec_ng$(EXEEXT) soxi_ng$(EXEEXT)

@@ -49,7 +49,7 @@ static float difference(const float * a, const float * b, size_t length)
   float diff = 0;
   size_t i = 0;
 
-  #define _ diff += sqr(a[i] - b[i]), ++i; /* Loop optimisation */
+  #define _ diff += sqr(a[i] - b[i]), ++i; /* Loop optimization */
   do {_ _ _ _ _ _ _ _} while (i < length); /* N.B. length == 0 (mod 8) */
   #undef _
   return diff;
@@ -99,48 +99,48 @@ static void tempo_overlap(
 
 static void tempo_process(tempo_t * t)
 {
-  while (fifo_occupancy(&t->input_fifo) >= t->process_size) {
+  while (lsx_fifo_occupancy(&t->input_fifo) >= t->process_size) {
     size_t skip, offset;
 
     /* Copy or overlap the first bit to the output */
     if (!t->segments_total) {
       offset = t->search / 2;
-      fifo_write(&t->output_fifo, t->overlap, (float *) fifo_read_ptr(&t->input_fifo) + t->channels * offset);
+      lsx_fifo_write(&t->output_fifo, t->overlap, (float *) lsx_fifo_read_ptr(&t->input_fifo) + t->channels * offset);
     } else {
-      offset = tempo_best_overlap_position(t, fifo_read_ptr(&t->input_fifo));
+      offset = tempo_best_overlap_position(t, lsx_fifo_read_ptr(&t->input_fifo));
       tempo_overlap(t, t->overlap_buf,
-          (float *) fifo_read_ptr(&t->input_fifo) + t->channels * offset,
-          fifo_write(&t->output_fifo, t->overlap, NULL));
+          (float *) lsx_fifo_read_ptr(&t->input_fifo) + t->channels * offset,
+          lsx_fifo_write(&t->output_fifo, t->overlap, NULL));
     }
     /* Copy the middle bit to the output */
-    fifo_write(&t->output_fifo, t->segment - 2 * t->overlap,
-               (float *) fifo_read_ptr(&t->input_fifo) +
+    lsx_fifo_write(&t->output_fifo, t->segment - 2 * t->overlap,
+               (float *) lsx_fifo_read_ptr(&t->input_fifo) +
                t->channels * (offset + t->overlap));
 
     /* Copy the end bit to overlap_buf ready to be mixed with
      * the beginning of the next segment. */
     memcpy(t->overlap_buf,
-           (float *) fifo_read_ptr(&t->input_fifo) +
+           (float *) lsx_fifo_read_ptr(&t->input_fifo) +
            t->channels * (offset + t->segment - t->overlap),
            t->channels * t->overlap * sizeof(*(t->overlap_buf)));
 
     /* Advance through the input stream */
     skip = t->factor * (++t->segments_total * (t->segment - t->overlap)) + 0.5;
     t->skip_total += skip -= t->skip_total;
-    fifo_read(&t->input_fifo, skip, NULL);
+    lsx_fifo_read(&t->input_fifo, skip, NULL);
   }
 }
 
 static float * tempo_input(tempo_t * t, float const * samples, size_t n)
 {
   t->samples_in += n;
-  return fifo_write(&t->input_fifo, n, samples);
+  return lsx_fifo_write(&t->input_fifo, n, samples);
 }
 
 static float const * tempo_output(tempo_t * t, float * samples, size_t * n)
 {
-  t->samples_out += *n = min(*n, fifo_occupancy(&t->output_fifo));
-  return fifo_read(&t->output_fifo, *n, samples);
+  t->samples_out += *n = min(*n, lsx_fifo_occupancy(&t->output_fifo));
+  return lsx_fifo_read(&t->output_fifo, *n, samples);
 }
 
 /* Flush samples remaining in overlap_buf & input_fifo to the output. */
@@ -154,11 +154,11 @@ static void tempo_flush(tempo_t * t)
   lsx_vcalloc(buff, 128 * t->channels);
 
   if (remaining > 0) {
-    while (fifo_occupancy(&t->output_fifo) < remaining) {
+    while (lsx_fifo_occupancy(&t->output_fifo) < remaining) {
       tempo_input(t, buff, (size_t) 128);
       tempo_process(t);
     }
-    fifo_trim_to(&t->output_fifo, remaining);
+    lsx_fifo_trim_to(&t->output_fifo, remaining);
     t->samples_in = 0;
   }
   free(buff);
@@ -174,20 +174,20 @@ static void tempo_setup(tempo_t * t,
   t->segment = sample_rate * segment_ms / 1000 + .5;
   t->search  = sample_rate * search_ms / 1000 + .5;
   t->overlap = max(sample_rate * overlap_ms / 1000 + 4.5, 16);
-  t->overlap &= ~7; /* Make divisible by 8 for loop optimisation */
+  t->overlap &= ~7; /* Make divisible by 8 for loop optimization */
   if (t->overlap * 2 > t->segment)
     t->overlap -= 8;
   lsx_valloc(t->overlap_buf, t->overlap * t->channels);
   max_skip = ceil(factor * (t->segment - t->overlap));
   t->process_size = max(max_skip + t->overlap, t->segment) + t->search;
-  memset(fifo_reserve(&t->input_fifo, t->search / 2), 0, (t->search / 2) * t->channels * sizeof(float));
+  memset(lsx_fifo_reserve(&t->input_fifo, t->search / 2), 0, (t->search / 2) * t->channels * sizeof(float));
 }
 
 static void tempo_delete(tempo_t * t)
 {
   free(t->overlap_buf);
-  fifo_delete(&t->output_fifo);
-  fifo_delete(&t->input_fifo);
+  lsx_fifo_delete(&t->output_fifo);
+  lsx_fifo_delete(&t->input_fifo);
   free(t);
 }
 
@@ -195,8 +195,8 @@ static tempo_t * tempo_create(size_t channels)
 {
   tempo_t * t = lsx_calloc(1, sizeof(*t));
   t->channels = channels;
-  fifo_create(&t->input_fifo, t->channels * sizeof(float));
-  fifo_create(&t->output_fifo, t->channels * sizeof(float));
+  lsx_fifo_create(&t->input_fifo, t->channels * sizeof(float));
+  lsx_fifo_create(&t->output_fifo, t->channels * sizeof(float));
   return t;
 }
 
@@ -205,10 +205,10 @@ static tempo_t * tempo_create(size_t channels)
 typedef struct {
   tempo_t     * tempo;
   sox_bool    quick_search;
-  double      factor, segment_ms, search_ms, overlap_ms;
+  double      factor, segment, search, overlap; /* the last three are in ms */
 } priv_t;
 
-static int getopts(sox_effect_t * effp, int argc, char **argv)
+static int getopts_tempo(sox_effect_t * effp, int argc, char **argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   enum {Default, Music, Speech, Linear} profile = Default;
@@ -220,40 +220,57 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
   lsx_getopt_t optstate;
   lsx_getopt_init(argc, argv, "+qmls", NULL, lsx_getopt_flag_none, 1, &optstate);
 
-  p->segment_ms = p->search_ms = p->overlap_ms = HUGE_VAL;
+  p->factor = p->segment = p->search = p->overlap = HUGE_VAL;
   while ((c = lsx_getopt(&optstate)) != -1) switch (c) {
     case 'q': p->quick_search  = sox_true;   break;
     case 'm': profile = Music; break;
     case 's': profile = Speech; break;
-    case 'l': profile = Linear; p->search_ms = 0; break;
-    default: lsx_fail("unknown option `-%c'", optstate.opt); return lsx_usage(effp);
+    case 'l': profile = Linear; p->search = 0; break;
+    default: lsx_fail("invalid option `-%c'", optstate.opt); return lsx_usage(effp);
   }
   argc -= optstate.ind, argv += optstate.ind;
   if (argc < 1) {	/* The "factor" parameter is obbligatory */
-    lsx_usage(effp);
+    lsx_fail("the `factor' parameter is obligatory");
     return SOX_EOF;
   }
   do {                    /* break-able block */
-    NUMERIC_PARAMETER(factor      ,0.1 , 100 )
-    NUMERIC_PARAMETER(segment_ms  , 10 , 120)
-    NUMERIC_PARAMETER(search_ms   , 0  , 30 )
-    NUMERIC_PARAMETER(overlap_ms  , 0  , 30 )
+    NUMERIC_PARAMETER(factor   ,0.1 , 100 )
+    NUMERIC_PARAMETER(segment  , 10 , 120)
+    NUMERIC_PARAMETER(search   , 0  , 30 )
+    NUMERIC_PARAMETER(overlap  , 0  , 30 )
   } while (0);
 
-  if (p->segment_ms == HUGE_VAL)
-    p->segment_ms = max(10, segments_ms[profile] / max(pow(p->factor, segments_pow[profile]), 1));
-  if (p->overlap_ms == HUGE_VAL)
-    p->overlap_ms = p->segment_ms / overlaps_div[profile];
-  if (p->search_ms == HUGE_VAL)
-    p->search_ms = p->segment_ms / searches_div[profile];
+  if (argc) {
+    /* Either there was stuff that we didn't understand as numbers
+     * (starting with something not a digit, plus or minus)
+     * or they gave more than four arguments */
+    if (p->overlap != HUGE_VAL)
+      lsx_fail("superfluous argument `%s'", *argv);
+    else
+      lsx_fail("%s `%s' is not a number",
+        p->factor == HUGE_VAL ? "factor" :
+        p->segment == HUGE_VAL ? "segment" :
+        p->search == HUGE_VAL ? "search" :
+        p->overlap == HUGE_VAL ? "overlap" :
+	"argument", /* "can't happen" */
+      *argv);
+    return SOX_EOF;
+  }
 
-  p->overlap_ms = min(p->overlap_ms, p->segment_ms / 2);
+  if (p->segment == HUGE_VAL)
+    p->segment = max(10, segments_ms[profile] / max(pow(p->factor, segments_pow[profile]), 1));
+  if (p->overlap == HUGE_VAL)
+    p->overlap = p->segment / overlaps_div[profile];
+  if (p->search == HUGE_VAL)
+    p->search = p->segment / searches_div[profile];
+
+  p->overlap = min(p->overlap, p->segment / 2);
   lsx_report("quick_search=%u factor=%g segment=%g search=%g overlap=%g",
-    p->quick_search, p->factor, p->segment_ms, p->search_ms, p->overlap_ms);
-  return argc? lsx_usage(effp) : SOX_SUCCESS;
+    p->quick_search, p->factor, p->segment, p->search, p->overlap);
+  return SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static int start_tempo(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
 
@@ -262,7 +279,7 @@ static int start(sox_effect_t * effp)
 
   p->tempo = tempo_create((size_t)effp->in_signal.channels);
   tempo_setup(p->tempo, effp->in_signal.rate, p->quick_search, p->factor,
-      p->segment_ms, p->search_ms, p->overlap_ms);
+      p->segment, p->search, p->overlap);
 
   effp->out_signal.length = SOX_UNKNOWN_LEN;
   if (effp->in_signal.length != SOX_UNKNOWN_LEN) {
@@ -274,7 +291,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_tempo(sox_effect_t * effp, const sox_sample_t * ibuf,
                 sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -297,15 +314,15 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+static int drain_tempo(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
   static size_t isamp = 0;
   tempo_flush(p->tempo);
-  return flow(effp, 0, obuf, &isamp, osamp);
+  return flow_tempo(effp, 0, obuf, &isamp, osamp);
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_tempo(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   tempo_delete(p->tempo);
@@ -331,37 +348,48 @@ sox_effect_handler_t const * lsx_tempo_effect_fn(void)
   };
 
   static sox_effect_handler_t handler = {
-    "tempo", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH,
-    getopts, start, flow, drain, stop, NULL, sizeof(priv_t)
+    "tempo", usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH,
+    getopts_tempo, start_tempo, flow_tempo, drain_tempo, stop_tempo, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
   return &handler;
 }
 
 /*---------------------------------- pitch -----------------------------------*/
+#define log2(n) log(n)/log(2.)
 
-static int pitch_getopts(sox_effect_t * effp, int argc, char **argv)
+static int getopts_pitch(sox_effect_t * effp, int argc, char **argv)
 {
-  double d;
+  double cents, factor;
   char dummy, arg[100], **argv2;
   int result, pos = (argc > 1 && !strcmp(argv[1], "-q"))? 2 : 1;
 
   lsx_valloc(argv2, argc);
-  if (argc <= pos || sscanf(argv[pos], "%lf %c", &d, &dummy) != 1)
-    return lsx_usage(effp);
+  if (argc <= pos || sscanf(argv[pos], "%lf %c", &cents, &dummy) != 1) {
+    lsx_fail("cannot parse shift factor `%s'", argv[pos]);
+    return SOX_EOF;
+  }
 
-  d = pow(2., d / 1200);  /* cents --> factor */
-  sprintf(arg, "%g", 1 / d);
+  factor = pow(2., cents / 1200);  /* cents --> factor */
+  /* "1 / factor" can be from 0.1 to 100, so "cents"... */
+  if (1/factor < 0.1 || 1/factor > 100) {
+    /* Inverting the formula... */
+    lsx_fail("pitch's cents `%g' must be from %g to %g\n", cents,
+            1200 * log2(1/100.0), 1200 * log2(1/0.1));
+    return SOX_EOF;
+  }
+  sprintf(arg, "%g", 1 / factor);
   memcpy(argv2, argv, argc * sizeof(*argv2));
   argv2[pos] = arg;
-  result = getopts(effp, argc, argv2);
+  result = getopts_tempo(effp, argc, argv2);
   free(argv2);
   return result;
 }
 
-static int pitch_start(sox_effect_t * effp)
+static int start_pitch(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *) effp->priv;
-  int result = start(effp);
+  int result = start_tempo(effp);
 
   effp->out_signal.rate = effp->in_signal.rate / p->factor;
   return result;
@@ -385,8 +413,8 @@ sox_effect_handler_t const * lsx_pitch_effect_fn(void)
   handler.name = "pitch";
   handler.usage = usage;
   handler.extra_usage = extra_usage;
-  handler.getopts = pitch_getopts;
-  handler.start = pitch_start;
+  handler.getopts = getopts_pitch;
+  handler.start = start_pitch;
   handler.flags &= ~SOX_EFF_LENGTH;
   handler.flags |= SOX_EFF_RATE;
   return &handler;

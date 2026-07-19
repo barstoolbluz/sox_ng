@@ -50,6 +50,16 @@ lsx_enum_item const * lsx_get_wave_enum(void);
 #define ftello ftell
 #endif
 
+#ifdef __EMSCRIPTEN__
+/* emscripten operates in a memory heap */
+#define rewind(fp) do { \
+    fclose(fp); /* close the memory buffer file */ \
+    ft->fp = fmemopen(buffer, buffer_size, "rb"); /* open it again */ \
+} while(0)
+#endif
+
+typedef enum { tuning_equal, tuning_just, tuning_pythagorean } tuning_t;
+
 #ifdef _FILE_OFFSET_BITS
 assert_static(sizeof(off_t) == _FILE_OFFSET_BITS >> 3, OFF_T_BUILD_PROBLEM);
 #endif
@@ -63,7 +73,7 @@ void lsx_debug_most_impl(char const * fmt, ...) LSX_PRINTF12;
 #define lsx_debug_more sox_get_globals()->subsystem=__FILE__,lsx_debug_more_impl
 #define lsx_debug_most sox_get_globals()->subsystem=__FILE__,lsx_debug_most_impl
 
-/* Digitise one cycle of a wave and store it as
+/* Digitize one cycle of a wave and store it as
  * a table of samples of a specified data-type.
  */
 void lsx_generate_wave_table(
@@ -77,8 +87,9 @@ void lsx_generate_wave_table(
 char const * lsx_parsesamples(sox_rate_t rate, const char *str, uint64_t *samples, int def);
 char const * lsx_parseposition(sox_rate_t rate, const char *str, uint64_t *samples, uint64_t latest, uint64_t end, int def);
 int lsx_parse_note(char const * text, char * * end_ptr);
-double lsx_parse_frequency_k(char const * text, char * * end_ptr, int key);
-#define lsx_parse_frequency(a, b) lsx_parse_frequency_k(a, b, INT_MAX)
+double lsx_parse_frequency_k(char const * text, char * * end_ptr,
+                             int key, tuning_t tuning);
+#define lsx_parse_frequency(a, b) lsx_parse_frequency_k(a, b, INT_MAX, tuning_equal)
 FILE * lsx_open_input_file(sox_effect_t * effp, char const * filename, sox_bool text_mode);
 
 void lsx_prepare_spline3(double const * x, double const * y, int n,
@@ -87,14 +98,16 @@ double lsx_spline3(double const * x, double const * y, double const * y_2d,
     int n, double x1);
 
 double lsx_bessel_I_0(double x);
-int lsx_set_dft_length(int num_taps);
+size_t lsx_set_dft_length(size_t num_taps);
 void init_fft_cache(void);
 void clear_fft_cache(void);
 #define lsx_is_power_of_2(x) !(x < 2 || (x & (x - 1)))
-void lsx_safe_rdft(int len, int type, double * d);
-void lsx_safe_cdft(int len, int type, double * d);
-void lsx_power_spectrum(int n, double const * in, double * out);
-void lsx_power_spectrum_f(int n, float const * in, float * out);
+void lsx_safe_rdft(unsigned len, int type, double * d);
+void lsx_safe_cdft(unsigned len, int type, double * d);
+void lsx_safe_rdft_f(unsigned len, int type, float * d);
+void lsx_safe_cdft_f(unsigned len, int type, float * d);
+void lsx_power_spectrum(unsigned n, double const * in, double * out);
+void lsx_power_spectrum_f(unsigned n, float const * in, float * out);
 void lsx_apply_hann_f(float h[], const int num_points);
 void lsx_apply_hann(double h[], const int num_points);
 void lsx_apply_hamming(double h[], const int num_points);
@@ -116,7 +129,7 @@ double * lsx_design_lpf(
     int k,          /* >0: number of phases; <0: num_taps ≡ 1 (mod -k) */
     double beta);   /* <0: value will be estimated */
 void lsx_fir_to_phase(double * * h, int * len,
-    int * post_len, double phase0);
+    size_t * post_len, double phase0);
 void lsx_plot_fir(double * h, int num_points, sox_rate_t rate, sox_plot_t type, char const * title, double y1, double y2);
 void lsx_save_samples(sox_sample_t * const dest, double const * const src,
     size_t const n, sox_uint64_t * const clips);
@@ -137,7 +150,7 @@ void lsx_load_samples(double * const dest, sox_sample_t const * const src,
 
 
 
-/*------------------------ Implemented in libsoxio.c -------------------------*/
+/*----------------------- Implemented in formats_i.c -----------------------*/
 
 /* Read and write basic data types from "ft" stream. */
 size_t lsx_readbuf(sox_format_t * ft, void *buf, size_t len);
@@ -238,11 +251,6 @@ int lsx_rawstart(sox_format_t * ft, sox_bool default_rate, sox_bool default_chan
 #define lsx_rawstopread NULL
 #define lsx_rawstopwrite NULL
 
-extern sox_format_handler_t const * lsx_sndfile_format_fn(void);
-#if HAVE_POPEN
-extern sox_format_handler_t const * lsx_ffmpeg_format_fn(void);
-#endif
-
 char * lsx_cat_comments(sox_comments_t comments);
 
 /*--------------------------------- Effects ----------------------------------*/
@@ -259,14 +267,22 @@ int lsx_usage(sox_effect_t * effp);
   double d; \
   if (argc == 0) break; \
   d = strtod(*argv, &end_ptr); \
-  if (end_ptr != *argv) { \
-    if (d < min || d > max || *end_ptr != '\0') {\
-      lsx_fail("parameter `%s' must be from %g to %g", #name, (double)min, (double)max); \
-      return lsx_usage(effp); \
-    } \
-    p->name = d; \
-    --argc, ++argv; \
+  if (end_ptr == *argv) { \
+    /* No valid number was found */ \
+    break; \
   } \
+  if (*end_ptr != '\0') { \
+    /* A number with trailing garbage */ \
+    lsx_fail("%s `%s' is not a number", #name, *argv); \
+    return SOX_EOF; \
+  } \
+  if (d < min || d > max) { \
+    lsx_fail("%s `%s' must be from %g to %g", #name, *argv, \
+             (double)min, (double)max); \
+    return SOX_EOF; \
+  } \
+  p->name = d; \
+  --argc, ++argv; \
 }
 
 #define TEXTUAL_PARAMETER(name, enum_table) { \
@@ -279,17 +295,28 @@ int lsx_usage(sox_effect_t * effp);
   } \
 }
 
-#define GETOPT_LOCAL_NUMERIC(state, ch, name, min, max) case ch:{ \
+#define GETOPT_NUMERIC_IMPL(state, ch, var, name, min, max) case ch:{ \
   char * end_ptr; \
   double d = strtod(state.arg, &end_ptr); \
-  if (end_ptr == state.arg || d < min || d > max || *end_ptr != '\0') {\
-    lsx_fail("parameter `%s' must be from %g to %g", #name, (double)min, (double)max); \
-    return lsx_usage(effp); \
+  if (end_ptr == state.arg || *end_ptr != '\0') {\
+    lsx_fail("%s `%s' is not a number", #name, state.arg); \
+    return SOX_EOF; \
   } \
-  name = d; \
+  if (end_ptr == state.arg || d < min || d > max || *end_ptr != '\0') {\
+    lsx_fail("%s must be from %g to %g", #name, (double)min, (double)max); \
+    return SOX_EOF; \
+  } \
+  var = d; \
   break; \
 }
-#define GETOPT_NUMERIC(state, ch, name, min, max) GETOPT_LOCAL_NUMERIC(state, ch, p->name, min, max)
+/* GETOPT_NUMERIC is for parameters included in priv_t;
+ * GETOPT_LOCAL_NUMERIC is for parameters in a local variable.
+ * The above implements these without saying "p->name" in usage messages.
+ */
+#define GETOPT_LOCAL_NUMERIC(state, ch, name, min, max) \
+        GETOPT_NUMERIC_IMPL(state, ch, name, name, min, max)
+#define GETOPT_NUMERIC(state, ch, name, min, max) \
+        GETOPT_NUMERIC_IMPL(state, ch, p->name, name, min, max)
 
 int lsx_effect_set_imin(sox_effect_t * effp, size_t imin);
 

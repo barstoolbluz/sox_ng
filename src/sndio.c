@@ -87,7 +87,7 @@ static void decode(struct sio_par *par,
   }
 }
 
-static int startany(sox_format_t *ft, unsigned mode)
+static int startany_sndio(sox_format_t *ft, unsigned mode)
 {
   struct sndio_priv *p = (struct sndio_priv *)ft->priv;
   struct sio_par reqpar;
@@ -155,23 +155,23 @@ static int startany(sox_format_t *ft, unsigned mode)
   return SOX_EOF;
 }
 
-static int stopany(sox_format_t *ft)
+static int stopany_sndio(sox_format_t *ft)
 {
   sio_close(((struct sndio_priv *)ft->priv)->hdl);
   return SOX_SUCCESS;
 }
 
-static int startread(sox_format_t *ft)
+static int startread_sndio(sox_format_t *ft)
 {
-  return startany(ft, SIO_REC);
+  return startany_sndio(ft, SIO_REC);
 }
 
-static int startwrite(sox_format_t *ft)
+static int startwrite_sndio(sox_format_t *ft)
 {
-  return startany(ft, SIO_PLAY);
+  return startany_sndio(ft, SIO_PLAY);
 }
 
-static size_t readsamples(sox_format_t *ft, sox_sample_t *buf, size_t len)
+static size_t readsamples_sndio(sox_format_t *ft, sox_sample_t *buf, size_t len)
 {
   struct sndio_priv *p = (struct sndio_priv *)ft->priv;
   unsigned char partial[4];
@@ -200,7 +200,7 @@ static size_t readsamples(sox_format_t *ft, sox_sample_t *buf, size_t len)
   return len - todo / p->par.bps;
 }
 
-static size_t writesamples(sox_format_t *ft, const sox_sample_t *buf, size_t len)
+static size_t writesamples_sndio(sox_format_t *ft, const sox_sample_t *buf, size_t len)
 {
   struct sndio_priv *p = (struct sndio_priv *)ft->priv;
   unsigned sc, spb;
@@ -236,8 +236,8 @@ LSX_FORMAT_HANDLER(sndio)
     "libsndio device driver",
     names,
     SOX_FILE_DEVICE | SOX_FILE_NOSTDIO,
-    startread, readsamples, stopany,
-    startwrite, writesamples, stopany,
+    startread_sndio, readsamples_sndio, stopany_sndio,
+    startwrite_sndio, writesamples_sndio, stopany_sndio,
     NULL, write_encodings, NULL,
     sizeof(struct sndio_priv)
   };

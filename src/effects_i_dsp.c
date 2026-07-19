@@ -148,17 +148,18 @@ double lsx_bessel_I_0(double x)
   return sum;
 }
 
-int lsx_set_dft_length(int num_taps) /* Set to 4 x nearest power of 2 */
+size_t lsx_set_dft_length(size_t num_taps) /* Set to 4 x nearest power of 2 */
 {      /* or half of that if danger of causing too many cache misses. */
-  int min = sox_globals.log2_dft_min_size;
+  unsigned min = sox_globals.log2_dft_min_size;
   double d = log((double)num_taps) / log(2.);
-  return 1 << range_limit((int)(d + 2.77), min, max((int)(d + 1.77), 17));
+  return (size_t)1 << range_limit((unsigned)(d + 2.77), min, max((unsigned)(d + 1.77), 31));
 }
 
 #include "fft4g.h"
-static int * lsx_fft_br;
+static unsigned * lsx_fft_br;
 static double * lsx_fft_sc;
-static int fft_len = -1;
+static float * lsx_fft_sc_f;
+static size_t fft_len = 0;
 #if defined HAVE_OPENMP
 static ccrw2_t fft_cache_ccrw;
 #endif
@@ -167,35 +168,36 @@ void init_fft_cache(void)
 {
   assert(lsx_fft_br == NULL);
   assert(lsx_fft_sc == NULL);
-  assert(fft_len == -1);
+  assert(lsx_fft_sc_f == NULL);
   ccrw2_init(fft_cache_ccrw);
   fft_len = 0;
 }
 
 void clear_fft_cache(void)
 {
-  assert(fft_len >= 0);
   ccrw2_clear(fft_cache_ccrw);
   free(lsx_fft_br);
   free(lsx_fft_sc);
+  free(lsx_fft_sc_f);
   lsx_fft_sc = NULL;
+  lsx_fft_sc_f = NULL;
   lsx_fft_br = NULL;
-  fft_len = -1;
+  fft_len = 0;
 }
 
-static sox_bool update_fft_cache(int len)
+static sox_bool update_fft_cache(size_t len)
 {
   assert(lsx_is_power_of_2(len));
-  assert(fft_len >= 0);
   ccrw2_become_reader(fft_cache_ccrw);
   if (len > fft_len) {
     ccrw2_cease_reading(fft_cache_ccrw);
     ccrw2_become_writer(fft_cache_ccrw);
     if (len > fft_len) {
-      int old_n = fft_len;
+      size_t old_n = fft_len;
       fft_len = len;
       lsx_revalloc(lsx_fft_br, dft_br_len(fft_len));
       lsx_revalloc(lsx_fft_sc, dft_sc_len(fft_len));
+      lsx_revalloc(lsx_fft_sc_f, dft_sc_len(fft_len));
       if (!old_n)
         lsx_fft_br[0] = 0;
       return sox_true;
@@ -213,23 +215,39 @@ static void done_with_fft_cache(sox_bool is_writer)
   else ccrw2_cease_reading(fft_cache_ccrw);
 }
 
-void lsx_safe_rdft(int len, int type, double * d)
+void lsx_safe_rdft(unsigned len, int type, double * d)
 {
   sox_bool is_writer = update_fft_cache(len);
   lsx_rdft(len, type, d, lsx_fft_br, lsx_fft_sc);
   done_with_fft_cache(is_writer);
 }
 
-void lsx_safe_cdft(int len, int type, double * d)
+void lsx_safe_cdft(unsigned len, int type, double * d)
 {
   sox_bool is_writer = update_fft_cache(len);
   lsx_cdft(len, type, d, lsx_fft_br, lsx_fft_sc);
   done_with_fft_cache(is_writer);
 }
 
-void lsx_power_spectrum(int n, double const * in, double * out)
+#if 0
+void lsx_safe_rdft_f(unsigned len, int type, float * d)
 {
-  int i;
+  sox_bool is_writer = update_fft_cache(len);
+  lsx_rdft_f(len, type, d, lsx_fft_br, lsx_fft_sc_f);
+  done_with_fft_cache(is_writer);
+}
+
+void lsx_safe_cdft_f(unsigned len, int type, float * d)
+{
+  sox_bool is_writer = update_fft_cache(len);
+  lsx_cdft_f(len, type, d, lsx_fft_br, lsx_fft_sc_f);
+  done_with_fft_cache(is_writer);
+}
+#endif
+
+void lsx_power_spectrum(unsigned n, double const * in, double * out)
+{
+  unsigned i;
   double * work = lsx_memdup(in, n * sizeof(*work));
   lsx_safe_rdft(n, 1, work);
   out[0] = sqr(work[0]);
@@ -239,9 +257,9 @@ void lsx_power_spectrum(int n, double const * in, double * out)
   free(work);
 }
 
-void lsx_power_spectrum_f(int n, float const * in, float * out)
+void lsx_power_spectrum_f(unsigned n, float const * in, float * out)
 {
-  int i;
+  unsigned i;
   double * work;
 
   lsx_valloc(work, n);
@@ -362,7 +380,7 @@ double * lsx_make_lpf(int num_taps, double Fc, double beta, double rho,
   double * h, sum = 0;
   double mult = scale / lsx_bessel_I_0(beta), mult1 = 1 / (.5 * m + rho);
   assert(Fc >= 0 && Fc <= 1);
-  lsx_debug("make_lpf(n=%i Fc=%.7g β=%g ρ=%g dc-norm=%i scale=%g)", num_taps, Fc, beta, rho, dc_norm, scale);
+  lsx_debug("make_lpf(n=%i Fc=%.7g beta=%g rho=%g dc-norm=%i scale=%g)", num_taps, Fc, beta, rho, dc_norm, scale);
 
   lsx_vcalloc(h, num_taps);
 
@@ -397,7 +415,7 @@ double * lsx_design_lpf(
   int n = *num_taps, phases = max(k, 1), modulo = max(-k, 1);
   double tr_bw, Fc, rho = phases == 1? .5 : att < 120? .63 : .75;
 
-  Fp /= fabs(Fn), Fs /= fabs(Fn);        /* Normalise to Fn = 1 */
+  Fp /= fabs(Fn), Fs /= fabs(Fn);        /* Normalize to Fn = 1 */
   tr_bw = .5 * (Fs - Fp); /* Transition band-width: 6dB to stop points */
   tr_bw /= phases, Fs /= phases;
   tr_bw = min(tr_bw, .5 * Fs);
@@ -419,7 +437,7 @@ static double safe_log(double x)
   return -26;
 }
 
-void lsx_fir_to_phase(double * * h, int * len, int * post_len, double phase)
+void lsx_fir_to_phase(double * * h, int * len, size_t * post_len, double phase)
 {
   double * pi_wraps, * work, phase1 = (phase > 50 ? 100 - phase : phase) / 50;
   int i, work_len, begin, end, imp_peak = 0, peak = 0;
@@ -506,9 +524,9 @@ void lsx_fir_to_phase(double * * h, int * len, int * post_len, double phase)
     work[(begin + (phase > 50 ? *len - 1 - i : i) + work_len) & (work_len - 1)];
   *post_len = phase > 50 ? peak - begin : begin + *len - (peak + 1);
 
-  lsx_debug("nPI=%g peak-sum@%i=%g (val@%i=%g); len=%i post=%i (%g%%)",
+  lsx_debug("nPI=%g peak-sum@%i=%g (val@%i=%g); len=%i post=%" PRIu64 " (%g%%)",
       pi_wraps[work_len >> 1] / M_PI, peak, peak_imp_sum, imp_peak,
-      work[imp_peak], *len, *post_len, 100 - 100. * *post_len / (*len - 1));
+      work[imp_peak], *len, (uint64_t)*post_len, 100 - 100. * *post_len / (*len - 1));
   free(pi_wraps), free(work);
 }
 

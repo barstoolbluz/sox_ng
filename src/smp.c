@@ -71,6 +71,7 @@ static char const *SVmagic = "SOUND SAMPLE DATA ", *SVvers = "2.1 ";
  * Returns SOX_SUCCESS if everything was read ok,
  * SOX_EOF if there was an error.
  */
+#define TRAILERSIZE (2 + 8*(4+4+1+2) + 8*(MARKERLEN+4) + (1+4+4+4))
 static int readtrailer(sox_format_t * ft, struct smptrailer *trailer)
 {
         int i;
@@ -296,9 +297,13 @@ static int sox_smpstartread(sox_format_t * ft)
         smp->dataStart = samplestart;
         ft->signal.length = smp->NoOfSamps;
 
+        /* This is only used in computing the bitrate,
+         * so include the size of the trailer */
+        ft->data_start = samplestart + TRAILERSIZE;
+
         lsx_report("SampleVision trailer:");
         for(i = 0; i < 8; i++) if (1 || trailer.loops[i].count) {
-                lsx_report("Loop %lu: start: %6d", (unsigned long)i, trailer.loops[i].start);
+                lsx_report("loop %lu: start: %6d", (unsigned long)i, trailer.loops[i].start);
                 lsx_report(" end:   %6d", trailer.loops[i].end);
                 lsx_report(" count: %6d", trailer.loops[i].count);
                 switch(trailer.loops[i].type) {

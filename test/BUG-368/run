@@ -15,12 +15,12 @@
 # sox_ng-14.5.0
 sox_ng FAIL formats: can't open input file `poc_file': Implausible dictionary size in HCOM header
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} --single-threaded poc_file -t aiff /dev/null
 status=$?
 
-rm -f core
+rm -f core core.*
 
 case $status in
 0) status=255;;

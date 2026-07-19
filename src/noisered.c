@@ -104,11 +104,16 @@ static int sox_noisered_start(sox_effect_t * effp)
             break;
         i1 = i1_ul;
         if (i1 != fchannels) {
-            lsx_fail("got channel %lu, expected channel %lu.",
+            lsx_fail("got channel %lu, expected channel %lu",
                     (unsigned long)i1, (unsigned long)fchannels);
             return SOX_EOF;
         }
 
+        if (fchannels >= channels) {
+            lsx_fail("channel mismatch: %lu in input, more in profile",
+                    (unsigned long)channels);
+            return SOX_EOF;
+        }
         data->chandata[fchannels].noisegate[0] = f1;
         for (i = 1; i < FREQCOUNT; i ++) {
             if (1 != fscanf(ifp, ", %f", &f1)) {
@@ -121,7 +126,7 @@ static int sox_noisered_start(sox_effect_t * effp)
         fchannels ++;
     }
     if (fchannels != channels) {
-        lsx_fail("channel mismatch: %lu in input, %lu in profile.",
+        lsx_fail("channel mismatch: %lu in input, %lu in profile",
                 (unsigned long)channels, (unsigned long)fchannels);
         return SOX_EOF;
     }
@@ -339,14 +344,18 @@ static int sox_noisered_stop(sox_effect_t * effp)
 
 static sox_effect_handler_t sox_noisered_effect = {
   "noisered",
-  "[profile-file(-) [amount(0.5)]]", NULL,
+  "[profile-file(-) [amount(0.5)]]",
   SOX_EFF_MCHAN|SOX_EFF_LENGTH,
   sox_noisered_getopts,
   sox_noisered_start,
   sox_noisered_flow,
   sox_noisered_drain,
   sox_noisered_stop,
-  NULL, sizeof(priv_t)
+  NULL,
+  sizeof(priv_t),
+  NULL,
+  NULL,
+  NULL,
 };
 
 const sox_effect_handler_t *lsx_noisered_effect_fn(void)

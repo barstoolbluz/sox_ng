@@ -164,13 +164,13 @@ case "$1" in
 	esac
 
 	case "$remote" in
-	https://*)
+	http://*|https://*)
 	    site="$(echo "$remote" | \
-		    sed -n 's|https://\([^/]*\)/.*|\1|p')"
+		    sed -n 's|https*://\([^/]*\)/.*|\1|p')"
 	    owner="$(echo "$remote" | \
-		    sed -n 's|https://[^/]*/\([^/]*\)/.*|\1|p')"
+		    sed -n 's|https*://[^/]*/\([^/]*\)/.*|\1|p')"
 	    repo="$(echo "$remote" | \
-		    sed -n 's|https://[^/]*/[^/]*/\(.*\)$|\1|p')"
+		    sed -n 's|https*://[^/]*/[^/]*/\(.*\)$|\1|p')"
 	    if [ -z "$site" ] || [ -z "$owner" ] || [ -z "$repo" ]
 	    then
 		echo "I can't decode the git origin '$remote'" 1>&2
@@ -179,7 +179,7 @@ case "$1" in
 	    fi
 	    ;;
 	*)
-	    echo "$0: I only understand https:// git origins" 1>&2
+	    echo "$0: I only understand http:// and https:// git origins" 1>&2
 	    exit 1 ;;
 	esac
     fi ;;
@@ -384,11 +384,11 @@ select_transfer()
 
 select_transfer
 
-# Make sure jq is present
-if echo '' | jaq > /dev/null
+# Make sure jaq (faster) or jq is present
+if echo '' | jaq > /dev/null 2>&1
 then
     jq="jaq -c"
-elif echo '' | jq > /dev/null
+elif echo '' | jq > /dev/null 2>&1
 then
     jq="jq -c"
 else
@@ -768,11 +768,11 @@ getissues() {
 	# though they may have created an issue called "*" (!)
 	test "$a" = "*.md" && [ ! -f "*.md" ] && continue
 
-	test -f "$a" && rm "$a"
+	test -f "$a" && rm ./"$a"
 	# If we were interrupted, we may have created an .md file
 	# but not its corresponding directory so check first.
 	dirname="$(echo "$a" | sed 's/\.md$//')"
-	test -d "$dirname" && rm -r "$dirname"
+	test -d "$dirname" && rm -r ./"$dirname"
     done
 
     echo "$rissues_json" | $jq -r '.[].number' | while read -r number
@@ -792,15 +792,15 @@ getissues() {
 	# Check for duplicate titles
 	if [ -f "$ftitle".md ]
 	then
-	    echo "Ignoring issue $number with the same title as $(cat "$ftitle"/number): '$ftitle'"
+	    echo "Ignoring issue $number with the same title as $(cat ./"$ftitle"/number): '$ftitle'"
 	    continue
 	fi
 	# Some issue bodies have all \n and others have all \r\n. Go figure.
 	echo "$issue" | $jq -r .body | tr -d '\r' > "$ftitle".md
 
 	# Save metadata: number, id, milestone and labels
-	mkdir "$ftitle"
-	if cd "$ftitle"
+	mkdir ./"$ftitle"
+	if cd ./"$ftitle"
 	then
 	    # Forgejo includes pull requests as issues with a non-null
 	    # .pull_request field. We don't want them in the issues.
@@ -832,19 +832,21 @@ getissues() {
 
 	    assets="$(echo "$issue" | $jq '.assets')"  # json
 	    nassets="$(echo "$assets" | $jq -r length)"
-	    test "$nassets" -gt 0 && mkdir assets
-	    for i in $(seq 0 $((nassets - 1))); do
-		name="$(echo "$assets" | $jq -r ".[$i].name")"
-		url="$(echo "$assets" | $jq -r ".[$i].browser_download_url")"
-		case "$name" in
-		*.patch|*.diff)
-		    geturl GET "$url" \
-			   "Failed to fetch patch '$name' of '$title'" ;;
-		*)
-		    geturl GET -r "$url" \
-			   "Failed to fetch attachment '$name' of '$title'" ;;
-		esac > assets/"$name"
-	    done
+	    test "$nassets" -gt 0 && {
+		mkdir assets
+		for i in $(seq 0 $(($nassets - 1)) ); do
+		    name="$(echo "$assets" | $jq -r ".[$i].name")"
+		    url="$(echo "$assets" | $jq -r ".[$i].browser_download_url")"
+		    case "$name" in
+		    *.patch|*.diff)
+			geturl GET "$url" \
+			       "Failed to fetch patch '$name' of '$title'" ;;
+		    *)
+			geturl GET -r "$url" \
+			       "Failed to fetch attachment '$name' of '$title'" ;;
+		    esac > assets/"$name"
+		done
+	    }
 	    cd ..
 	else
 	    echo "Can't cd to \"$ftitle\""
@@ -902,12 +904,12 @@ putissues() {
 	# There could be an issue called "*" (!)
 	if [ "$ftitle" = "*.md" ] && [ ! -e "*.md" ]
 	then
-	    echo "There are no issues here!"
+	    echo "There are no issues in `pwd`"
 	    exit 1
 	fi
 
 	# Guard against issues whose title ends in .md
-	test -d "$ftitle" && continue
+	test -d ./"$ftitle" && continue
 
 	# and files called ".md"
 	if [ "$ftitle" = ".md" ]
@@ -917,7 +919,7 @@ putissues() {
 	fi
 
 	# Hereon, $ftitle is the issue's directory name
-	ftitle="$(basename "$ftitle" .md)"
+	ftitle="$(basename ./"$ftitle" .md)"
 
 	# Ignore any pull requests left over from when we used to store them
 	if [ -f "$ftitle"/pull_request ]
@@ -926,13 +928,13 @@ putissues() {
 	fi
 
 	# New issues may not have a directory
-	mkdir -p "$ftitle"
+	mkdir -p ./"$ftitle"
 
 	# Read its metadata
 
 	if [ -f "$ftitle/title" ]
 	then
-	    title="$(cat "$ftitle"/title)"
+	    title="$(cat ./"$ftitle"/title)"
 	else
 	    # Probably a new issue
 	    title="$ftitle"
@@ -945,24 +947,24 @@ putissues() {
 	    $dryrun || echo "$title" > "$ftitle"/title
 	fi
 	if [ -f "$ftitle"/number ]
-	then number="$(cat "$ftitle"/number)"
+	then number="$(cat ./"$ftitle"/number)"
 	else number=
 	fi
 	if [ -f "$ftitle/id" ]
-	then id="$(cat "$ftitle"/id)"
+	then id="$(cat ./"$ftitle"/id)"
 	else id=
 	fi
 	if [ -f "$ftitle/state" ]
-	then state="$(cat "$ftitle"/state)"
+	then state="$(cat ./"$ftitle"/state)"
 	else state=open
 	     $dryrun || echo open > "$ftitle"/state
 	fi
 	if [ -f "$ftitle/milestone" ]
-	then milestone="$(cat "$ftitle"/milestone)"
+	then milestone="$(cat ./"$ftitle"/milestone)"
 	else milestone=
 	fi
 	if [ -f "$ftitle/labels" ]
-	then labels="$(cat "$ftitle"/labels)"
+	then labels="$(cat ./"$ftitle"/labels)"
 	else labels=
 	fi
 
@@ -974,7 +976,7 @@ putissues() {
 	    continue
 	fi
 	# Make sure there are no newlines in its title
-	if [ 1 != "$(echo "$title" | wc -l)" ]
+	if [ 1 -ne "$(echo "$title" | wc -l)" ]
 	then
 	    echo "There's a newline in the title of '$ftitle'" 1>&2
 	    continue
@@ -1118,8 +1120,8 @@ putissues() {
 	    if [ -d "$ftitle"/assets ]
 	    then
 		test -d "$ftitle"/assets && \
-		(cd "$ftitle"/assets && find . -maxdepth 1 -type f | \
-					sed 's|^\./||') | \
+		(cd ./"$ftitle"/assets && find . -maxdepth 1 -type f | \
+					  sed 's|^\./||') | \
 		while read -r name
 		do
 		    result="$(puturl POST -a \
@@ -1131,7 +1133,7 @@ putissues() {
 		if result="$(geturl GET -r "$apirepo/issues/$number" \
 				    "#$number '$title': Failed to refetch")"
 		then
-		    old="$(cat "$ftitle"/updated_at)"
+		    old="$(cat ./"$ftitle"/updated_at)"
 		    new="$(echo "$result" | $jq -r .updated_at > "$ftitle"/updated_at)"
 		    if [ "$old" != "$new" ]
 		    then
@@ -1182,11 +1184,11 @@ putissues() {
 	# updated on the server.
 
 	if [ -f "$ftitle"/updated_at ] && \
-	   [ "$(cat "$ftitle"/updated_at)" != \
+	   [ "$(cat ./"$ftitle"/updated_at)" != \
 	     "$(echo "$rissue_json" | $jq -r ".updated_at")" ]
 	then
 	    echo "Remote issue '$ftitle' has been updated since we got it" 1>&2
-	    echo "Here: '$(cat "$ftitle"/updated_at)' There: '$(echo "$rissue_json" | $jq -r ".updated_at")'" 1>&2
+	    echo "Here: '$(cat ./"$ftitle"/updated_at)' There: '$(echo "$rissue_json" | $jq -r ".updated_at")'" 1>&2
 	    continue
 	fi
 
@@ -1317,8 +1319,8 @@ putissues() {
 	    echo "$rassets_json" > "$tmp"
 
 	    test -d "$ftitle"/assets && \
-	    (cd "$ftitle"/assets && find . -maxdepth 1 -type f | \
-				    sed 's|^\./||') | \
+	    (cd ./"$ftitle"/assets && find . -maxdepth 1 -type f | \
+				      sed 's|^\./||') | \
 	    while read -r name
 	    do
 		rasset_json="$(echo "$rassets_json" | \
@@ -1353,7 +1355,7 @@ putissues() {
 		    *)
 			geturl GET -r "$url" \
 			       "#$number '$title': Failed to fetch asset '$name'" > $rasset ;;
-		    esac && cmp -s "$ftitle/assets/$name" "$rasset" || {
+		    esac && cmp -s ./"$ftitle/assets/$name" "$rasset" || {
 			# geturl succeeded and the files are different
 
 			echo "#$number '$title': Updating asset '$name'"
@@ -1512,24 +1514,24 @@ putissues() {
 	    fi
 
 	    # Hereon, $ftitle is the issue's directory name
-	    ftitle="$(basename "$ftitle" .md)"
+	    ftitle="$(basename ./"$ftitle" .md)"
 
-	    test "$(cat "$ftitle"/number)" -ne "$number" && continue
+	    test "$(cat ./"$ftitle"/number)" -ne "$number" && continue
 
 	    data="{"	# }
-	    title="$(cat "$ftitle"/title)"
+	    title="$(cat ./"$ftitle"/title)"
 	    data="$data,\"title\":$(ecma_quote -n "$title")"
 	    data="$data,\"body\":$(ecma_quote "$(tr -d '\r' < "$ftitle".md)")"
 
 	    # New issues by default are created open
-	    if [ -f "$ftitle"/state ] && [ "$(cat "$ftitle"/state)" = closed ]
+	    if [ -f "$ftitle"/state ] && [ "$(cat ./"$ftitle"/state)" = closed ]
 	    then data="$data,\"state\":\"closed\""
 	    fi
 
 	    # You can't set the created_at field or username when PATCHING
 	    # an issue, nor when creating it.
 
-	    milestone="$(cat "$ftitle"/milestone 2> /dev/null)"
+	    milestone="$(cat ./"$ftitle"/milestone 2> /dev/null)"
 	    if [ -n "$milestone" ]
 	    then
 		# Find the milestone id from its name
@@ -1592,8 +1594,8 @@ putissues() {
 	    if [ -d "$ftitle"/assets ]
 	    then
 		test -d "$ftitle"/assets && \
-		(cd "$ftitle"/assets && find . -maxdepth 1 -type f | \
-					sed 's|^\./||') | \
+		(cd ./"$ftitle"/assets && find . -maxdepth 1 -type f | \
+					  sed 's|^\./||') | \
 		while read -r name
 		do
 		    result="$(puturl POST -a \

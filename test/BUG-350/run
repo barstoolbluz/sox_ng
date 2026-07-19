@@ -21,12 +21,12 @@
 # 42b355 and sox.sf.net master
 # Segmentation fault (core dumped)
 
-rm -f core
+rm -f core core.*
 
 ${sox:-sox} bug2 -n	# The noiseprof is not necessary
 status=$?
 
-rm -f core
+rm -f core core.*
 
 case $status in
 0) status=2;;

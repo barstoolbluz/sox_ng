@@ -16,6 +16,11 @@ fi
 # The timing tests do not succeed/fail and barf if /usr/bin/time isn't.
 timeio=false
 
+# Which tests should we perform?
+mono=true
+stereo=true
+multi=true
+
 # Set options & allow user to override paths.  Useful for testing an
 # installed sox_ng.
 while [ $# -ne 0 ]; do
@@ -30,7 +35,25 @@ while [ $# -ne 0 ]; do
         ;;
 
         -a)      # Perform each test up to 3 times with different #s of
-        all=all  # channels; probably enough coverage without this though.
+        all=all;
+        ;;
+
+        -1)      # do only mono tests
+        mono=true
+        stereo=false
+        multi=false
+        ;;
+
+        -2)      # do only stereo tests
+        mono=false
+        stereo=true
+        multi=false
+        ;;
+
+        -3)      # do only nultichannel tests
+        mono=false
+        stereo=false
+        multi=true
         ;;
 
         -t)
@@ -76,7 +99,10 @@ while [ $# -ne 0 ]; do
 	{
             echo "Usage: sh tests.sh [options]"
 	    echo "-v      Be verbose"
-	    echo "-a      Also run mono and stereo tests"
+	    echo "-1      Only run the tests for mono formats"
+	    echo "-2      Only run the tests for stereo formats"
+	    echo "-3      Only run the tests for multichannel formats"
+	    echo "-a      Also run mono and stereo tests on multichannel formats"
 	    echo "-t      Also run timing tests (cannot fail)"
 	    echo "-i path or --bindir=path"
 	    echo "        Where to find the sox executable"
@@ -139,7 +165,6 @@ convertToAndFrom () {
             echo "*FAIL vector* channels=$channels \"$format1Text\" ---> \"$format2Text\"."
             exit 1    # This allows failure inspection.
           fi
-	  vectors=`expr $vectors + 1`
         fi
 
         if cmp -s input.$format1Ext output.$format1Ext
@@ -238,7 +263,13 @@ timeIO () {
 # Don't try to test un-built formats
 skip_check () {
   while [ $# -ne 0 ]; do
-    LD_LIBRARY_PATH=${libdir} ${bindir}/sox_ng${EXEEXT} --help|grep "^AUDIO FILE.*\<$1\>">/dev/null || skip="$1 $skip"
+    if LD_LIBRARY_PATH=${libdir} ${bindir}/sox_ng${EXEEXT} --help|grep "^AUDIO FILE.*\<$1\>">/dev/null
+    then
+      # It's supported - make sure it's writable
+      LD_LIBRARY_PATH=${libdir} ${bindir}/sox_ng${EXEEXT} --help-format "$1"|grep '^Writes:$'>/dev/null || skip="$1 $skip"
+    else
+      skip="$1 $skip"
+    fi
     shift
   done
 }
@@ -250,28 +281,30 @@ ${builddir}/sox_sample_test${EXEEXT} || exit 1
 
 skip_check caf flac mat4 mat5 paf w64 wv
 
-vectors=0
-
 rate=44100
 samples=23493
 
-channels=3 
-do_multichannel_formats
-
-channels=2 
-if [ "$all" = "all" ]; then
+if $multi; then
+  channels=3 
   do_multichannel_formats
 fi
-do_twochannel_formats
-format1=cdda         # 2-channel only
-convertToAndFrom s16 u24 aiff
 
-channels=1 
-if [ "$all" = "all" ]; then
-  do_multichannel_formats
+if $stereo; then
+  channels=2 
+  test "x$all" = "xall" && do_multichannel_formats
   do_twochannel_formats
+  format1=cdda         # 2-channel only
+  convertToAndFrom s16 u24 aiff
 fi
-do_singlechannel_formats
+
+if $mono; then
+  channels=1 
+  test "x$all" = "xall" && {
+    do_multichannel_formats
+    do_twochannel_formats
+  }
+  do_singlechannel_formats
+fi
 
 if false; then # needs skip & dir work for general use
 ${srcdir}/test-comments
@@ -290,9 +323,6 @@ else
   echo "*FAIL* synth size"
 fi
 rm output.u8
-
-echo "Checked $vectors vectors"
-
 
 if $timeio
 then

@@ -421,13 +421,16 @@ LSX_FORMAT_HANDLER(dsdiff)
 		SOX_ENCODING_DSD, 1, 0,
 		0
         };
+	static sox_rate_t const write_rates[] = {
+		64*44100, 128*44100, 256*44100,
+		0 };
 	static sox_format_handler_t const handler = {
 		SOX_LIB_VERSION_CODE,
 		"Direct Stream Digital Interchange File Format (DSDIFF)",
 		names, SOX_FILE_BIG_END,
 		dff_startread, dff_read, dff_stopread,
 		dff_startwrite, dff_write, dff_stopwrite,
-		dff_seek, write_encodings, NULL,
+		dff_seek, write_encodings, write_rates,
 		sizeof(struct dsdiff)
 	};
 	return &handler;

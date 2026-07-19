@@ -2,7 +2,7 @@
 
 # Test writing of AIFC ALAW encoding
 
-rm -f core out.aifc alaw.wav out.wav
+rm -f core core.* out.aifc alaw.wav out.wav
 
 ${sox:-sox} alaw.aifc -e a-law out.aifc
 status=$?
@@ -11,6 +11,6 @@ ${sox:-sox} alaw.aifc -e signed -b 16 alaw.wav || status=2
 ${sox:-sox} out.aifc -e signed -b 16 out.wav || status=2
 cmp alaw.wav out.wav || status=2
 
-rm -f core out.aifc alaw.wav out.wav
+rm -f core core.* out.aifc alaw.wav out.wav
 
 exit $status

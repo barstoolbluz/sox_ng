@@ -19,6 +19,7 @@
                                 * in given time. */
 #define FADE_TRI        't'     /* Linear slope. */
 #define FADE_PAR        'p'     /* Inverted parabola. */
+#define FADE_SQUARE     's'     /* Square. */
 
 
 /* Private data for fade file */
@@ -50,14 +51,16 @@ static int sox_fade_getopts(sox_effect_t * effp, int argc, char **argv)
     const char *n;
   --argc, ++argv;
 
-    if (argc < 1 || argc > 4)
-         return lsx_usage(effp);
+    if (argc < 1) {
+      lsx_fail("fade-in-length is required");
+      return SOX_EOF;
+    }
 
     /* because sample rate is unavailable at this point we store the
      * string off for later computations.
      */
 
-    if (sscanf(argv[0], "%1[qhltp]", t_char))
+    if (sscanf(argv[0], "%1[qhltps]", t_char))
     {
         fade->in_fadetype = *t_char;
         fade->out_fadetype = *t_char;
@@ -72,11 +75,18 @@ static int sox_fade_getopts(sox_effect_t * effp, int argc, char **argv)
         fade->out_fadetype = 'l';
     }
 
+    if (argc > 3) {
+      lsx_fail("too many arguments");
+      return lsx_usage(effp);;
+    }
+
     fade->in_stop_str = lsx_strdup(argv[0]);
     /* Do a dummy parse to see if it will fail */
     n = lsx_parsesamples(0., fade->in_stop_str, &samples, 't');
-    if (!n || *n)
-      return lsx_usage(effp);
+    if (!n || *n) {
+      lsx_fail("cannot parse fade-in-length `%s'", fade->in_stop_str);
+      return SOX_EOF;
+    }
 
     fade->in_stop = samples;
     fade->out_start_str = fade->out_stop_str = 0;
@@ -90,8 +100,10 @@ static int sox_fade_getopts(sox_effect_t * effp, int argc, char **argv)
 
             /* Do a dummy parse to see if it will fail */
             n = lsx_parseposition(0., fade->out_stop_str, NULL, (uint64_t)0, (uint64_t)0, '=');
-            if (!n || *n)
-              return lsx_usage(effp);
+            if (!n || *n) {
+	      lsx_fail("cannot parse stop-position `%s'", fade->out_stop_str);
+              return SOX_EOF;
+	    }
             fade->out_stop = samples;
         }
         else
@@ -100,8 +112,10 @@ static int sox_fade_getopts(sox_effect_t * effp, int argc, char **argv)
 
             /* Do a dummy parse to see if it will fail */
             n = lsx_parsesamples(0., fade->out_start_str, &samples, 't');
-            if (!n || *n)
-              return lsx_usage(effp);
+            if (!n || *n) {
+	      lsx_fail("cannot parse fade-out-length `%s'", fade->out_stop_str);
+              return SOX_EOF;
+	    }
             fade->out_start = samples;
         }
     } /* End for(t_argno) */
@@ -297,7 +311,7 @@ static int sox_fade_drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp
     if (fade->do_out && fade->samplesdone < fade->out_stop &&
         !(fade->endpadwarned))
     { /* Warning about padding silence into end of sample */
-        lsx_warn("End time past end of audio. Padding with silence");
+        lsx_warn("end time is past the end of the audio. Padding with silence");
         fade->endpadwarned = 1;
     } /* endif endpadwarned */
 
@@ -369,6 +383,10 @@ static double fade_gain(uint64_t index, uint64_t range, int type)
       retval = (1 - (1 - findex)  * (1 - findex));
       break;
 
+    case FADE_SQUARE :             /* square */
+      retval = findex * findex;
+      break;
+
     /* TODO: more fade curves? */
     default :                  /* Error indicating wrong fade curve */
       retval = -1.0;
@@ -388,18 +406,23 @@ static char const * const extra_usage[] = {
   "t     Linear (`triangular')",
   "l     Logarithmic",
   "p     Inverted parabola",
+  "s     Square law",
   "Times are in hh:mm:ss.frac format.",
   NULL
 };
 
 static sox_effect_handler_t sox_fade_effect = {
-  "fade", usage, extra_usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH,
+  "fade", usage, SOX_EFF_MCHAN | SOX_EFF_LENGTH,
   sox_fade_getopts,
   sox_fade_start,
   sox_fade_flow,
   sox_fade_drain,
   NULL,
-  lsx_kill, sizeof(priv_t)
+  lsx_kill,
+  sizeof(priv_t),
+  extra_usage,
+  NULL,
+  NULL,
 };
 
 const sox_effect_handler_t *lsx_fade_effect_fn(void)

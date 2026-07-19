@@ -208,7 +208,7 @@ static int blockstart(sox_format_t *);
 /*-----------------------------------------------------------------
  * startread() -- start reading a VOC file
  *-----------------------------------------------------------------*/
-static int startread(sox_format_t * ft)
+static int startread_voc(sox_format_t * ft)
 {
   char header[20];
   priv_t * v = (priv_t *) ft->priv;
@@ -240,6 +240,8 @@ static int startread(sox_format_t * ft)
       lsx_fail_errno(ft, SOX_EHDR, "unexpected EOF in header");
       return (SOX_EOF);
     }
+
+  ft->data_start = lsx_tell(ft);
 
   v->rate = -1;
   v->block_remaining = 0;
@@ -312,7 +314,7 @@ static int startread(sox_format_t * ft)
  * ANN:  Major changes here to support multi-part files and files
  *       that do not have audio in block 9's.
  *-----------------------------------------------------------------*/
-static size_t read_samples(sox_format_t * ft, sox_sample_t * buf,
+static size_t read_samples_voc(sox_format_t * ft, sox_sample_t * buf,
                                size_t len)
 {
   priv_t * v = (priv_t *) ft->priv;
@@ -463,7 +465,7 @@ static size_t read_samples(sox_format_t * ft, sox_sample_t * buf,
  * which will work with the oldest software (eg. an 8-bit mono sample
  * will be able to be played with a really old SB VOC player.)
  */
-static int startwrite(sox_format_t * ft)
+static int startwrite_voc(sox_format_t * ft)
 {
   priv_t * v = (priv_t *) ft->priv;
 
@@ -488,7 +490,7 @@ static int startwrite(sox_format_t * ft)
 /*-----------------------------------------------------------------
  * write() -- write a VOC file
  *-----------------------------------------------------------------*/
-static size_t write_samples(sox_format_t * ft, const sox_sample_t * buf,
+static size_t write_samples_voc(sox_format_t * ft, const sox_sample_t * buf,
                                 size_t len)
 {
   priv_t * v = (priv_t *) ft->priv;
@@ -523,7 +525,7 @@ static size_t write_samples(sox_format_t * ft, const sox_sample_t * buf,
  * blockstop() -- stop an output block
  * End the current data or silence block.
  *-----------------------------------------------------------------*/
-static int blockstop(sox_format_t * ft)
+static int stopwrite_voc(sox_format_t * ft)
 {
   priv_t * v = (priv_t *) ft->priv;
   sox_sample_t datum;
@@ -553,14 +555,6 @@ static int blockstop(sox_format_t * ft)
       return (SOX_EOF);
   }
   return (SOX_SUCCESS);
-}
-
-/*-----------------------------------------------------------------
- * stopwrite() -- stop writing a VOC file
- *-----------------------------------------------------------------*/
-static int stopwrite(sox_format_t * ft)
-{
-  return (blockstop(ft));
 }
 
 /*-----------------------------------------------------------------
@@ -828,8 +822,8 @@ LSX_FORMAT_HANDLER(voc)
   static sox_format_handler_t const handler = {SOX_LIB_VERSION_CODE,
     "Creative Technology Sound Blaster format",
     names, SOX_FILE_LIT_END | SOX_FILE_MONO | SOX_FILE_STEREO,
-    startread, read_samples, NULL,
-    startwrite, write_samples, stopwrite,
+    startread_voc, read_samples_voc, NULL,
+    startwrite_voc, write_samples_voc, stopwrite_voc,
     NULL, write_encodings, NULL, sizeof(priv_t)
   };
   return &handler;

@@ -49,7 +49,7 @@ static int default_getopts(sox_effect_t * effp, int argc, char **argv UNUSED)
   return --argc? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-/* Partially initialise the effect structure; signal info will come later */
+/* Partially initialize the effect structure; signal info will come later */
 sox_effect_t * sox_create_effect(sox_effect_handler_t const * eh)
 {
   sox_effect_t * effp = lsx_calloc(1, sizeof(*effp));
@@ -163,7 +163,8 @@ int sox_add_effect(sox_effects_chain_t * chain, sox_effect_t * effp, sox_signali
   }
   if (ret != SOX_SUCCESS) {
     free(eff0.priv);
-    effp->priv = NULL; /* Avoid bad calls to free in sox_delete_effect */
+    free(effp->priv);
+    free(effp);
     return SOX_EOF;
   }
   if (in->mult)
@@ -361,7 +362,7 @@ static int drain_effect(sox_effects_chain_t * chain, size_t n)
   } else {                       /* Run effect on each channel individually */
     sox_sample_t *obuf = il_change ? chain->il_buf : effp->obuf;
     size_t flow_offs = sox_globals.bufsiz/effp->flows;
-    size_t odone_last = 0; /* Initialised to prevent warning */
+    size_t odone_last = 0; /* Initialized to prevent warning */
 
     for (f = 0; f < effp->flows; ++f) {
       size_t odonec = obeg / effp->flows;

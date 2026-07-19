@@ -71,18 +71,18 @@ static int ossinit(sox_format_t* ft)
         szDevname = getenv("OSS_AUDIODEV");
         if (szDevname != NULL)
         {
-            lsx_report("Using device name from OSS_AUDIODEV environment variable: %s", szDevname);
+            lsx_report("using device name from OSS_AUDIODEV environment variable: %s", szDevname);
         }
         else
         {
             szDevname = "/dev/dsp";
-            lsx_report("Using default OSS device name: %s", szDevname);
+            lsx_report("using default OSS device name: %s", szDevname);
         }
     }
     else
     {
         szDevname = ft->filename;
-        lsx_report("Using user-specified device name: %s", szDevname);
+        lsx_report("using user-specified device name: %s", szDevname);
     }
 
     pPriv->device = open(
@@ -100,8 +100,7 @@ static int ossinit(sox_format_t* ft)
         if (ft->encoding.encoding == SOX_ENCODING_UNKNOWN)
             ft->encoding.encoding = SOX_ENCODING_UNSIGNED;
         if (ft->encoding.encoding != SOX_ENCODING_UNSIGNED) {
-            lsx_report("OSS driver only supports unsigned with bytes");
-            lsx_report("Forcing to unsigned");
+            lsx_report("OSS driver only supports unsigned with bytes; forcing to unsigned");
             ft->encoding.encoding = SOX_ENCODING_UNSIGNED;
         }
     }
@@ -116,8 +115,7 @@ static int ossinit(sox_format_t* ft)
         if (ft->encoding.encoding == SOX_ENCODING_UNKNOWN)
             ft->encoding.encoding = SOX_ENCODING_SIGN2;
         if (ft->encoding.encoding != SOX_ENCODING_SIGN2) {
-            lsx_report("OSS driver only supports signed with words");
-            lsx_report("Forcing to signed linear");
+            lsx_report("OSS driver only supports signed with words; forcing to signed linear");
             ft->encoding.encoding = SOX_ENCODING_SIGN2;
         }
     }
@@ -132,8 +130,7 @@ static int ossinit(sox_format_t* ft)
         if (ft->encoding.encoding == SOX_ENCODING_UNKNOWN)
             ft->encoding.encoding = SOX_ENCODING_SIGN2;
         if (ft->encoding.encoding != SOX_ENCODING_SIGN2) {
-            lsx_report("OSS driver only supports signed with words");
-            lsx_report("Forcing to signed linear");
+            lsx_report("OSS driver only supports signed with words; forcing to signed linear");
             ft->encoding.encoding = SOX_ENCODING_SIGN2;
         }
     }
@@ -147,8 +144,7 @@ static int ossinit(sox_format_t* ft)
         pPriv->sample_shift = 1;
         ft->encoding.bits_per_sample = 16;
         ft->encoding.encoding = SOX_ENCODING_SIGN2;
-        lsx_report("OSS driver only supports bytes and words");
-        lsx_report("Forcing to signed linear word");
+        lsx_report("OSS driver only supports bytes and words; forcing to signed linear word");
     }
 
     ft->signal.channels = 2;
@@ -171,8 +167,7 @@ static int ossinit(sox_format_t* ft)
                 /* Must not like 16-bits, try 8-bits */
                 ft->encoding.bits_per_sample = 8;
                 ft->encoding.encoding = SOX_ENCODING_UNSIGNED;
-                lsx_report("OSS driver doesn't like signed words");
-                lsx_report("Forcing to unsigned bytes");
+                lsx_report("OSS driver doesn't like signed words; forcing to unsigned bytes");
                 tmp = sampletype = AFMT_U8;
                 samplesize = 8;
                 pPriv->sample_shift = 0;
@@ -182,8 +177,7 @@ static int ossinit(sox_format_t* ft)
             {
                 ft->encoding.bits_per_sample = 16;
                 ft->encoding.encoding = SOX_ENCODING_SIGN2;
-                lsx_report("OSS driver doesn't like unsigned bytes");
-                lsx_report("Forcing to signed words");
+                lsx_report("OSS driver doesn't like unsigned bytes; forcing to signed words");
                 sampletype = (MACHINE_IS_BIGENDIAN) ? AFMT_S16_BE : AFMT_S16_LE;
                 samplesize = 16;
                 pPriv->sample_shift = 1;
@@ -214,7 +208,7 @@ static int ossinit(sox_format_t* ft)
     tmp = 1;
     if (ioctl(pPriv->device, SNDCTL_DSP_STEREO, &tmp) < 0 || tmp != 1)
     {
-        lsx_warn("Couldn't set to stereo");
+        lsx_warn("couldn't set to stereo");
         ft->signal.channels = 1;
     }
 

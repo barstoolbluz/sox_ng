@@ -11,11 +11,11 @@
 
 # 42b355
 
-rm -f core out.wav
+rm -f core core.* out.wav
 
 ${sox:-sox} -V -V --norm ../../src/monkey.wav out.wav
 status=$?
 
-rm -f core out.wav
+rm -f core core.* out.wav
 
 exit $status

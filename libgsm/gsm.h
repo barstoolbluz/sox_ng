@@ -4,12 +4,16 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/*$Header: /cvsroot/sox/sox/libgsm/gsm.h,v 1.2 2008/03/21 13:34:21 robs Exp $*/
+/*$Header: /home/kbs/jutta/src/gsm/gsm-1.0/inc/RCS/gsm.h,v 1.11 1996/07/05 18:02:56 jutta Exp $*/
 
 #ifndef	GSM_H
 #define	GSM_H
 
 #include "aliases.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef __cplusplus
 #	define	NeedFunctionPrototypes	1
@@ -45,7 +49,7 @@ typedef gsm_byte 		gsm_frame[33];		/* 33 * 8 bits	 */
 
 #define	GSM_MAGIC		0xD		  	/* 13 kbit/s RPE-LTP */
 
-#define	GSM_PATCHLEVEL		10
+#define	GSM_PATCHLEVEL		23
 #define	GSM_MINOR		0
 #define	GSM_MAJOR		1
 
@@ -65,5 +69,9 @@ extern void gsm_encode  GSM_P((gsm, gsm_signal *, gsm_byte  *));
 extern int  gsm_decode  GSM_P((gsm, gsm_byte   *, gsm_signal *));
 
 #undef	GSM_P
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
 
 #endif	/* GSM_H */

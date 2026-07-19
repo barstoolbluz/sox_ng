@@ -16,6 +16,12 @@ you can use `sox_ng`'s everything-read-only access token:
 7b3e922513587437ba698e2fa3421f92a044a990
 ```
 
+If you have write access to the repository, try not to make forced pushes
+("rewriting history") unless you are very quick (a few minutes) or if
+you are working on a branch that probably only you are interested in.
+Otherwise it creates pointless and frustrating surprise work for
+anyone who has a clone of it.
+
 There are no other rules except for the GPL and, when modifying the code,
 to follow the existing style in its bizarre formatting and dense grammar.
 

@@ -57,16 +57,24 @@
 #  include <sys/wait.h>	/* for WEXITSTATUS */
 #endif
 
-#define PIPE_AUTO_DETECT_SIZE 256 /* Only as much as we can rewind a pipe */
-#define AUTO_DETECT_SIZE 4096     /* For seekable file, so no restriction */
+#if USING_FFMPEG
+#define AUTO_DETECT_SIZE 257	/* for act */
+#else
+#define AUTO_DETECT_SIZE 132    /* for hcom */
+#endif
 
 static char const * auto_detect_format(sox_format_t * ft, char const * ext)
 {
   char data[AUTO_DETECT_SIZE];
-  size_t len = lsx_readbuf_rewind(ft, data, ft->seekable ? sizeof(data) : PIPE_AUTO_DETECT_SIZE);
+  size_t len = lsx_readbuf_rewind(ft, data, sizeof(data));
 
   #define CHECK(type, p2, l2, d2, p1, l1, d1) if (len >= p1 + l1 && \
       !memcmp(data + p1, d1, (size_t)l1) && !memcmp(data + p2, d2, (size_t)l2)) return #type;
+
+  /* If there's only one magic string, it should be the second one.
+   * If there are two, the second one is the later one (for the file size check)
+   */
+
   CHECK(voc   , 0, 0, ""     , 0, 20, "Creative Voice File\x1a")
   CHECK(smp   , 0, 0, ""     , 0, 17, "SOUND SAMPLE DATA")
   CHECK(wve   , 0, 0, ""     , 0, 15, "ALawSoundFile**")
@@ -80,6 +88,10 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   CHECK(vorbis, 0, 4, "OggS" , 29, 6, "vorbis")
   CHECK(opus  , 0, 4, "OggS" , 28, 8, "OpusHead")
   CHECK(hcom  ,65, 4, "FSSD" , 128,4, "HCOM")
+#if USING_FFMPEG
+  /* Must come before wav because it looks like a PCM WAV file */
+  CHECK(act   , 0, 4, "RIFF" , 256,1, "\x84")
+#endif
   CHECK(wav   , 0, 4, "RIFF" , 8,  4, "WAVE")
   CHECK(wav   , 0, 4, "RIFX" , 8,  4, "WAVE")
   CHECK(wav   , 0, 4, "RF64" , 8,  4, "WAVE")
@@ -100,6 +112,7 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   CHECK(caf   , 0, 0, ""     , 0,  4, "caff")
   CHECK(wv    , 0, 0, ""     , 0,  4, "wvpk")
   CHECK(paf   , 0, 0, ""     , 0,  4, " paf")
+  CHECK(pcm   , 0, 0, ""     , 0,  4, "MSU1")
   CHECK(sf    , 0, 0, ""     , 0,  4, "\144\243\001\0")
   CHECK(sf    , 0, 0, ""     , 0,  4, "\0\001\243\144")
   CHECK(sf    , 0, 0, ""     , 0,  4, "\144\243\002\0")
@@ -116,12 +129,14 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   /* First 16 bits for MPEG 1 layer 2 */
   CHECK(mp2   , 0, 0, ""     , 0,  2, "\xFF\xFC") /* CRC protected */
   CHECK(mp2   , 0, 0, ""     , 0,  2, "\xFF\xFD") /* Not protected */
+  CHECK(dff   , 0, 4, "FRM8" ,12,  4, "DSD ")
+  CHECK(dsf   , 0, 4, "DSD " ,28,  4, "fmt ")
+  CHECK(wsd   , 0, 0, ""     , 0,  4, "1bit")
 
 #if HAVE_SNDFILE
   CHECK(sds   , 0, 0, ""     , 0,  2, "\xF0\x7E")
 # if HAVE_SF_FORMAT_MPC2K
   CHECK(mpc2k , 0, 0, ""     , 0,  2, "\x01\x04")
-	/* sndfile always writes [100,0] at [19] */
 # endif
 #endif
 
@@ -131,6 +146,9 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   CHECK(3gp   , 0, 0, ""     , 4,  8, "ftyp3gp6")
   CHECK(3gp   , 0, 0, ""     , 4,  8, "ftyp3gp4")
   CHECK(3gp   , 0, 0, ""     , 4,  6, "ftyp3g")
+  /* aa: libavformat/aadec.c says #define AA_MAGIC 1469084982 at offset 4;
+   * and that it's big-endian */
+  CHECK(aa    , 0, 0, ""     , 4,  4, "\x57\x90\x75\x36")
   CHECK(aac   , 0, 0, ""     , 0,  2, "\xFF\xF1")
   CHECK(aac   , 0, 0, ""     , 0,  2, "\xFF\xF9")
   CHECK(ac3   , 0, 0, ""     , 0,  2, "\x0B\x77")
@@ -147,7 +165,7 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   CHECK(adx   , 0, 0, ""     , 0,  2, "\x80\x00") /* libavformat/adxdec.c */
 #endif
   CHECK(ape   , 0, 0, ""     , 0,  4, "MAC ")     /* libavformat/ape.c */
-  CHECK(apm   ,20, 4, "vs12" , 0,  2, "\x00\x20") /* libavformat/apm.c */
+  CHECK(apm   , 0, 2, "\x00\x20",20, 4, "vs12" ) /* libavformat/apm.c */
   /* aptx is headerless and can only be autodetected by the filename extension */
   /* libavformat/argo_asf.[ch] */
   CHECK(argo_asf,0,0, ""     , 0,  8, "ASF\x00\x01\x00\x01\x00")
@@ -162,17 +180,29 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   CHECK(avi   , 0, 4, "RIFF" , 8,  4, "AMV ")
   /* dfpwm is headerless and can only be autodetected by the filename extension */
   /* dts is autodetected by ffmpeg but not by fixed bytes at fixed offsets */
+
+  /* Possible ea magic numbers from libavformat/electronicarts.c */
+  CHECK(ea    , 0, 0, ""     , 0,  4, "ISNh")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "SCHl")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "SEAD")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "SHEN")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "kVGT")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "MADk")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "MPCh")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "MVhd")
+  CHECK(ea    , 0, 0, ""     , 0,  4, "APV6")
+
   CHECK(eac3  , 0, 0, ""     , 0,  2, "\x04\x00") /* libavformat/eacdata.c */
   CHECK(eac3  , 0, 0, ""     , 0,  2, "\x04\x04")
   CHECK(eac3  , 0, 0, ""     , 0,  2, "\x04\x0C")
   CHECK(eac3  , 0, 0, ""     , 0,  2, "\x04\x14")
   CHECK(f4v   , 0, 0, ""     , 4,  8, "ftypf4v ") /* libavformat/movenc.c */
-  CHECK(flv   , 5, 1, "\x00" , 0,  4, "FLV\x00")  /* libavformat/flvdec.c */
-  CHECK(flv   , 5, 1, "\x00" , 0,  4, "FLV\x01")
-  CHECK(flv   , 5, 1, "\x00" , 0,  4, "FLV\x02")
-  CHECK(flv   , 5, 1, "\x00" , 0,  4, "FLV\x03")
-  CHECK(flv   , 5, 1, "\x00" , 0,  4, "FLV\x04")
-  CHECK(gxf   ,10, 6, "\x00\x00\x00\x00\xE1\xE2", 0, 6, "\x00\x00\x00\x00\x01\xBC") /* libavformat/gxf.c */
+  CHECK(flv   , 0, 4, "FLV\x00", 5, 1, "\x00" )  /* libavformat/flvdec.c */
+  CHECK(flv   , 0, 4, "FLV\x01", 5, 1, "\x00" )
+  CHECK(flv   , 0, 4, "FLV\x02", 5, 1, "\x00" )
+  CHECK(flv   , 0, 4, "FLV\x03", 5, 1, "\x00" )
+  CHECK(flv   , 0, 4, "FLV\x04", 5, 1, "\x00" )
+  CHECK(gxf   , 0, 6, "\x00\x00\x00\x00\x01\xBC",10, 6, "\x00\x00\x00\x00\xE1\xE2") /* libavformat/gxf.c */
   CHECK(ism   , 0, 0, ""     , 4,  8, "ftypisml")
   CHECK(kvag  , 0, 0, ""     , 0,  4, "KVAG")	 /* libavformat/kvag.c */
   CHECK(m4a   , 0, 0, ""     , 4,  8, "ftypM4A ") /* iPod format */
@@ -199,11 +229,11 @@ static char const * auto_detect_format(sox_format_t * ft, char const * ext)
   CHECK(rm    , 0, 0, ""     , 0,  4, ".ra\xFD")
   /* rso can't be autodetected by ffmpeg */
   /* sbc can't be autodetected by ffmpeg */
-  CHECK(smjpeg,0, 0, ""     , 0,  8, "\x0\xaSMJPEG") /* libavformat/smjpeg.h */
+  CHECK(smjpeg, 0, 0, ""     , 0,  8, "\x0\xaSMJPEG") /* libavformat/smjpeg.h */
   /* spdif is autodetected by ffmpeg but not by fixed bytes at fixed offsets */
   CHECK(spx   , 0, 4, "OggS" , 28, 5, "Speex")
-  CHECK(tta   , 4, 2, "\1\0" , 0,  4, "TTA1") /* libavformat/tta.c */
-  CHECK(tta   , 4, 2, "\2\0" , 0,  4, "TTA1")
+  CHECK(tta   , 0, 4, "TTA1" , 4,  2, "\1\0" ) /* libavformat/tta.c */
+  CHECK(tta   , 0, 4, "TTA1" , 4,  2, "\2\0" )
   CHECK(vag   , 0, 0, ""     , 0,  7, "VAGp\0\0\0")
   CHECK(wma   , 0, 0, ""     , 0, 16, "\x30\x26\xB2\x75\x8E\x66\xCF\x11\xA6\xD9\x00\xAA\x00\x62\xCE\x6C")
   /* wsaud has no file signature but there are header sanity checks
@@ -264,7 +294,9 @@ static sox_encodings_info_t const s_sox_encodings_info[] = {
   {sox_encodings_none  , "DWVW"         , "DWVW"},
   {sox_encodings_none  , "DWVWN"        , "DWVWN"},
   {sox_encodings_lossy2, "GSM"          , "GSM"},
-  {sox_encodings_lossy2, "MPEG audio"   , "MPEG audio (layer I, II or III)"},
+  {sox_encodings_lossy2, "MP1"          , "MPEG-1 audio layer I"},
+  {sox_encodings_lossy2, "MP2"          , "MPEG-1 audio layer II"},
+  {sox_encodings_lossy2, "MP3"          , "MPEG-1 audio layer III"},
   {sox_encodings_lossy2, "Vorbis"       , "Vorbis"},
   {sox_encodings_lossy2, "AMR-WB"       , "AMR-WB"},
   {sox_encodings_lossy2, "AMR-NB"       , "AMR-NB"},
@@ -309,7 +341,15 @@ unsigned sox_precision(sox_encoding_t encoding, unsigned bits_per_sample)
     case SOX_ENCODING_CVSD:       return bits_per_sample == 1? 16: 0;
     case SOX_ENCODING_DPCM:       return bits_per_sample; /* ? */
 
-    case SOX_ENCODING_MP3:        return 0; /* Accept the precision returned by the format. */
+    case SOX_ENCODING_MP1:
+    case SOX_ENCODING_MP2:
+    case SOX_ENCODING_MP3:        return 16;
+    /* MAD returns 28 bits and Twolame and LAME take floats (24-bit mantissa
+     * + sign = 25) and sox_ng.c and sndfile.c know about this.
+     * However, this determines the bit width written to WAV files when
+     * decoding MP3 files, which Chris decided should be 16 to match
+     * user expectations.  To keep the extra precision, give -b 24.
+     */
 
     case SOX_ENCODING_GSM:
     case SOX_ENCODING_VORBIS:
@@ -359,7 +399,7 @@ void sox_append_comment(sox_comments_t * comments, char const * comment)
 
 void sox_append_comments(sox_comments_t * comments, char const * comment)
 {
-  char * end;
+  char const * end;
   if (comment) {
     while ((end = strchr(comment, '\n'))) {
       size_t len = end - comment;
@@ -461,26 +501,32 @@ static void set_endiannesses(sox_format_t * ft)
 
 static sox_bool is_seekable(sox_format_t const * ft)
 {
-  struct stat st;
-  int fd, seekable;
+  int seekable;
+  FILE *fp;
 
   assert(ft);
   if (!ft->fp)
     return sox_false;
-  fd = fileno((FILE*)ft->fp);
-  if (fd < 0)
-     return 0;
-  fstat(fd, &st);
-  seekable = ((st.st_mode & S_IFMT) == S_IFREG);
+  fp = (FILE*)ft->fp;
+  seekable = !fseek(fp, 0, SEEK_CUR);
+
 #if defined HAVE_POSIX_FADVISE && defined POSIX_FADV_SEQUENTIAL
   if (seekable) {
-    /*
-     * POSIX_FADV_NOREUSE can potentially be beneficial, too,
-     * but is a no-op as of Linux 4.2.  Not sure about other kernels.
-     */
-    (void)posix_fadvise(fd, (off_t)0, st.st_size, POSIX_FADV_SEQUENTIAL);
+    struct stat st;
+    int fd = fileno(fp);
+
+    /* open_memstream()ed and fopenmem()ed files are seekable
+     * but don't have a file descriptor */
+    if (fd >= 0 && !fstat(fd, &st)) {
+      /*
+       * POSIX_FADV_NOREUSE can potentially be beneficial, too,
+       * but is a no-op as of Linux 4.2.  Not sure about other kernels.
+       */
+      (void)posix_fadvise(fd, (off_t)0, st.st_size, POSIX_FADV_SEQUENTIAL);
+    }
   }
 #endif
+  errno = 0; /* Clear expected failures */
   return seekable;
 }
 
@@ -490,7 +536,7 @@ static int sox_checkformat(sox_format_t * ft)
   ft->sox_errno = SOX_SUCCESS;
 
   if (ft->signal.rate <= 0) {
-    lsx_fail_errno(ft, SOX_EFMT, "sample rate zero or negative");
+    lsx_fail_errno(ft, SOX_EFMT, "sample rate is zero or negative");
     return SOX_EOF;
   }
   if (!ft->signal.precision) {
@@ -631,7 +677,7 @@ static FILE * open_url(char const * identifier)
         }
     }
     if (!command) {
-        lsx_fail("to read URLs Please install one of wget, wget2 and curl");
+        lsx_fail("to read URLs, please install wget, wget2 or curl");
 	return NULL;
     }
 
@@ -742,7 +788,7 @@ static FILE * open_url(char const * identifier)
 	case 63: s = "Maximum file size exceeded"; break;
 	case 64: s = "FTP SSL level failed"; break;
 	case 65: s = "Rewind failed"; break;
-	case 66: s = "Failed to initialise SSL Engine"; break;
+	case 66: s = "Failed to initialize SSL Engine"; break;
 	case 67: s = "Failed to log in"; break;
 	case 68: s = "File not found on TFTP server"; break;
 	case 69: s = "Permission problem on TFTP server"; break;
@@ -815,7 +861,8 @@ static sox_format_t * open_read(
 {
   sox_format_t * ft = lsx_calloc(1, sizeof(*ft));
   sox_format_handler_t const * handler;
-  char const * const io_types[] = {"file", "pipe", "file URL"};
+  /* Decode lsx_io_type values to strings for error reporting */
+  char const * const io_types[] = {"file", "pipe", "URL"};
   char const * type = "";
   size_t   input_bufsiz = sox_globals.input_bufsiz?
       sox_globals.input_bufsiz : sox_globals.bufsiz;
@@ -848,7 +895,7 @@ static sox_format_t * open_read(
       type = io_types[ft->io_type];
       if (ft->fp == NULL) {
         /* Pipe and URL openers will already have emitted an error message */
-        if (strcmp(type, "file") == 0)
+        if (ft->io_type == lsx_io_file)
           lsx_fail("can't open input file `%s': %s", path, strerror(errno));
         goto error;
       }
@@ -962,6 +1009,7 @@ sox_format_t * sox_open_mem_read(
     sox_encodinginfo_t const * encoding,
     char               const * filetype)
 {
+  if (!buffer || !buffer_size) return NULL;
   return open_read("", buffer, buffer_size, signal,encoding,filetype);
 }
 
@@ -1036,19 +1084,37 @@ static void set_output_format(sox_format_t * ft)
     ft->signal.rate = SOX_DEFAULT_RATE;
 
   if (ft->handler.flags & SOX_FILE_CHANS) {
-    if (ft->signal.channels == 1 && !(ft->handler.flags & SOX_FILE_MONO)) {
-      ft->signal.channels = (ft->handler.flags & SOX_FILE_STEREO)? 2 : 4;
-      lsx_warn("%s can't encode mono; setting channels to %u", ft->handler.names[0], ft->signal.channels);
-    } else
-    if (ft->signal.channels == 2 && !(ft->handler.flags & SOX_FILE_STEREO)) {
-      ft->signal.channels = (ft->handler.flags & SOX_FILE_QUAD)? 4 : 1;
-      lsx_warn("%s can't encode stereo; setting channels to %u", ft->handler.names[0], ft->signal.channels);
-    } else
-    if (ft->signal.channels == 4 && !(ft->handler.flags & SOX_FILE_QUAD)) {
-      ft->signal.channels = (ft->handler.flags & SOX_FILE_STEREO)? 2 : 1;
-      lsx_warn("%s can't encode quad; setting channels to %u", ft->handler.names[0], ft->signal.channels);
+    unsigned wanted = ft->signal.channels; /* to see if we changed it */
+
+    switch (ft->signal.channels) {
+    case 1:
+      if (!(ft->handler.flags & SOX_FILE_MONO))
+        ft->signal.channels = (ft->handler.flags & SOX_FILE_STEREO)? 2 : 4;
+      break;
+    case 2:
+      if (!(ft->handler.flags & SOX_FILE_STEREO))
+        ft->signal.channels = (ft->handler.flags & SOX_FILE_QUAD)? 4 : 1;
+      break;
+    case 4:
+      if (!(ft->handler.flags & SOX_FILE_QUAD))
+        ft->signal.channels = (ft->handler.flags & SOX_FILE_STEREO)? 2 : 1;
+      break;
+    default:
+      /* For 3-channel and >4-channel, convert to the best supported one */
+      if (ft->handler.flags & SOX_FILE_QUAD)
+        ft->signal.channels = 4;
+      else if (ft->handler.flags & SOX_FILE_STEREO)
+        ft->signal.channels = 2;
+      else if (ft->handler.flags & SOX_FILE_MONO)
+        ft->signal.channels = 1;
     }
-  } else ft->signal.channels = max(ft->signal.channels, 1);
+    if (ft->signal.channels != wanted)
+      lsx_warn("%s can't encode %u channel%s; setting to %u",
+                ft->handler.names[0], wanted, wanted > 1 ? "s" : "",
+                ft->signal.channels);
+  } else {
+    ft->signal.channels = max(ft->signal.channels, 1);
+  }
 
   if (!encodings)
     return;
@@ -1203,7 +1269,7 @@ static sox_format_t * open_write(
   sox_format_handler_t const * handler;
 
   if (!path || !signal) {
-    lsx_fail("must specify file name and signal parameters to write file");
+    lsx_fail("to write files, specify the file name and signal parameters");
     goto error;
   }
 
@@ -1226,7 +1292,7 @@ static sox_format_t * open_write(
       struct stat st;
       if (!lsx_stat(path, &st) && (st.st_mode & S_IFMT) == S_IFREG &&
           (overwrite_permitted && !overwrite_permitted(path))) {
-        lsx_fail("permission to overwrite `%s' denied", path);
+        lsx_fail("cannot overwrite `%s'", path);
         goto error;
       }
       ft->fp =
@@ -1247,7 +1313,11 @@ static sox_format_t * open_write(
       lsx_fail("can't set write buffer");
       goto error;
     }
-    ft->seekable = is_seekable(ft);
+    if (buffer || buffer_ptr) {
+      /* Memory buffers are always seekable */
+      ft->seekable = sox_true;
+    } else
+      ft->seekable = is_seekable(ft);
   }
 
   ft->filetype = lsx_strdup(filetype);
@@ -1303,6 +1373,7 @@ error:
   free(ft->priv);
   free(ft->filename);
   free(ft->filetype);
+  sox_delete_comments(&ft->oob.comments);
   free(ft);
   return NULL;
 }
@@ -1343,6 +1414,10 @@ sox_format_t * sox_open_memstream_write(
 size_t sox_read(sox_format_t * ft, sox_sample_t * buf, size_t len)
 {
   size_t actual;
+  if (ft->mode != 'r') {
+    lsx_warn("attempt to read from output file `%s'", ft->filename);
+    return 0;
+  }
   if (ft->signal.length != SOX_UNSPEC)
     len = min(len, ft->signal.length - ft->olength);
   actual = ft->handler.read? (*ft->handler.read)(ft, buf, len) : 0;
@@ -1353,7 +1428,13 @@ size_t sox_read(sox_format_t * ft, sox_sample_t * buf, size_t len)
 
 size_t sox_write(sox_format_t * ft, const sox_sample_t *buf, size_t len)
 {
-  size_t actual = ft->handler.write? (*ft->handler.write)(ft, buf, len) : 0;
+  size_t actual;
+
+  if (ft->mode != 'w') {
+    lsx_warn("attempt to write to input file `%s'", ft->filename);
+    return 0;
+  }
+  actual = ft->handler.write? (*ft->handler.write)(ft, buf, len) : 0;
   ft->olength += actual;
   return actual;
 }
@@ -1362,31 +1443,54 @@ int sox_close(sox_format_t * ft)
 {
   int result = SOX_SUCCESS;
 
-  if (ft->mode == 'r')
+  if (ft->mode == 'r') {
     result = ft->handler.stopread? (*ft->handler.stopread)(ft) : SOX_SUCCESS;
+    if (ft->fp == stdin)
+      sox_globals.stdin_in_use_by = NULL;
+  }
   else {
     if (ft->handler.flags & SOX_FILE_REWIND) {
       /* Really write out a final zero byte if we're writing a sparse file.
        * See lsx_writebuf() */
       if (ft->last_byte_was_zero) {
-	if (lsx_seeki(ft, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
-	  putc('\0', (FILE *)ft->fp);
-	ft->last_byte_was_zero = sox_false;
+        if (lsx_seeki(ft, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
+          putc('\0', (FILE *)ft->fp);
+        ft->last_byte_was_zero = sox_false;
       }
+      /* If the handler wrote a header before calling the rawwrite functions,
+       * seek back to 0 and call startwrite() again to update the header.
+       *
+       * For memopen()ed files, we need to preserve the current offset
+       * otherwise it gets truncated to the new length,
+       */
+
       if (ft->olength != ft->signal.length && ft->seekable) {
+        off_t o = ftell(ft->fp);
         result = lsx_seeki(ft, (off_t)0, 0);
-        if (result == SOX_SUCCESS)
-          result = ft->handler.stopwrite? (*ft->handler.stopwrite)(ft)
-             : ft->handler.startwrite?(*ft->handler.startwrite)(ft) : SOX_SUCCESS;
+        if (result == SOX_SUCCESS) {
+          if (ft->handler.stopwrite) {
+            result = (*ft->handler.stopwrite)(ft);
+          } else if (ft->handler.startwrite) {
+            result = (*ft->handler.startwrite)(ft);
+          } else
+            result = SOX_SUCCESS;
+        }
+        fseek(ft->fp, o, SEEK_SET);
       }
     } else {
       result = ft->handler.stopwrite? (*ft->handler.stopwrite)(ft) : SOX_SUCCESS;
+
+      if (ft->fp == stdout) {
+        fflush(stdout);
+        sox_globals.stdout_in_use_by = NULL;
+      }
+
       /* Really write out a final zero byte if we're writing a sparse file.
        * See lsx_writebuf() */
       if (ft->last_byte_was_zero) {
-	if (lsx_seeki(ft, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
-	  putc('\0', (FILE *)ft->fp);
-	ft->last_byte_was_zero = sox_false;
+        if (lsx_seeki(ft, (off_t)-1, SEEK_CUR) == SOX_SUCCESS)
+          putc('\0', (FILE *)ft->fp);
+        ft->last_byte_was_zero = sox_false;
       }
     }
   }
@@ -1549,7 +1653,8 @@ static sox_bool plugins_initted = sox_false;
   #define MAX_DYNAMIC_FORMATS 42
   #define MAX_FORMATS (NSTATIC_FORMATS + MAX_DYNAMIC_FORMATS)
   #define MAX_FORMATS_1 (MAX_FORMATS + 1)
-  #define MAX_NAME_LEN (size_t)1024 /* FIXME: Use vasprintf */
+  #define MAX_NAME_LEN (size_t)32 /* To contain "lsx_%s_format_fn" */
+                                  /* FIXME: Use vasprintf */
 #else
   #define MAX_FORMATS_1
 #endif
@@ -1580,7 +1685,7 @@ sox_get_format_fns(void)
     const char *end = file + strlen(file);
     const char prefix[] = "sox_ng_fmt_";
     char fnname[MAX_NAME_LEN];
-    char *start = strstr(file, prefix);
+    const char *start = strstr(file, prefix);
 
     (void)data;
     if (start && (start += sizeof(prefix) - 1) < end) {
@@ -1593,11 +1698,43 @@ sox_get_format_fns(void)
             fnname, (void *)lth, ltptr.ptr);
         if (ltptr.fn && (ltptr.fn()->sox_lib_version_code & ~255) ==
             (SOX_LIB_VERSION_CODE & ~255)) { /* compatible version check */
-          if (nformats == MAX_FORMATS) {
-            lsx_warn("too many plugin formats");
-            return -1;
+          {
+            sox_format_handler_t const * handler = ltptr.fn();
+            char const *const *namep;
+
+            /* For formats like sndfile and ffmpeg that have many
+             * format handlers, register the format-specific ones
+             * before the generic one so that, when sox_find_format() seeks
+             * a handler for a filename extension, it finds the specific
+             * one before the generic one.
+             */
+            for (namep = handler->names + 1; *namep; namep++) {
+              /* Local version so as not to overwrite the one above */
+              union {sox_format_fn_t fn; lt_ptr ptr;} ltptr;
+              char name[MAX_NAME_LEN];
+
+              sprintf(name, "lsx_%s_format_fn", *namep);
+              ltptr.ptr = lt_dlsym(lth, name);
+              if (ltptr.fn) {
+                if (nformats == MAX_FORMATS) {
+                  lsx_warn("too many plugin formats");
+                  return -1;
+                }
+                s_sox_format_fns[nformats].name = *namep;
+                s_sox_format_fns[nformats].fn = ltptr.fn;
+                nformats++;
+              }
+            }
+            /* Register the generic format handler last so that the
+             * format-specific ones take precedence over it */
+            if (nformats == MAX_FORMATS) {
+              lsx_warn("too many plugin formats");
+              return -1;
+            }
+            s_sox_format_fns[nformats].name = handler->names[0];
+            s_sox_format_fns[nformats].fn = ltptr.fn;
+            nformats++;
           }
-          s_sox_format_fns[nformats++].fn = ltptr.fn;
         }
       }
     }
@@ -1613,12 +1750,35 @@ int sox_format_init(void) /* Find & load format handlers.  */
   plugins_initted = sox_true;
 #ifdef HAVE_LIBLTDL
   {
+    char *pkglibdir = PKGLIBDIR;
+    char *copy = NULL;
     int error = lt_dlinit();
     if (error) {
       lsx_fail("lt_dlinit failed with %d error(s): %s", error, lt_dlerror());
       return SOX_EOF;
     }
-    lt_dlforeachfile(PKGLIBDIR, init_format, NULL);
+
+    /* A special case for when sox is run in the source directory without
+     * being installed, from the wrapper generated by libtool.
+     * The most obvious clue is that it prefixes LD_LIBRARY_PATH with
+     * /home/martin/sox_ng/src/.libs
+     */
+    {
+      char *ld_library_path = getenv("LD_LIBRARY_PATH");
+      if (ld_library_path) {
+        char *colonp;
+
+        /* We mustn't modify the process environment */
+        copy = lsx_strdup(ld_library_path);
+        colonp = strchr(copy, ':');
+        if (colonp && colonp - copy >= 6 &&
+            !(*colonp = '\0', strcmp(colonp-6, "/.libs")))
+          pkglibdir = copy;
+      }
+    }
+
+    lt_dlforeachfile(pkglibdir, init_format, NULL);
+    free(copy);
   }
 #endif
   return SOX_SUCCESS;

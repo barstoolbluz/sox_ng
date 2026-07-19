@@ -31,6 +31,8 @@
 #else
   /* Use the deprecated constant on older OS versions */
 # define kAudioObjectPropertyElementMain kAudioObjectPropertyElementMaster
+# define kAudioObjectPropertyScopeInput  kAudioDevicePropertyScopeInput
+# define kAudioObjectPropertyScopeOutput kAudioDevicePropertyScopeOutput
 #endif
 
 #define Buffactor 4
@@ -212,6 +214,7 @@ static int setup(sox_format_t *ft, int is_input)
 	 */
         sox_uint32_t datasize = 0;
 	AudioDeviceID *devices;
+        int device_count;
 	int i;
 
         address.mSelector = kAudioHardwarePropertyDevices;
@@ -236,12 +239,21 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
 
 	address.mSelector = kAudioDevicePropertyDeviceName;
 
-	for (i = 0; i < (int)(datasize / sizeof(AudioDeviceID)); i++)
+        /* Allow selection of audio device by number */
+        device_count = (int)(datasize / sizeof(AudioDeviceID));
+	i = atoi(ft->filename);
+        if (i > 0 && i <= device_count) {
+	    if (!DeviceHasBuffersInScope(devices[i], is_input)) {
+		lsx_warn("audio device %d has no buffers in scope", i);
+	    }
+            ac->adid = devices[i-1];
+        }
+	else for (i = 0; i < device_count; i++)
 	{
 	    char *name;
 
 	    if (!DeviceHasBuffersInScope(devices[i], is_input)) {
-		lsx_warn("Audio device %d has no buffers in scope", i);
+		lsx_warn("audio device %d has no buffers in scope", i);
 		continue;
 	    }
 	    datasize = 0;
@@ -258,9 +270,11 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
 	    }
 	    name[datasize] = '\0';
 
-	    lsx_report("found audio device '%s'",name);
+	    lsx_report("found audio device %d '%s'", i+1, name);
 
-	    if (strcmp(name,ft->filename) == 0)
+            /* String returned from OS can be truncated
+             * so only compare as much as returned. */
+	    if (strncmp(name,ft->filename,datasize) == 0)
 	    {
 		/* Found it! */
 		ac->adid = devices[i];
@@ -272,7 +286,7 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
 
 	if (ac->adid == kAudioDeviceUnknown) {
 	   lsx_fail_errno(ft, SOX_EPERM,
-	                  "can't find %s device '%s'. Try -V3\n",
+	                  "can't find %s device '%s'. Try -V.\n",
                           io, ft->filename);
 	   free(devices);
 	   return SOX_EOF;
@@ -282,7 +296,7 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
 
     if (ac->adid == kAudioDeviceUnknown)
     {
-      lsx_fail_errno(ft, SOX_EPERM, "can not open audio device");
+      lsx_fail_errno(ft, SOX_EPERM, "can't open audio device");
       return SOX_EOF;
     }
 
@@ -293,7 +307,7 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
     if (AudioObjectGetPropertyData(ac->adid, &address, 0, NULL,
                                    &property_size, &stream_desc))
     {
-      lsx_fail_errno(ft, SOX_EPERM, "can not get audio device properties");
+      lsx_fail_errno(ft, SOX_EPERM, "can't get audio device properties");
       return SOX_EOF;
     }
 
@@ -324,7 +338,7 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
                                     kAudioDevicePropertyStreamFormat,
                                     property_size, &stream_desc))
     {
-      lsx_fail_errno(ft, SOX_EPERM, "can not set audio device properties");
+      lsx_fail_errno(ft, SOX_EPERM, "can't set audio device properties");
       return SOX_EOF;
     }
 
@@ -334,21 +348,21 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
                                kAudioDevicePropertyStreamFormat,
                                &property_size, &stream_desc)
     {
-      lsx_fail_errno(ft, SOX_EPERM, "can not get audio device properties");
+      lsx_fail_errno(ft, SOX_EPERM, "can't get audio device properties");
       return SOX_EOF;
     }
   #endif
 
     if (stream_desc.mChannelsPerFrame != ft->signal.channels)
     {
-      lsx_debug("audio device did not accept %d channels. Use %d channels instead.", (int)ft->signal.channels,
+      lsx_debug("audio device did not accept %d channels; use %d channels instead", (int)ft->signal.channels,
                 (int)stream_desc.mChannelsPerFrame);
       ft->signal.channels = stream_desc.mChannelsPerFrame;
     }
 
     if (stream_desc.mSampleRate != ft->signal.rate)
     {
-      lsx_debug("audio device did not accept %d sample rate. Use %d instead.", (int)ft->signal.rate,
+      lsx_debug("audio device did not accept %d sample rate; use %d instead", (int)ft->signal.rate,
                 (int)stream_desc.mSampleRate);
       ft->signal.rate = stream_desc.mSampleRate;
     }
@@ -370,13 +384,13 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
     }
 
     if (pthread_mutex_init(&ac->mutex, NULL)) {
-      lsx_fail_errno(ft, SOX_EPERM, "failed initializing mutex");
+      lsx_fail_errno(ft, SOX_EPERM, "failed to initialize the mutex");
       free(ac->buf);
       return SOX_EOF;
     }
 
     if (pthread_cond_init(&ac->cond, NULL)) {
-      lsx_fail_errno(ft, SOX_EPERM, "failed initializing condition");
+      lsx_fail_errno(ft, SOX_EPERM, "failed to initialize the condition");
       free(ac->buf);
       return SOX_EOF;
     }
@@ -394,12 +408,12 @@ nodevices:  lsx_fail_errno(ft, SOX_EPERM,
     return SOX_SUCCESS;
 }
 
-static int startread(sox_format_t *ft)
+static int startread_coreaudio(sox_format_t *ft)
 {
     return setup(ft, 1);
 }
 
-static size_t read_samples(sox_format_t *ft, sox_sample_t *buf, size_t nsamp)
+static size_t read_samples_coreaudio(sox_format_t *ft, sox_sample_t *buf, size_t nsamp)
 {
     priv_t *ac = (priv_t *)ft->priv;
     size_t len;
@@ -434,7 +448,7 @@ static size_t read_samples(sox_format_t *ft, sox_sample_t *buf, size_t nsamp)
     return len;
 }
 
-static int stopread(sox_format_t * ft)
+static int stopread_coreaudio(sox_format_t * ft)
 {
   priv_t *ac = (priv_t *)ft->priv;
 
@@ -449,12 +463,12 @@ static int stopread(sox_format_t * ft)
   return SOX_SUCCESS;
 }
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_coreaudio(sox_format_t * ft)
 {
     return setup(ft, 0);
 }
 
-static size_t write_samples(sox_format_t *ft, const sox_sample_t *buf, size_t nsamp)
+static size_t write_samples_coreaudio(sox_format_t *ft, const sox_sample_t *buf, size_t nsamp)
 {
     priv_t *ac = (priv_t *)ft->priv;
     size_t i;
@@ -495,7 +509,7 @@ static size_t write_samples(sox_format_t *ft, const sox_sample_t *buf, size_t ns
 }
 
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_coreaudio(sox_format_t * ft)
 {
     priv_t *ac = (priv_t *)ft->priv;
 
@@ -528,8 +542,8 @@ LSX_FORMAT_HANDLER(coreaudio)
   static sox_format_handler_t const handler = {SOX_LIB_VERSION_CODE,
     "Mac AudioCore device driver",
     names, SOX_FILE_DEVICE | SOX_FILE_NOSTDIO,
-    startread, read_samples, stopread,
-    startwrite, write_samples, stopwrite,
+    startread_coreaudio, read_samples_coreaudio, stopread_coreaudio,
+    startwrite_coreaudio, write_samples_coreaudio, stopwrite_coreaudio,
     NULL, write_encodings, NULL, sizeof(priv_t)
   };
   return &handler;

@@ -28,26 +28,32 @@ typedef struct {
   size_t buf_size;
 } priv_t;
 
-static int startwrite(sox_format_t * ft)
+static int startwrite_ao(sox_format_t * ft)
 {
   priv_t * ao = (priv_t *)ft->priv;
 
-  ao->buf_size = sox_globals.bufsiz - (sox_globals.bufsiz % (ft->encoding.bits_per_sample >> 3));
-  ao->buf_size *= (ft->encoding.bits_per_sample >> 3);
+  /* ft->e.bps == 0 on NetBSD so avoid SIGFPE */
+  if (ft->encoding.bits_per_sample >> 3)
+  {
+      ao->buf_size = sox_globals.bufsiz - (sox_globals.bufsiz % (ft->encoding.bits_per_sample >> 3));
+      ao->buf_size *= (ft->encoding.bits_per_sample >> 3);
+  } else {
+      ao->buf_size = sox_globals.bufsiz;
+  }
   ao->buf = lsx_malloc(ao->buf_size);
 
   ao_initialize();
   if (strcmp(ft->filename,"default") == 0)
   {
       if ((ao->driver_id = ao_default_driver_id()) < 0) {
-          lsx_fail("could not find a default ao driver");
+          lsx_fail("could not find a default driver");
           return SOX_EOF;
       }
   }
   else
   {
       if ((ao->driver_id = ao_driver_id(ft->filename)) < 0) {
-          lsx_fail("could not find a ao driver %s", ft->filename);
+          lsx_fail("could not find a driver %s", ft->filename);
           return SOX_EOF;
       }
   }
@@ -77,7 +83,7 @@ static void sox_sw_write_buf(char *buf1, sox_sample_t const * buf2, size_t len, 
     }
 }
 
-static size_t write_samples(sox_format_t *ft, const sox_sample_t *buf, size_t len)
+static size_t write_samples_ao(sox_format_t *ft, const sox_sample_t *buf, size_t len)
 {
   priv_t * ao = (priv_t *)ft->priv;
   uint_32 aobuf_size;
@@ -95,14 +101,14 @@ static size_t write_samples(sox_format_t *ft, const sox_sample_t *buf, size_t le
   return len;
 }
 
-static int stopwrite(sox_format_t * ft)
+static int stopwrite_ao(sox_format_t * ft)
 {
   priv_t * ao = (priv_t *)ft->priv;
 
   free(ao->buf);
 
   if (ao_close(ao->device) == 0) {
-    lsx_fail("error closing libao output");
+    lsx_fail("error closing output");
     return SOX_EOF;
   }
   ao_shutdown();
@@ -117,7 +123,7 @@ LSX_FORMAT_HANDLER(ao)
   static sox_format_handler_t const handler = {SOX_LIB_VERSION_CODE,
     "Xiph's libao device driver", names, SOX_FILE_DEVICE | SOX_FILE_NOSTDIO,
     NULL, NULL, NULL,
-    startwrite, write_samples, stopwrite,
+    startwrite_ao, write_samples_ao, stopwrite_ao,
     NULL, encodings, NULL, sizeof(priv_t)
   };
   return &handler;

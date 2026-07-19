@@ -38,8 +38,11 @@
   FORMAT(la)
   FORMAT(lu)
   FORMAT(maud)
+  FORMAT(mod)
+  FORMAT(mul)
   FORMAT(nsp)
   FORMAT(nul)
+  FORMAT(pcm)
   FORMAT(prc)
   FORMAT(raw)
   FORMAT(s1)
@@ -93,9 +96,23 @@
 #if defined HAVE_LPC10 && (defined STATIC_LPC10 || !defined HAVE_LIBLTDL)
   FORMAT(lpc10)
 #endif
+
 #if defined HAVE_MP3 && (defined STATIC_MP3 || !defined HAVE_LIBLTDL)
+  /* HAVE_MP3 refers to the format, not the encoding */
+# if HAVE_MAD
+  FORMAT(mp1)
+# endif
+# if HAVE_MAD || HAVE_TWOLAME
+  FORMAT(mp2)
+# endif
+# if HAVE_MAD || HAVE_LAME
   FORMAT(mp3)
+# endif
+# if HAVE_LAME
+  FORMAT(hip)
+# endif
 #endif
+
 #if defined HAVE_OPUS && (defined STATIC_OPUS || !defined HAVE_LIBLTDL)
   FORMAT(opus)
 #endif
@@ -111,8 +128,16 @@
 #if defined HAVE_SNDIO && (defined STATIC_SNDIO || !defined HAVE_LIBLTDL)
   FORMAT(sndio)
 #endif
+#if defined HAVE_SUN_AUDIO && (defined STATIC_SUN_AUDIO || !defined HAVE_LIBLTDL)
+  FORMAT(sunau)
+#endif
+#if defined HAVE_OGG_VORBIS && (defined STATIC_OGG_VORBIS || !defined HAVE_LIBLTDL)
+  FORMAT(vorbis)
+#endif
+#if defined HAVE_WAVPACK && (defined STATIC_WAVPACK || !defined HAVE_LIBLTDL)
+  FORMAT(wavpack)
+#endif
 #if defined HAVE_SNDFILE && (defined STATIC_SNDFILE || !defined HAVE_LIBLTDL)
-  FORMAT(sndfile)
   FORMAT(caf)
   FORMAT(fap)
   FORMAT(mat4)
@@ -126,21 +151,15 @@
   FORMAT(sds)
   FORMAT(w64)
   FORMAT(xi)
-#endif
-#if defined HAVE_SUN_AUDIO && (defined STATIC_SUN_AUDIO || !defined HAVE_LIBLTDL)
-  FORMAT(sunau)
-#endif
-#if defined HAVE_OGG_VORBIS && (defined STATIC_OGG_VORBIS || !defined HAVE_LIBLTDL)
-  FORMAT(vorbis)
-#endif
-#if defined HAVE_WAVPACK && (defined STATIC_WAVPACK || !defined HAVE_LIBLTDL)
-  FORMAT(wavpack)
+  /* Format-specific handlers using sndfile should come first so that,
+   * when looking a filename extension up, they get the more specific one.
+   */
+  FORMAT(sndfile)
 #endif
 
 /*--------------------- Handlers using an external program -------------------*/
 
 #if USING_FFMPEG
-FORMAT(ffmpeg)
 FORMAT(3g2)
 FORMAT(3gp)
 FORMAT(aac)
@@ -156,6 +175,7 @@ FORMAT(ast)
 FORMAT(avi)
 FORMAT(dfpwm)
 FORMAT(dts)
+FORMAT(ea)
 FORMAT(eac3)
 FORMAT(f4v)
 FORMAT(flv)
@@ -186,16 +206,8 @@ FORMAT(wma)
 FORMAT(wsaud)
 FORMAT(wtv)
 
-/* It handles the following formats if you use -t ffmpeg
-caf
-flac
-ircam
-mp2
-mp3
-ogg
-sox
-voc
-w64
-wv
-*/
+/* The generic handler comes last so that --help-format gives the
+ * description specific to the format instead of the generic one. */
+FORMAT(ffmpeg)
+
 #endif /* USING_FFMPEG */

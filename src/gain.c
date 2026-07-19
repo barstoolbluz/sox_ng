@@ -20,8 +20,8 @@
 #include <ctype.h>
 
 typedef struct {
-  sox_bool      do_equalise, do_balance, do_balance_no_clip, do_limiter;
-  sox_bool      do_restore, make_headroom, do_normalise, do_scan;
+  sox_bool      do_equalize, do_balance, do_balance_no_clip, do_limiter;
+  sox_bool      do_restore, make_headroom, do_normalize, do_scan;
   double        fixed_gain; /* Valid only in channel 0 */
 
   double        mult, reclaim, rms, limiter;
@@ -30,15 +30,15 @@ typedef struct {
   FILE          * tmp_file;
 } priv_t;
 
-static int create(sox_effect_t * effp, int argc, char * * argv)
+static int create_gain(sox_effect_t * effp, int argc, char * * argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   char const * q;
   for (--argc, ++argv; argc && **argv == '-' && argv[0][1] &&
       !isdigit((int)argv[0][1]) && argv[0][1] != '.'; --argc, ++argv)
     for (q = &argv[0][1]; *q; ++q) switch (*q) {
-      case 'n': p->do_scan = p->do_normalise = sox_true; break;
-      case 'e': p->do_scan = p->do_equalise = sox_true; break;
+      case 'n': p->do_scan = p->do_normalize = sox_true; break;
+      case 'e': p->do_scan = p->do_equalize = sox_true; break;
       case 'B': p->do_scan = p->do_balance = sox_true; break;
       case 'b': p->do_scan = p->do_balance_no_clip = sox_true; break;
       case 'r': p->do_scan = p->do_restore = sox_true; break;
@@ -46,16 +46,16 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
       case 'l': p->do_limiter = sox_true; break;
       default: lsx_fail("invalid option `-%c'", *q); return lsx_usage(effp);
     }
-  if ((p->do_equalise + p->do_balance + p->do_balance_no_clip + p->do_restore)/ sox_true > 1) {
-    lsx_fail("only one of -e, -B, -b, -r may be given");
+  if ((p->do_equalize + p->do_balance + p->do_balance_no_clip + p->do_restore)/ sox_true > 1) {
+    lsx_fail("only one of -e, -B, -b and -r may be given");
     return SOX_EOF;
   }
-  if (p->do_normalise && p->do_restore) {
-    lsx_fail("only one of -n, -r may be given");
+  if (p->do_normalize && p->do_restore) {
+    lsx_fail("only one of -n and -r may be given");
     return SOX_EOF;
   }
   if (p->do_limiter && p->make_headroom) {
-    lsx_fail("only one of -l, -h may be given");
+    lsx_fail("only one of -l and -h may be given");
     return SOX_EOF;
   }
   do {NUMERIC_PARAMETER(fixed_gain, -HUGE_VAL, HUGE_VAL)} while (0);
@@ -63,7 +63,7 @@ static int create(sox_effect_t * effp, int argc, char * * argv)
   return argc? lsx_usage(effp) : SOX_SUCCESS;
 }
 
-static int start(sox_effect_t * effp)
+static int start_gain(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
 
@@ -76,7 +76,7 @@ static int start(sox_effect_t * effp)
       p->reclaim = 1 / *effp->in_signal.mult;
     }
     effp->out_signal.mult = p->make_headroom? &p->fixed_gain : NULL;
-    if (!p->do_equalise && !p->do_balance && !p->do_balance_no_clip)
+    if (!p->do_equalize && !p->do_balance && !p->do_balance_no_clip)
       effp->flows = 1; /* essentially a conditional SOX_EFF_MCHAN */
   }
   p->mult = 0;
@@ -96,7 +96,7 @@ static int start(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
+static int flow_gain(sox_effect_t * effp, const sox_sample_t * ibuf,
     sox_sample_t * obuf, size_t * isamp, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
@@ -107,7 +107,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t * ibuf,
       lsx_fail("error writing temporary file: %s", strerror(errno));
       return SOX_EOF;
     }
-    if (p->do_balance && !p->do_normalise)
+    if (p->do_balance && !p->do_normalize)
       for (len = *isamp; len; --len, ++ibuf) {
         double d = SOX_SAMPLE_TO_FLOAT_64BIT(*ibuf, effp->clips);
         p->rms += sqr(d);
@@ -161,12 +161,12 @@ static void start_drain(sox_effect_t * effp)
       max_peak = max(max_peak, q->mult * this_peak);
       q->mult *= p->fixed_gain;
     }
-    if (p->do_normalise || (p->do_balance_no_clip && max_peak > 1))
+    if (p->do_normalize || (p->do_balance_no_clip && max_peak > 1))
       for (i = 0; i < effp->flows; ++i) {
         priv_t * q = (priv_t *)(effp - effp->flow + i)->priv;
         q->mult /= max_peak;
       }
-  } else if (p->do_equalise && !p->do_normalise) {
+  } else if (p->do_equalize && !p->do_normalize) {
     for (i = 0; i < effp->flows; ++i) {
       priv_t * q = (priv_t *)(effp - effp->flow + i)->priv;
       double this_peak = max(q->max / max, q->min / (double)SOX_SAMPLE_MIN);
@@ -190,7 +190,7 @@ static void start_drain(sox_effect_t * effp)
   }
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
+static int drain_gain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
   size_t len;
@@ -218,7 +218,7 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf, size_t * osamp)
   return result;
 }
 
-static int stop(sox_effect_t * effp)
+static int stop_gain(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   if (p->do_scan)
@@ -245,13 +245,15 @@ sox_effect_handler_t const * lsx_gain_effect_fn(void)
     NULL
   };
   static sox_effect_handler_t handler = {
-    "gain", usage, extra_usage, SOX_EFF_GAIN,
-    create, start, flow, drain, stop, NULL, sizeof(priv_t)};
+    "gain", usage, SOX_EFF_GAIN,
+    create_gain, start_gain, flow_gain, drain_gain, stop_gain, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL,
+  };
 
-    return &handler;
+  return &handler;
 }
 
-/*------------------ emulation of the old `normalise' effect -----------------*/
+/*------------------ emulation of the old `normalize' effect -----------------*/
 
 static int norm_getopts(sox_effect_t * effp, int argc, char * * argv)
 {

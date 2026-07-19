@@ -23,6 +23,9 @@
 #define DEFAULT_STRETCH_WINDOW          20.0  /* ms */
 
 typedef enum { input_state, output_state } stretch_status_t;
+typedef enum {
+  fade_linear, fade_sqrt, fade_half_cosine, fade_quarter_cosine
+} stretch_fade_t;
 
 typedef struct {
   /* options
@@ -32,6 +35,7 @@ typedef struct {
   double window;   /* window in ms */
   double shift;    /* shift ratio wrt window. <1.0 */
   double fading;   /* fading ratio wrt window. <0.5 */
+  stretch_fade_t fade_type;
 
   /* internal stuff */
   stretch_status_t state; /* automaton status */
@@ -53,33 +57,48 @@ typedef struct {
 /*
  * Process options
  */
-static int getopts(sox_effect_t * effp, int argc, char **argv)
+static int getopts_stretch(sox_effect_t * effp, int argc, char **argv)
 {
   priv_t * p = (priv_t *) effp->priv;
+  char dummy;
+
   --argc, ++argv;
 
   /* default options */
   p->factor = 1.0; /* default is no change */
   p->window = DEFAULT_STRETCH_WINDOW;
 
-  if (argc > 0 && !sscanf(argv[0], "%lf", &p->factor)) {
-    lsx_fail("error while parsing factor");
-    return lsx_usage(effp);
+  if (argc > 0 && sscanf(argv[0], "%lf %c", &p->factor, &dummy) != 1) {
+    lsx_fail("factor `%s' must be a number", argv[0]);
+    return SOX_EOF;
   }
 
-  if (argc > 1 && !sscanf(argv[1], "%lf", &p->window)) {
-    lsx_fail("error while parsing window size");
-    return lsx_usage(effp);
+  if (argc > 1 && sscanf(argv[1], "%lf %c", &p->window, &dummy) != 1) {
+    lsx_fail("window size `%s' must be a number of milliseconds", argv[1]);
+    return SOX_EOF;
+  }
+  if (p->window < 1) {
+    lsx_fail("the minimum window size is one millisecond");
+    return SOX_EOF;
   }
 
   if (argc > 2) {
     switch (argv[2][0]) {
-    case 'l':
-    case 'L':
+    case 'l': case 'L':
+      p->fade_type = fade_linear;
+      break;
+    case 's': case 'S':
+      p->fade_type = fade_sqrt;
+      break;
+    case 'h': case 'H':
+      p->fade_type = fade_half_cosine;
+      break;
+    case 'q': case 'Q':
+      p->fade_type = fade_quarter_cosine;
       break;
     default:
-      lsx_fail("error while parsing fade type");
-      return lsx_usage(effp);
+      lsx_fail("fade type must be linear, sqrt, half or quarter, not `%s'", argv[2]);
+      return SOX_EOF;
     }
   }
 
@@ -87,14 +106,14 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
   p->shift = (p->factor <= 1.0) ?
     DEFAULT_FAST_SHIFT_RATIO: DEFAULT_SLOW_SHIFT_RATIO;
 
-  if (argc > 3 && !sscanf(argv[3], "%lf", &p->shift)) {
-    lsx_fail("error while parsing shift ratio");
-    return lsx_usage(effp);
+  if (argc > 3 && sscanf(argv[3], "%lf %c", &p->shift, &dummy) != 1) {
+    lsx_fail("cannot parse shift ratio `%s'", argv[3]);
+    return SOX_EOF;
   }
 
   if (p->shift > 1.0 || p->shift <= 0.0) {
-    lsx_fail("error with shift ratio value");
-    return lsx_usage(effp);
+    lsx_fail("shift ratio must be > 0 and <= 1.0");
+    return SOX_EOF;
   }
 
   /* default fading stuff...
@@ -106,14 +125,14 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
   if (p->fading > 0.5)
     p->fading = 0.5;
 
-  if (argc > 4 && !sscanf(argv[4], "%lf", &p->fading)) {
-    lsx_fail("error while parsing fading ratio");
-    return lsx_usage(effp);
+  if (argc > 4 && sscanf(argv[4], "%lf %c", &p->fading, &dummy) != 1) {
+    lsx_fail("cannot parse fading ratio `%s'", argv[4]);
+    return SOX_EOF;
   }
 
   if (p->fading > 0.5 || p->fading < 0.0) {
-    lsx_fail("error with fading ratio value");
-    return lsx_usage(effp);
+    lsx_fail("fading ratio `%s' must be from 0.0 to 0.5", argv[4]);
+    return SOX_EOF;
   }
 
   return SOX_SUCCESS;
@@ -122,7 +141,7 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
 /*
  * Start processing
  */
-static int start(sox_effect_t * effp)
+static int start_stretch(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   size_t i;
@@ -161,14 +180,32 @@ static int start(sox_effect_t * effp)
   for (i = 0; i<p->segment; i++)
     p->obuf[i] = 0.0;
 
-  if (p->overlap>1) {
+  if (p->overlap == 1)
+    p->fade_coefs[0] = 1.0;
+  else if (p->overlap>1) {
     double slope = 1.0 / (p->overlap - 1);
+
     p->fade_coefs[0] = 1.0;
-    for (i = 1; i < p->overlap - 1; i++)
-      p->fade_coefs[i] = slope * (p->overlap - i - 1);
+    switch (p->fade_type) {
+    case fade_linear:
+      for (i = 1; i < p->overlap - 1; i++)
+        p->fade_coefs[i] = slope * (p->overlap - i - 1);
+      break;
+    case fade_sqrt:
+      for (i = 1; i < p->overlap - 1; i++)
+        p->fade_coefs[i] = sqrt(slope * (p->overlap - i - 1));
+      break;
+    case fade_quarter_cosine:
+      for (i = 1; i < p->overlap - 1; i++)
+        p->fade_coefs[i] = cos(((double)i / (p->overlap - 1)) * M_PI/2);
+      break;
+    case fade_half_cosine:
+      for (i = 1; i < p->overlap - 1; i++)
+        p->fade_coefs[i] = 0.5 + cos(((double)i / (p->overlap - 1)) * M_PI) / 2;
+      break;
+    }
     p->fade_coefs[p->overlap - 1] = 0.0;
-  } else if (p->overlap == 1)
-    p->fade_coefs[0] = 1.0;
+  }
 
   lsx_debug("start: (factor=%g segment=%g shift=%g overlap=%g)\nstate=%d\n"
       "segment=%" PRIuPTR "\nindex=%" PRIuPTR "\n"
@@ -202,8 +239,8 @@ static void combine(priv_t * p)
 /*
  * Processes flow.
  */
-static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
-                    size_t *isamp, size_t *osamp)
+static int flow_stretch(sox_effect_t * effp, const sox_sample_t *ibuf,
+                        sox_sample_t *obuf, size_t *isamp, size_t *osamp)
 {
   priv_t * p = (priv_t *) effp->priv;
   size_t iindex = 0, oindex = 0;
@@ -269,7 +306,7 @@ static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obu
  * Drain buffer at the end
  * maybe not correct ? end might be artificially faded?
  */
-static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
+static int drain_stretch(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
 {
   priv_t * p = (priv_t *) effp->priv;
   size_t i;
@@ -299,7 +336,7 @@ static int drain(sox_effect_t * effp, sox_sample_t *obuf, size_t *osamp)
 }
 
 
-static int stop(sox_effect_t * effp)
+static int stop_stretch(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *) effp->priv;
 
@@ -316,18 +353,22 @@ const sox_effect_handler_t *lsx_stretch_effect_fn(void)
   static char const * const extra_usage[] = {
 "OPTION RANGE DEFAULT DESCRIPTION",
 "factor  0-      1    Change in length; >1 lengthens, <1 shortens",
-"window         20    Length of the crossfading window in milliseconds",
-"fade     l      l    Can only be `l' for `linear'",
-"shift   0-1     ?    Shift ratio, (1 when speeding up, 0.8 when slowing down)",
-"fading  0-.5    ?    Fading ratio: how much of each window is cross-faded;",
-"                     its default value depends on factor and shift",
+"window  1-     20    Length of the crossfading window in milliseconds",
+"fade  l|s|q|h   l    Crossfading type: linear and half-cosine are equal-gain;",
+"                     sqrt and quarter-cosine are equal-power",
+"shift   0-1   1/0.8  Shift ratio, (1 when shortening, 0.8 when lengthening)",
+"fading  0-.5    ?    Fading ratio: how much of each window is cross-faded:",
+"                     The default value is 1 - factor * shift when shortening",
+"                     1 - shift when lengthening, with a maximum of 0.5",
     NULL
   };
 
   static const sox_effect_handler_t handler = {
-    "stretch", usage, extra_usage,
+    "stretch", usage,
     SOX_EFF_LENGTH,
-    getopts, start, flow, drain, stop, NULL, sizeof(priv_t)
+    getopts_stretch, start_stretch, flow_stretch, drain_stretch,
+    stop_stretch, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL,
   };
   return &handler;
 }

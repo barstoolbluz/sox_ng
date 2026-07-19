@@ -21,11 +21,11 @@
 
 /* Magic numbers used in Sun and NeXT audio files */
 static struct {char str[4]; sox_bool reverse_bytes; char const * desc;} id[] = {
-  {"\x2e\x73\x6e\x64", MACHINE_IS_LITTLEENDIAN, "big-endian `.snd'"},
-  {"\x64\x6e\x73\x2e", MACHINE_IS_BIGENDIAN   , "little-endian `.snd'"},
-  {"\x00\x64\x73\x2e", MACHINE_IS_BIGENDIAN   , "little-endian `\\0ds.' (for DEC)"},
-  {"\x2e\x73\x64\x00", MACHINE_IS_LITTLEENDIAN, "big-endian `\\0ds.'"},
-  {"    ", 0, NULL}
+  {{'\x2e','\x73','\x6e','\x64'}, MACHINE_IS_LITTLEENDIAN, "big-endian `.snd'"},
+  {{'\x64','\x6e','\x73','\x2e'}, MACHINE_IS_BIGENDIAN   , "little-endian `.snd'"},
+  {{'\x00','\x64','\x73','\x2e'}, MACHINE_IS_BIGENDIAN   , "little-endian `\\0ds.' (for DEC)"},
+  {{'\x2e','\x73','\x64','\x00'}, MACHINE_IS_LITTLEENDIAN, "big-endian `\\0ds.'"},
+  {{' ',' ',' ',' '}, 0, NULL}
 };
 #define FIXED_HDR     24
 #define SUN_UNSPEC    ~0u         /* Unspecified data size (this is legal) */

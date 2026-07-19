@@ -1,12 +1,13 @@
-noinst_PROGRAMS = samples
-samples_SOURCES = samples.c
+EXTRA_DIST = samples.c
 
-CLEANFILES = samples samples.o
+CLEANFILES = samples$(EXEEXT) samples.o
 
-all: samples
+samples$(EXEEXT): samples.c
+	$(CC) -o samples$(EXEEXT) samples.c
 
-check-am:
+check-am: samples$(EXEEXT)
 	sox=../../src/sox_ng sh $(srcdir)/check.sh -n
 
 dist-hook:
-	$(RM) -rf $(distdir)/.deps
+	rm -f $(distdir)/samples$(EXEEXT) $(distdir)/samples.o
+	rm -rf $(distdir)/.deps

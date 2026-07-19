@@ -4,7 +4,7 @@
  * details.  THERE IS ABSOLUTELY NO WARRANTY FOR THIS SOFTWARE.
  */
 
-/* $Header: /cvsroot/sox/sox/libgsm/rpe.c,v 1.2 2007/11/04 16:32:36 robs Exp $ */
+/* $Header: /tmp_amd/presto/export/kbs/jutta/src/gsm/RCS/rpe.c,v 1.3 1994/05/10 20:18:46 jutta Exp $ */
 
 #include <stdio.h>
 #include <assert.h>
@@ -12,13 +12,14 @@
 #include "private.h"
 
 #include "gsm.h"
+#include "proto.h"
 
 /*  4.2.13 .. 4.2.17  RPE ENCODING SECTION
  */
 
 /* 4.2.13 */
 
-static void Weighting_filter (
+static void Weighting_filter P2((e, x),
 	register word	* e,		/* signal [-5..0.39.44]	IN  */
 	word		* x		/* signal [0..39]	OUT */
 )
@@ -26,7 +27,7 @@ static void Weighting_filter (
  *  The coefficients of the weighting filter are stored in a table
  *  (see table 4.4).  The following scaling is used:
  *
- *	H[0..10] = integer( real_H[ 0..10] * 8192 ); 
+ *	H[0..10] = integer( real_H[ 0..10] * 8192 );
  */
 {
 	/* word			wt[ 50 ]; */
@@ -47,7 +48,7 @@ static void Weighting_filter (
 	e -= 5;
 
 	/*  Compute the signal x[0..39]
-	 */ 
+	 */
 	for (k = 0; k <= 39; k++) {
 
 		L_result = 8192 >> 1;
@@ -62,7 +63,7 @@ static void Weighting_filter (
 #define	STEP( i, H )	(e[ k + i ] * (longword)H)
 
 		/*  Every one of these multiplications is done twice --
-		 *  but I don't see an elegant way to optimize this. 
+		 *  but I don't see an elegant way to optimize this.
 		 *  Do you?
 		 */
 
@@ -80,16 +81,16 @@ static void Weighting_filter (
 		L_result += STEP(	10, 	-134 ) ;
 #else
 		L_result +=
-		  STEP(	0, 	-134 ) 
-		+ STEP(	1, 	-374 ) 
+		  STEP(	0, 	-134 )
+		+ STEP(	1, 	-374 )
 	     /* + STEP(	2, 	0    )  */
-		+ STEP(	3, 	2054 ) 
-		+ STEP(	4, 	5741 ) 
-		+ STEP(	5, 	8192 ) 
-		+ STEP(	6, 	5741 ) 
-		+ STEP(	7, 	2054 ) 
+		+ STEP(	3, 	2054 )
+		+ STEP(	4, 	5741 )
+		+ STEP(	5, 	8192 )
+		+ STEP(	6, 	5741 )
+		+ STEP(	7, 	2054 )
 	     /* + STEP(	8, 	0    )  */
-		+ STEP(	9, 	-374 ) 
+		+ STEP(	9, 	-374 )
 		+ STEP(10, 	-134 )
 		;
 #endif
@@ -112,8 +113,8 @@ static void Weighting_filter (
 
 /* 4.2.14 */
 
-static void RPE_grid_selection (
-	word		* x,		/* [0..39]		IN  */ 
+static void RPE_grid_selection P3((x,xM,Mc_out),
+	word		* x,		/* [0..39]		IN  */
 	word		* xM,		/* [0..12]		OUT */
 	word		* Mc_out	/*			OUT */
 )
@@ -146,7 +147,7 @@ static void RPE_grid_selection (
 	 *		L_temp   = GSM_L_MULT( temp1, temp1 );
 	 *		L_result = GSM_L_ADD( L_temp, L_result );
 	 *	}
-	 * 
+	 *
 	 *	if (L_result > EM) {
 	 *		Mc = m;
 	 *		EM = L_result;
@@ -219,7 +220,7 @@ static void RPE_grid_selection (
 
 /* 4.12.15 */
 
-static void APCM_quantization_xmaxc_to_exp_mant (
+static void APCM_quantization_xmaxc_to_exp_mant P3((xmaxc,exp_out,mant_out),
 	word		xmaxc,		/* IN 	*/
 	word		* exp_out,	/* OUT	*/
 	word		* mant_out )	/* OUT  */
@@ -252,7 +253,7 @@ static void APCM_quantization_xmaxc_to_exp_mant (
 	*mant_out = mant;
 }
 
-static void APCM_quantization (
+static void APCM_quantization P5((xM,xMc,mant_out,exp_out,xmaxc_out),
 	word		* xM,		/* [0..12]		IN	*/
 
 	word		* xMc,		/* [0..12]		OUT	*/
@@ -309,7 +310,7 @@ static void APCM_quantization (
 	 *  can be calculated by using the exponent and the mantissa part of
 	 *  xmaxc (logarithmic table).
 	 *  So, this method avoids any division and uses only a scaling
-	 *  of the RPE samples by a function of the exponent.  A direct 
+	 *  of the RPE samples by a function of the exponent.  A direct
 	 *  multiplication by the inverse of the mantissa (NRFAC[0..7]
 	 *  found in table 4.5) gives the 3 bit coded version xMc[0..12]
 	 *  of the RPE samples.
@@ -320,7 +321,7 @@ static void APCM_quantization (
 	 */
 
 	assert( exp <= 4096 && exp >= -4096);
-	assert( mant >= 0 && mant <= 7 ); 
+	assert( mant >= 0 && mant <= 7 );
 
 	temp1 = 6 - exp;		/* normalization by the exponent */
 	temp2 = gsm_NRFAC[ mant ];  	/* inverse mantissa 		 */
@@ -345,12 +346,12 @@ static void APCM_quantization (
 
 /* 4.2.16 */
 
-static void APCM_inverse_quantization (
+static void APCM_inverse_quantization P4((xMc,mant,exp,xMp),
 	register word	* xMc,	/* [0..12]			IN 	*/
 	word		mant,
 	word		exp,
 	register word	* xMp)	/* [0..12]			OUT 	*/
-/* 
+/*
  *  This part is for decoding the RPE sequence of coded xMc[0..12]
  *  samples to obtain the xMp[0..12] array.  Table 4.6 is used to get
  *  the mantissa of xmaxc (FAC[0..7]).
@@ -360,7 +361,7 @@ static void APCM_inverse_quantization (
 	word	temp, temp1, temp2, temp3;
 	longword	ltmp;
 
-	assert( mant >= 0 && mant <= 7 ); 
+	assert( mant >= 0 && mant <= 7 );
 
 	temp1 = gsm_FAC[ mant ];	/* see 4.2-15 for mant */
 	temp2 = gsm_sub( 6, exp );	/* see 4.2-15 for exp  */
@@ -383,7 +384,7 @@ static void APCM_inverse_quantization (
 
 /* 4.2.17 */
 
-static void RPE_grid_positioning (
+static void RPE_grid_positioning P3((Mc,xMp,ep),
 	word		Mc,		/* grid position	IN	*/
 	register word	* xMp,		/* [0..12]		IN	*/
 	register word	* ep		/* [0..39]		OUT	*/
@@ -400,18 +401,18 @@ static void RPE_grid_positioning (
 
 	assert(0 <= Mc && Mc <= 3);
 
-	switch (Mc) {
-		case 3: *ep++ = 0; goto two;
-		case 2:
-two:			do {
-				*ep++ = 0; goto one;
-		case 1:
-one:				*ep++ = 0; goto zero;
-		case 0:
-zero:				*ep++ = *xMp++;
-			 } while (--i);
-	}
-	while (++Mc < 4) *ep++ = 0;
+        switch (Mc) {
+                case 3: *ep++ = 0; goto two;
+                case 2:
+two:		         do {
+                                *ep++ = 0; goto one;
+                case 1:
+one:                            *ep++ = 0; goto zero;
+                case 0:
+zero:                           *ep++ = *xMp++;
+                         } while (--i);
+        }
+        while (++Mc < 4) *ep++ = 0;
 
 	/*
 
@@ -440,7 +441,7 @@ void Gsm_Update_of_reconstructed_short_time_residual_signal P3((dpp, ep, dp),
 {
 	int 		k;
 
-	for (k = 0; k <= 79; k++) 
+	for (k = 0; k <= 79; k++)
 		dp[ -120 + k ] = dp[ -80 + k ];
 
 	for (k = 0; k <= 39; k++)
@@ -448,7 +449,7 @@ void Gsm_Update_of_reconstructed_short_time_residual_signal P3((dpp, ep, dp),
 }
 #endif	/* Has been inlined in code.c */
 
-void Gsm_RPE_Encoding (
+void Gsm_RPE_Encoding P5((S,e,xmaxc,Mc,xMc),
 
 	struct gsm_state * S,
 
@@ -461,7 +462,8 @@ void Gsm_RPE_Encoding (
 	word	xM[13], xMp[13];
 	word	mant, exp;
 
-  (void)S; /* Denotes intentionally unused */
+	if (S) assert(S); /* Shut compiler warning up */
+
 	Weighting_filter(e, x);
 	RPE_grid_selection(x, xM, Mc);
 
@@ -472,7 +474,7 @@ void Gsm_RPE_Encoding (
 
 }
 
-void Gsm_RPE_Decoding (
+void Gsm_RPE_Decoding P5((S, xmaxcr, Mcr, xMcr, erp),
 	struct gsm_state	* S,
 
 	word 		xmaxcr,
@@ -484,7 +486,8 @@ void Gsm_RPE_Decoding (
 	word	exp, mant;
 	word	xMp[ 13 ];
 
-  (void)S; /* Denotes intentionally unused */
+	if (S) assert(S); /* Shut compiler warning up */
+
 	APCM_quantization_xmaxc_to_exp_mant( xmaxcr, &exp, &mant );
 	APCM_inverse_quantization( xMcr, mant, exp, xMp );
 	RPE_grid_positioning( Mcr, xMp, erp );

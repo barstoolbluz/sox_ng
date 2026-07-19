@@ -19,11 +19,17 @@
 
 #include "sox_i.h"
 
+#if HAVE_DOLBYB_H
+
 #ifdef EXTERNAL_DOLBYB
 #include <dolbyb.h>
 #else
 #include "../libdolbyb/dolbyb.h"
 #endif
+
+#define MIN_TH_GAIN_DB     -100
+#define MAX_TH_GAIN_DB      100
+#define DEFAULT_TH_GAIN_DB  0
 
 /* Private data for effect */
 typedef struct {
@@ -37,34 +43,113 @@ typedef struct {
  * initialization now: effp->in_signal & effp->out_signal are not
  * yet filled in.
  */
-static int init(sox_effect_t * effp, int argc, char **argv)
+static int getopts_dolbyb(sox_effect_t * effp, int argc, char **argv)
 {
   priv_t *p = (priv_t *)effp->priv;
   dolbyb_t *dolbyb = &(p->dolbyb);
   lsx_getopt_t optstate;
   int c;
+  /* Give meaningful names to parameters in error messages */
+  int16_t upsamp, filter_type;
+  double gain, precision;
 
   dolbyb_init(dolbyb);
   lsx_getopt_init(argc, argv, "dehu:t:a:f:", NULL, lsx_getopt_flag_none, 1, &optstate);
+
+  upsamp = dolbyb->UpSamp;
+  gain = dolbyb->ThGndB;
+  precision = dolbyb->DecAdB;
+  filter_type = dolbyb->FltTyp;
 
   while((c = lsx_getopt(&optstate)) != -1) switch (c) {
   case 'd': p->Encode = sox_false; break;
   case 'e': p->Encode = sox_true; break;
   case 'h': dolbyb->AllHig = sox_true; break;
-  GETOPT_NUMERIC(optstate, 'u', dolbyb.UpSamp, 0, 100)
-  GETOPT_NUMERIC(optstate, 't', dolbyb.ThGndB, -100.0, 100.0)
-  GETOPT_NUMERIC(optstate, 'a', dolbyb.DecAdB, -100, 0.0)
-  GETOPT_NUMERIC(optstate, 'f', dolbyb.FltTyp, 1, 4)
+  GETOPT_LOCAL_NUMERIC(optstate, 'u', upsamp, 0, 100)
+  GETOPT_LOCAL_NUMERIC(optstate, 't', gain, -100.0, 100.0)
+  GETOPT_LOCAL_NUMERIC(optstate, 'a', precision, -100, 0.0)
+  GETOPT_LOCAL_NUMERIC(optstate, 'f', filter_type, 1, 4)
+  default:
+    if (optstate.ind > argc) {
+      /* Missing parameter */
+      lsx_fail("-%c what?", optstate.opt);
+      return SOX_EOF;
+    } else {
+      /* Invalid option */
+      lsx_fail("invalid option -%c", optstate.opt);
+      return lsx_usage(effp);
+    }
   }
+  dolbyb->UpSamp = upsamp;
+  dolbyb->ThGndB = gain;
+  dolbyb->DecAdB = precision;
+  dolbyb->FltTyp = filter_type;
+
   argc -= optstate.ind, argv -= optstate.ind;
   return argc ? lsx_usage(effp) : SOX_SUCCESS;
+}
+
+/*
+ * Get a dolbyb parameter's value
+ */
+
+/* Decibels-to-Gain and Gain-to-Decibels conversions */
+#define ConvertDb(dB) pow(10, (dB) / 20)        /* Stolen from libdolbyb */
+#define ConvertGain(Gain) (log10(Gain) * 20)    /* The inverse */
+
+static char *
+get_dolbyb(sox_effect_t *effp, char *name)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  char *s = NULL;
+
+  if (!strcmp(name, "gain")) {
+    /* The inverse of #define ParamConvertDb(Db) pow(10, Db / 20) */
+    double dB = ConvertGain(p->dolbyb.ThGain);
+    s = lsx_malloc(16);
+    sprintf(s, "%g", dB);
+  }
+
+  return s;
+}
+
+/*
+ * Set a dolbyb parameter.
+ */
+static char *
+set_dolbyb(sox_effect_t *effp, char *name, char *value)
+{
+  priv_t *p = (priv_t *)effp->priv;
+  dolbyb_t *dolbyb = &(p->dolbyb);
+  char *s = NULL;
+  char *endptr = value;
+  double dB = lsx_strtod(value, &endptr); /* Desired setting in dB */
+
+  /* Unconvertable string or trailing garbage */
+  if (endptr == value || *endptr != '\0') return NULL;
+
+  if (!strcmp(name, "gain")) {
+    double gain; /* Desired setting as a volume multiplier */
+
+    if (dB >= MAX_TH_GAIN_DB) dB = MAX_TH_GAIN_DB;
+    if (dB <= MIN_TH_GAIN_DB) dB = MIN_TH_GAIN_DB;
+    gain = ConvertDb(dB);
+    dolbyb->ThGain = gain;
+    dolbyb->ThGndB = ConvertGain(gain);
+    if ((s = dolbyb_restart(dolbyb)) != NULL)
+      return s;
+    s = lsx_malloc(16);
+    sprintf(s, "%g", dolbyb->ThGndB);
+  }
+
+  return s;
 }
 
 /*
  * Prepare processing.
  * Called once for each channel
  */
-static int start(sox_effect_t * effp)
+static int start_dolbyb(sox_effect_t * effp)
 {
   dolbyb_t *dolbyb = &(((priv_t *)effp->priv)->dolbyb);
 
@@ -88,8 +173,8 @@ static int start(sox_effect_t * effp)
  * in obuf.  Write back the actual numbers of samples to *isamp and *osamp.
  * Return SOX_SUCCESS or, if error occurs, SOX_EOF.
  */
-static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obuf,
-                           size_t *isamp, size_t *osamp)
+static int flow_dolbyb(sox_effect_t * effp, const sox_sample_t *ibuf,
+                       sox_sample_t *obuf, size_t *isamp, size_t *osamp)
 {
   priv_t *p = (priv_t *)effp->priv;
   dolbyb_t *dolbyb = &(p->dolbyb);
@@ -129,24 +214,10 @@ static int flow(sox_effect_t * effp, const sox_sample_t *ibuf, sox_sample_t *obu
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t UNUSED * effp, sox_sample_t UNUSED *obuf, size_t UNUSED *osamp)
-{
-  *osamp = 0;
-  return SOX_SUCCESS;
-}
-
-/*
- * Called once per channel
- */
-static int stop(sox_effect_t UNUSED * effp)
-{
-  return SOX_SUCCESS;
-}
-
 /*
  * Called once per effect
  */
-static int lsx_kill(sox_effect_t UNUSED * effp)
+static int kill_dolbyb(sox_effect_t UNUSED * effp)
 {
   dolbyb_t *dolbyb = &(((priv_t *)effp->priv)->dolbyb);
 
@@ -172,11 +243,15 @@ const sox_effect_handler_t *lsx_dolbyb_effect_fn(void)
     "-t gain -100-100    0     Adjust the sliding filter's threshold in dB",
     "-a prec -100-0     -5     Adjust the accuracy in dB when decoding",
     "-f n       1-4      4     Filter type: 1=original 2=better 3=worse 4=best",
+    "Keymap: dolbyb.gain",
     NULL
   };
   static sox_effect_handler_t sox_dolbyb_effect = {
-    "dolbyb", usage, extra_usage, SOX_EFF_MCHAN,
-    init, start, flow, drain, stop, lsx_kill, sizeof(priv_t)
+    "dolbyb", usage, SOX_EFF_MCHAN,
+    getopts_dolbyb, start_dolbyb, flow_dolbyb, NULL, NULL, kill_dolbyb,
+    sizeof(priv_t), extra_usage, get_dolbyb, set_dolbyb,
   };
   return &sox_dolbyb_effect;
 }
+
+#endif /* HAVE_DOLBYB_H */

@@ -65,14 +65,15 @@ static lsx_enum_item const window_options[] = {
 typedef struct {
   /* Parameters */
   double     pixels_per_sec, window_adjust;
-  int        x_size0, y_size, Y_size, dB_range, gain, spectrum_points, perm;
-  sox_bool   monochrome, light_background, high_colour, slack_overlap, no_axes;
+  int        x_size, y_size, Y_size, dB_range, gain, spectrum_points, perm;
+  sox_bool   monochrome, light_background, high_color, hh_mm_ss, slack_overlap, no_axes;
   sox_bool   normalize, raw, alt_palette, truncate;
   win_type_t win_type;
   char const * out_name, * title, * comment;
   char const *duration_str, *start_time_str;
   sox_bool   using_stdout; /* output image to stdout */
   sox_bool   log10_axis;   /* plot frequency on log10 axis */
+  sox_bool   interpolate;  /* Should we interpolate between frequency bins? */
   int        low_freq, high_freq;
 
   /* Shared work area */
@@ -81,10 +82,13 @@ typedef struct {
   /* Per-channel work area */
   uint64_t   skip;
   int        dft_size, step_size, block_steps, block_num, rows, cols, read;
-  int        x_size, end, end_min, last_end;
+  int        end, end_min, last_end;
   sox_bool   truncated;
   double     * buf;             /* [dft_size] */
   double     * dft_buf;         /* [dft_size] */
+#if HAVE_FFTW
+  double     * dft_buf2;        /* [dft_size] */
+#endif
   double     * window;          /* [dft_size + 1] */
   double     block_norm, max;
   double     * magnitudes;      /* [dft_size / 2 + 1] */
@@ -107,6 +111,14 @@ typedef struct {
  * so only one column of pixel tiles (or one row) has to be kept in RAM
  * at a time.  The speedup is unmeasurable because one thrashing process
  * makes the entire system grind to a halt.
+ */
+
+/*
+ * Each flow has its own square array of dBfs values for its spectrogram,
+ * stored as an array of pointers to tile columns, where each element is
+ * an array of pointers to a column of blocks piled on top of one another
+ * and each block a regular square array of TILE_HEIGHT rows,
+ * each TILE_WIDTH wide.
  */
 
 #define PAGE_SIZE 4096
@@ -204,28 +216,30 @@ static int parse_num_with_suffix (const char *s, int *a) {
  */
 static int parse_range (const char *s, int *a, int *b) {
   int a_status, b_status;
-  char *colon = strchr(s,':');
+  char *ss = lsx_strdup(s); /* Take a copy to modify */
+  char *colon = strchr(ss,':');
   if (colon) {
     /* Colon found, so have a number range */
-    *colon = 0; /* Temporarily put string terminator where colon is */
-    a_status = parse_num_with_suffix(s, a);
+    *colon = 0; /* Put string terminator where colon is */
+    a_status = parse_num_with_suffix(ss, a);
     b_status = parse_num_with_suffix(colon+1,b);
-    *colon = ':'; /* Restore colon */
+    free(ss);
     return a_status || b_status;
   } else {
     /* no colon: so just one value */
+    free(ss);
     return parse_num_with_suffix(s, a);
   }
 }
 
-static int getopts(sox_effect_t * effp, int argc, char **argv)
+static int getopts_spectrogram(sox_effect_t * effp, int argc, char **argv)
 {
   priv_t * p = (priv_t *)effp->priv;
   uint64_t dummy;
   char const * next;
   int c;
   lsx_getopt_t optstate;
-  lsx_getopt_init(argc, argv, "+S:d:x:X:y:Y:z:Z:q:p:W:w:st:c:AarmnlhTo:LR:", NULL, lsx_getopt_flag_none, 1, &optstate);
+  lsx_getopt_init(argc, argv, "+S:d:x:X:y:Y:z:Z:q:p:W:w:st:c:AarglmnhTo:LiR:", NULL, lsx_getopt_flag_none, 1, &optstate);
 
   p->dB_range = 120, p->spectrum_points = 249, p->perm = 1; /* Non-0 defaults */
   p->out_name = "spectrogram.png", p->comment = "Created by SoX";
@@ -236,7 +250,7 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
   p->high_freq = -1;
 
   while ((c = lsx_getopt(&optstate)) != -1) switch (c) {
-    GETOPT_NUMERIC(optstate, 'x', x_size0       , 100, MAX_X_SIZE)
+    GETOPT_NUMERIC(optstate, 'x', x_size        , 100, MAX_X_SIZE)
     GETOPT_NUMERIC(optstate, 'X', pixels_per_sec,  1 , 5000)
     GETOPT_NUMERIC(optstate, 'y', y_size        , 64 , MAX_Y_SIZE)
     GETOPT_NUMERIC(optstate, 'Y', Y_size        , 130, MAX_Y_SIZE)
@@ -245,7 +259,10 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
     GETOPT_NUMERIC(optstate, 'q', spectrum_points, 0 , p->spectrum_points)
     GETOPT_NUMERIC(optstate, 'p', perm          ,  1 , 6)
     GETOPT_NUMERIC(optstate, 'W', window_adjust , -10, 10)
-    case 'w': p->win_type = lsx_enum_option(c, optstate.arg, window_options);   break;
+    case 'w':
+      p->win_type = lsx_enum_option(c, optstate.arg, window_options);
+      if (p->win_type == INT_MAX) return SOX_EOF;
+      break;
     case 's': p->slack_overlap    = sox_true;   break;
     case 'A': p->alt_palette      = sox_true;   break;
     case 'a': p->no_axes          = sox_true;   break;
@@ -253,35 +270,52 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
     case 'm': p->monochrome       = sox_true;   break;
     case 'n': p->normalize        = sox_true;   break;
     case 'l': p->light_background = sox_true;   break;
-    case 'h': p->high_colour      = sox_true;   break;
+    case 'h': p->high_color       = sox_true;   break;
+    case 'g': p->hh_mm_ss         = sox_true;   break;
     case 'T': p->truncate         = sox_true;   break;
     case 'L': p->log10_axis       = sox_true;   break;
+    case 'i': p->interpolate      = sox_true;   break;
     case 't': p->title            = optstate.arg; break;
     case 'c': p->comment          = optstate.arg; break;
     case 'o': p->out_name         = optstate.arg; break;
     case 'S': next = lsx_parseposition(0., optstate.arg, NULL, (uint64_t)0, (uint64_t)0, '=');
-      if (next && !*next) {p->start_time_str = lsx_strdup(optstate.arg); break;}
-      return lsx_usage(effp);
+      /* Preliminary parse of start position; its value may only be usable
+       * when the length of the audio is known */
+      if (!next || *next) {
+        lsx_fail("cannot parse start position `%s'", optstate.arg);
+        return SOX_EOF;
+      }
+      p->start_time_str = lsx_strdup(optstate.arg);
+      break;
     case 'd': next = lsx_parsesamples(1e5, optstate.arg, &dummy, 't');
-      if (next && !*next) {p->duration_str = lsx_strdup(optstate.arg); break;}
-      return lsx_usage(effp);
+      if (!next || *next) {
+        lsx_fail("cannot parse duration `%s'", optstate.arg);
+        return SOX_EOF;
+      }
+      p->duration_str = lsx_strdup(optstate.arg);
+      break;
     case 'R':
       if (parse_range (optstate.arg, &p->low_freq, &p->high_freq)) {
-         lsx_fail("frequency range `%s' is invalid.", optstate.arg);
+         lsx_fail("cannot parse frequency range `%s'", optstate.arg);
          return SOX_EOF;
       }
-      if (p->low_freq < 0 || p->high_freq < 0) {
-        lsx_fail("frequency range `%s' is invalid. Frequencies must be positive.", optstate.arg);
+      if (p->low_freq < 0 || p->high_freq <= 0) {
+        lsx_fail("frequencies must be positive");
         return SOX_EOF;
       }
       if (p->low_freq >= p->high_freq) {
-        lsx_fail("frequency range `%s' is invalid. Lower frequency must be less than higher frequency.", optstate.arg);
-        exit(1);
+        lsx_fail("lower frequency must be less than higher frequency");
+        return SOX_EOF;
       }
       break;
-    default: lsx_fail("invalid option `-%c'", optstate.opt); return lsx_usage(effp);
+    default:
+      lsx_fail("invalid option `-%c'", optstate.opt);
+      /* No point printing the usage as it just says "spectrogram [options]" */
+      lsx_fail("for help, say %s --help-effect %s",
+               sox_globals.myname, effp->handler.name);
+      return SOX_EOF;
   }
-  if (!!p->x_size0 + !!p->pixels_per_sec + !!p->duration_str > 2) {
+  if (!!p->x_size + !!p->pixels_per_sec + !!p->duration_str > 2) {
     lsx_fail("only two of -x, -X, -d may be given");
     return SOX_EOF;
   }
@@ -307,7 +341,12 @@ static int getopts(sox_effect_t * effp, int argc, char **argv)
     effp->global_info->global_info->stdout_in_use_by = effp->handler.name;
     p->using_stdout = sox_true;
   }
-  return optstate.ind !=argc || p->win_type == INT_MAX? lsx_usage(effp) : SOX_SUCCESS;
+  if (optstate.ind < argc) {
+    lsx_fail("extra argument: %s", argv[optstate.ind]);
+    return SOX_EOF;
+  }
+  if (optstate.ind > argc) return lsx_usage(effp);
+  return SOX_SUCCESS;
 }
 
 static double make_window(priv_t * p, int end)
@@ -367,37 +406,138 @@ static void rdft_p(double const * q, double const * in, double * out, int n)
   }
 }
 
+/* What is the nearest power of two to the give size
+ * where "nearest" means of the smallest ratio between them?
+ * Callers should have checked that the given size is
+ * not a power of two.
+ */
+static sox_bool nearest_p2_dft_size(int size)
+{
+  int distance;
+
+  /* Consider the one above as closer as the ratio is smaller.
+   *
+   * higher one if it's geometrically closer to the ideal
+   * not arithmetically
+   */
+  for (distance = 2; ; distance += 2) {  /* dft sizes are always even */
+    int upper, lower;
+    /*
+     * Consider an upper one before a lower one That way, if they are at the
+     * same logarithmic distance, we to give more resolution instead of less
+     */
+    upper = size + distance;
+    if (is_p2(upper)) return upper;
+    /*
+     * Try a lower one that's the same ratio below size
+     * as size + distance is above it. With the loop this way round,
+     * the ratio between size + distance and size creeps up more slowly than
+     * the ratio between size - distance and size, which is why we loop
+     * linearly on the upper possibility and calculate the lower equivalent.
+     */
+    lower = size / ((float)(size + distance) / (float)size);
+    if (is_p2(lower)) return lower;
+  }
+  /* This can never happen */
+  return size;
+}
+
+#endif /* else part of HAVE_FFTW */
+
+#if HAVE_FFTW
+/*
+ * Helper function: is N a "fast" value for the FFT size?
+ *
+ * We use fftw_plan_r2r_1d() for which the documentation
+ * http://fftw.org/fftw3_doc/Real_002dto_002dReal-Transforms.html says:
+ *
+ * "FFTW is generally best at handling sizes of the form
+ *      2^a 3^b 5^c 7^d 11^e 13^f
+ * where e+f is either 0 or 1, and the other exponents are arbitrary."
+ *
+ * Our FFT size is 2*speclen, but that doesn't affect these calculations
+ * as 2 is an allowed factor and an odd fftsize may or may not work with
+ * the "half complex" format conversion in calc_magnitudes().
+ */
+static sox_bool is_2357(int n);
+
+static sox_bool
+is_good_dft_size(int n)
+{
+    /* It wants n, 11*n, 13*n but not (11*13*n)
+    ** where n only has as factors 2, 3, 5 and 7
+     */
+    if (n % (11 * 13) == 0) return 0; /* No good */
+
+    return is_2357(n) || ((n % 11 == 0) && is_2357(n / 11))
+		      || ((n % 13 == 0) && is_2357(n / 13));
+}
+
+/* Helper function: does N have only 2, 3, 5 and 7 as its factors? */
+static sox_bool
+is_2357(int n)
+{
+    /* Eliminate all factors of 2, 3, 5 and 7 and see if 1 remains */
+    while (n % 2 == 0) n /= 2;
+    while (n % 3 == 0) n /= 3;
+    while (n % 5 == 0) n /= 5;
+    while (n % 7 == 0) n /= 7;
+    return (n == 1);
+}
+
+/* What's the nearest DFT size to this that will be faster with FFTW?
+ * Callers should already know that their current DFT size is not good.
+ */
+static int nearest_good_dft_size(int size)
+{
+  int distance;
+
+  /* dft sizes calculated always even */
+  for (distance = 2; ; distance += 2) {
+    /* We consider the one above to be nearer than one below
+     * because the ratio between them is lower. */
+    if (is_good_dft_size(size + distance)) return size + distance;
+    if (is_good_dft_size(size - distance)) return size - distance;
+  }
+  /* Can't get here as it's got to find one eventually! */
+  return size;
+}
 #endif /* HAVE_FFTW */
 
-static int start(sox_effect_t * effp)
+static int start_spectrogram(sox_effect_t * effp)
 {
   priv_t * p = (priv_t *)effp->priv;
   double actual, duration = 0.0, start_time = 0.0,
          pixels_per_sec = p->pixels_per_sec;
-  uint64_t d;
 
   if (p->duration_str) {
-      lsx_parsesamples(effp->in_signal.rate, p->duration_str, &d, 't');
+    uint64_t d;
+    /* lsx_parsesamples() cannot fail because of the preliminary parse
+     * during getopt */
+    (void) lsx_parsesamples(effp->in_signal.rate, p->duration_str, &d, 't');
     duration = d / effp->in_signal.rate;
   }
   if (p->start_time_str) {
     uint64_t in_length = effp->in_signal.length != SOX_UNKNOWN_LEN ?
       effp->in_signal.length / effp->in_signal.channels : SOX_UNKNOWN_LEN;
-    if (!lsx_parseposition(effp->in_signal.rate, p->start_time_str, &d, (uint64_t)0, in_length, '=') || d == SOX_UNKNOWN_LEN) {
-      lsx_fail("-S option: audio length is unknown");
+    uint64_t d;
+
+    /* lsx_parseposition() cannot fail because of the preliminary parse
+     * during getopt */
+    (void) lsx_parseposition(effp->in_signal.rate, p->start_time_str, &d, (uint64_t)0, in_length, '=');
+    if (d == SOX_UNKNOWN_LEN) {
+      lsx_fail("-S: the audio length is unknown");
       return SOX_EOF;
     }
     start_time = d / effp->in_signal.rate;
     p->skip = d;
   }
 
-  p->x_size = p->x_size0;
-
   /* If we're supposed to scale the spectrogram to the length of the audio
    * but the audio length is unknown, emit a warning to this effect */
   if (!duration && effp->in_signal.length == SOX_UNKNOWN_LEN &&
       !pixels_per_sec) {
-    lsx_warn("cannot scale to an unknown audio length; use -d if you know it");
+    lsx_warn("audio length is unknown; use -d if you know it");
     /* pixels_per_sec will get 100 below */
   }
 
@@ -409,8 +549,10 @@ static int start(sox_effect_t * effp)
     if (!duration && effp->in_signal.length != SOX_UNKNOWN_LEN) {
       duration = effp->in_signal.length / (effp->in_signal.rate * effp->in_signal.channels);
       duration -= start_time;
-      if (duration < 0)
-        duration = 0;
+      if (duration <= 0) {
+        lsx_fail("start time is beyond the end of the audio");
+        return SOX_EOF;
+      }
       continue;
     } else if (!p->x_size) {
       p->x_size = 800;
@@ -422,27 +564,41 @@ static int start(sox_effect_t * effp)
     break;
   }
 
-  if (p->y_size) {
-    p->dft_size = 2 * (p->y_size - 1);
+  if (!p->y_size && !p->Y_size) p->Y_size = 550;
+  if (p->Y_size) p->y_size = p->Y_size / effp->in_signal.channels;
+  p->dft_size = 2 * (p->y_size - 1);
 #if !HAVE_FFTW
-    if (!is_p2(p->dft_size) && !effp->flow)
-      p->shared = rdft_init(p->dft_size);
-#endif
-  } else {
-   int y = max(32, (p->Y_size? p->Y_size : 550) / effp->in_signal.channels - 2);
-   for (p->dft_size = 128; p->dft_size <= y; p->dft_size <<= 1);
+  if (!is_p2(p->dft_size) && !effp->flow) {
+    if (effp->flow == 0)
+      lsx_warn("-y %d would be faster than %d",
+               nearest_p2_dft_size(p->dft_size) / 2 + 1, p->y_size);
+    p->shared = rdft_init(p->dft_size);
   }
+#else
+  if (!is_good_dft_size(p->dft_size)) {
+    if (effp->flow == 0)
+      lsx_warn("-y %d would be faster than %d",
+               nearest_good_dft_size(p->dft_size) / 2 + 1, p->y_size);
+  }
+#endif
 
   /* Now that dft_size is set, allocate variable-sized elements of priv_t */
   lsx_vcalloc(p->buf, p->dft_size);
   lsx_vcalloc(p->dft_buf, p->dft_size);
+#if HAVE_FFTW
+  lsx_vcalloc(p->dft_buf2, p->dft_size);
+#endif
   lsx_vcalloc(p->window, p->dft_size + 1);
   lsx_vcalloc(p->magnitudes, p->dft_size / 2 + 1);
 
   /* Initialize the FFT routine */
 #if HAVE_FFTW
   /* We have one FFT plan per flow because the input/output arrays differ. */
-  p->fftw_plan = fftw_plan_r2r_1d(p->dft_size, p->dft_buf, p->dft_buf,
+  /* Out-of-place FFTs are slightly faster than in-place so when we preprocess
+   * the audio buffer, we do into dft_buf2, then use that as the input to
+   * achieve an in-place transform.
+   */
+  p->fftw_plan = fftw_plan_r2r_1d(p->dft_size, p->dft_buf2, p->dft_buf,
                       FFTW_R2HC, FFTW_MEASURE);
 #else
   if (is_p2(p->dft_size) && !effp->flow)
@@ -455,7 +611,7 @@ static int start(sox_effect_t * effp)
   actual = make_window(p, p->last_end = 0);
   lsx_debug("window_density=%g", actual / p->dft_size);
   p->step_size = (p->slack_overlap? sqrt(actual * p->dft_size) : actual) + .5;
-  p->block_steps = max(effp->in_signal.rate / pixels_per_sec, 1);
+  p->block_steps = max(effp->in_signal.rate / pixels_per_sec + .5, 1);
   p->step_size = p->block_steps / ceil((double)p->block_steps / p->step_size) +.5;
   p->block_steps = floor((double)p->block_steps / p->step_size +.5);
   p->block_norm = 1. / p->block_steps;
@@ -478,7 +634,7 @@ static int do_column(sox_effect_t * effp)
   if (p->cols == p->x_size) {
     p->truncated = sox_true;
     if (!effp->flow)
-      lsx_report("PNG truncated at %g seconds", secs(p->cols));
+      lsx_report("truncated at %g seconds", secs(p->cols));
     return p->truncate? SOX_EOF : SOX_SUCCESS;
   }
 
@@ -504,7 +660,7 @@ static int do_column(sox_effect_t * effp)
   return SOX_SUCCESS;
 }
 
-static int flow(sox_effect_t * effp,
+static int flow_spectrogram(sox_effect_t * effp,
     const sox_sample_t * ibuf, sox_sample_t * obuf,
     size_t * isamp, size_t * osamp)
 {
@@ -537,8 +693,8 @@ static int flow(sox_effect_t * effp,
 
     if ((p->end = max(p->end, p->end_min)) != p->last_end)
       make_window(p, p->last_end = p->end);
-    for (i = 0; i < p->dft_size; ++i) p->dft_buf[i] = p->buf[i] * p->window[i];
 #if HAVE_FFTW
+    for (i = 0; i < p->dft_size; ++i) p->dft_buf2[i] = p->buf[i] * p->window[i];
     fftw_execute(p->fftw_plan);
     /* Convert from FFTW's "half complex" format to an array of magnitudes.
      * In HC format, the values are stored:
@@ -551,6 +707,7 @@ static int flow(sox_effect_t * effp,
     }
     p->magnitudes[p->dft_size / 2] += sqr(p->dft_buf[p->dft_size / 2]);
 #else /* ! HAVE_FFTW */
+    for (i = 0; i < p->dft_size; ++i) p->dft_buf[i] = p->buf[i] * p->window[i];
     if (is_p2(p->dft_size)) {
       lsx_safe_rdft(p->dft_size, 1, p->dft_buf);
       p->magnitudes[0] += sqr(p->dft_buf[0]);
@@ -567,7 +724,7 @@ static int flow(sox_effect_t * effp,
   return SOX_SUCCESS;
 }
 
-static int drain(sox_effect_t * effp, sox_sample_t * obuf_, size_t * osamp)
+static int drain_spectrogram(sox_effect_t * effp, sox_sample_t * obuf_, size_t * osamp)
 {
   priv_t * p = (priv_t *)effp->priv;
 
@@ -583,7 +740,7 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf_, size_t * osamp)
       isamp += p->step_size - left_over;
     lsx_debug("cols=%i left=%i end=%i", p->cols, p->read, p->end);
     p->end = 0, p->end_min = -p->dft_size;
-    if (flow(effp, ibuf, obuf, &isamp, &isamp) == SOX_SUCCESS && p->block_num) {
+    if (flow_spectrogram(effp, ibuf, obuf, &isamp, osamp) == SOX_SUCCESS && p->block_num) {
       p->block_norm *= (double)p->block_steps / p->block_num;
       do_column(effp);
     }
@@ -597,7 +754,7 @@ static int drain(sox_effect_t * effp, sox_sample_t * obuf_, size_t * osamp)
 
 enum {Background, Text, Labels, Grid, fixed_palette};
 
-static unsigned colour(priv_t const * p, double x)
+static unsigned color(priv_t const * p, double x)
 {
   unsigned c = x < -p->dB_range? 0 : x >= 0? p->spectrum_points - 1 :
       1 + (1 + x / p->dB_range) * (p->spectrum_points - 2);
@@ -624,7 +781,7 @@ static void make_palette(priv_t const * p, png_color * palette)
     int at = p->light_background? p->spectrum_points - 1 - i : i;
     if (p->monochrome) {
       c[2] = c[1] = c[0] = x;
-      if (p->high_colour) {
+      if (p->high_color) {
         c[(1 + p->perm) % 3] = x < .4? 0 : 5 / 3. * (x - .4);
         if (p->perm < 3)
           c[(2 + p->perm) % 3] = x < .4? 0 : 5 / 3. * (x - .4);
@@ -634,7 +791,7 @@ static void make_palette(priv_t const * p, png_color * palette)
       palette[at].blue = .5 + 255 * c[2];
       continue;
     }
-    if (p->high_colour) {
+    if (p->high_color) {
       static const int states[3][7] = {
         {4,5,0,0,2,1,1}, {0,0,2,1,1,3,2}, {4,1,1,3,0,0,2}};
       int j, phase_num = min(7 * x, 6);
@@ -715,20 +872,97 @@ static void print_at_(png_byte * pixels, int cols, int x, int y, int c, char con
   }
 }
 
-static int axis(double to, int max_steps, double * limit, char * * prefix)
+/*
+ * axis(): Choose linear label positions at a power of ten times 1, 2 or 5
+ * for a range of values from "from" to "to" covering a range of "total" pixels,
+ * for labels of "label_size" pixels with a minimum distance in pixels
+ * between labels of "min_spacing".
+ *
+ * Returns a mallocked array of values at which ticks should be placed,
+ * which it is the caller's responsibility to free, and stores the
+ * size of the array in *nlabels and a pointer to a string whose
+ * first character should be printed as the unit scalar ("m", "k" etc
+ * or "" if there is no scalar).
+ *
+ * The logarithmic frequency axis has its own separate labelling code.
+ */
+
+/* Forward declarations for axis() */
+static float *linear_axis(float from, float to, float step, unsigned *nlabels);
+
+static float *axis(float from, float to, unsigned total, unsigned min_spacing,
+                   unsigned * nlabels_p, float *scale_p, char * * prefix_p)
 {
-  double scale = 1, step = max(1, 10 * to);
-  int i, prefix_num = 0;
-  if (max_steps) {
-    double try, log_10 = HUGE_VAL, min_step = (to *= 10) / max_steps;
-    for (i = 5; i; i >>= 1) if ((try = ceil(log10(min_step * i))) <= log_10)
-      step = pow(10., log_10 = try) / i, log_10 -= i > 1;
-    prefix_num = floor(log_10 / 3);
-    scale = pow(10., -3. * prefix_num);
+  int prefix_num;
+  float scale;      /* Power of ten we are considering as a step */
+
+  if (min_spacing == 0) return NULL; /* Otherwise it may never terminate or
+                                      * return an infinite list */
+
+  for (scale=1e-12, prefix_num=0; scale <= 1e+18; scale *= 1000, prefix_num++)
+  {
+    /* The difference in pixels if you add scale to a value */
+    float distance = total / ((to - from) / scale);
+
+    *prefix_p = prefix_num == 4 ? "" : &"pnum-kMGTPE"[prefix_num];
+    *scale_p = scale;
+    if (distance * .1 >= min_spacing)
+      return linear_axis(from, to, scale * .1, nlabels_p);
+    if (distance * .2 >= min_spacing)
+      return linear_axis(from, to, scale * .2, nlabels_p);
+    if (distance * .5 >= min_spacing)
+      return linear_axis(from, to, scale * .5, nlabels_p);
+    if (distance * 1 >= min_spacing)
+      return linear_axis(from, to, scale * 1, nlabels_p);
+    if (distance * 2 >= min_spacing)
+      return linear_axis(from, to, scale * 2, nlabels_p);
+    if (distance * 5 >= min_spacing)
+      return linear_axis(from, to, scale * 5, nlabels_p);
+    if (distance * 10 >= min_spacing)
+      return linear_axis(from, to, scale * 10, nlabels_p);
+    if (distance * 20 >= min_spacing)
+      return linear_axis(from, to, scale * 20, nlabels_p);
+    if (distance * 50 >= min_spacing)
+      return linear_axis(from, to, scale * 50, nlabels_p);
   }
-  *prefix = &"pnum-kMGTPE"[prefix_num + (prefix_num? 4 : 11)];
-  *limit = to * scale;
-  return step * scale + .5;
+  /* "can't happen" */
+  *prefix_p = "?";
+  *scale_p = scale;
+  return linear_axis(from, to, scale * 1, nlabels_p);
+}
+
+/* Slop factor to allow for rounding errors at boundaries */
+#define DELTA 1e-6
+/* Comparisons allowing for slop */
+#define DELTA_LT(a,b) ((a) < (b) - DELTA)
+#define DELTA_LE(a,b) ((a) <= (b) + DELTA)
+#define DELTA_GT(a,b) ((a) > (b) + DELTA)
+#define DELTA_GE(a,b) ((a) >= (b) - DELTA)
+#define DELTA_EQ(a,b) (DELTA_GE(a,b) && DELTA_LE(a,b))
+#define DELTA_NE(a,b) (!DELTA_NE(a,b))
+
+static float *linear_axis(float from, float to, float step, unsigned *nlabels)
+{
+  float first_label;  /* The lowest multiple of step that's >= from */
+  float last_label;   /* The highest multiple of step that's <= to */
+  unsigned n;         /* The number of labels we have placed */
+  float *labels;      /* What we will return */
+  float value;        /* Loop variable for the values of labels */
+
+  for (first_label = 0; DELTA_LT(first_label, from); first_label += step)
+    ;
+  for (last_label = first_label;
+       DELTA_LE(last_label + step, to);
+       last_label += step) ;
+  n = 1;
+  lsx_valloc(labels, n);
+  labels[0] = first_label;
+  for (value = first_label + step; DELTA_LE(value, last_label); value += step) {
+    lsx_revalloc(labels, n + 1);
+    labels[n++] = value;
+  }
+
+  *nlabels = n; return labels;
 }
 
 #define below 48
@@ -737,12 +971,22 @@ static int axis(double to, int max_steps, double * limit, char * * prefix)
 #define spectrum_width 14
 #define right 35
 
-static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
+/* Code use in several places to draw frequency labels */
+#define frequency_label(y, f)                                       \
+do { char text[16];                                              \
+  if ((y) >= 0 && (y) < p->rows) {                                   \
+    sprintf(text, "%5i", (f));  /* Tick label (left) */            \
+    print_at(left - 4 - font_X * 5, base + (y) + 5, Labels, text); \
+    sprintf(text, "%i",  (f));     /* Tick label (right) */        \
+    print_at(left + p->cols + 6, base + (y) + 5, Labels, text);    \
+  } } while(0)
+
+static int stop_spectrogram(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 {
   priv_t *    p        = (priv_t *) effp->priv;
   uLong       font_len = 96 * font_y;
   int         chans    = effp->in_signal.channels;
-  int         c_rows   = p->rows * chans + chans - 1;
+  int         c_rows   = p->rows * chans + (!p->raw && !p->no_axes) * (chans - 1);
   int         rows     = p->raw? c_rows : below + c_rows + 30 + 20 * !!p->title;
   int         cols     = p->raw? p->cols : left + p->cols + between + spectrum_width + right;
   png_byte *  pixels;
@@ -753,7 +997,20 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
   float log10_low_freq, log10_high_freq;
   float nyquist_freq = (float)effp->in_signal.rate / 2;
 
-  /* set default values for frequency range */
+  if (effp->flow != 0) goto free_flow_data;
+
+/* Map a frequency to its index in dBfs[] (Note: floating point) */
+#define freq_to_index(freq) ((freq) * p->rows / nyquist_freq)
+
+/* Map a pixel row to the frequency its center represents */
+#define row_to_freq(row) (p->log10_axis \
+             ? powf(10.0f, (float)(row) * log_scale_factor + log10_low_freq) \
+             : (float)(row) * lin_scale_factor + p->low_freq)
+
+/* Map a pixel row to its index in dBfs */
+#define row_to_index(row) freq_to_index(row_to_freq(row))
+
+  /* Set default values for frequency range */
   if (p->high_freq == -1) {
     p->high_freq = effp->in_signal.rate/2;
   }
@@ -784,8 +1041,10 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
     int chan;
 
     for (chan = 0; chan < chans; ++chan) {
-      float log_scale_factor = (log10_high_freq- log10_low_freq)/(float)p->rows;
-      float lin_scale_factor = (p->high_freq-p->low_freq)/(float)(p->rows);
+      float log_scale_factor = (log10_high_freq - log10_low_freq) /
+                               (float)(p->rows - 1);
+      float lin_scale_factor = (p->high_freq - p->low_freq) /
+                               (float)(p->rows - 1);
       priv_t * q = (priv_t *)(effp - effp->flow + chan)->priv;
       int row, base;
 
@@ -793,30 +1052,80 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 	int row, col;
 
 	for (row=p->rows-1; row >=0; row--)
-	  for (col=p->cols-1; col >=0; col--)
+	  for (col=p->cols-1; col >= 0; col--)
 	    pdBfs(q, row, col) += autogain;
       }
 
-      base = !p->raw * below + (chans - 1 - chan) * (p->rows + 1);
+      base = !p->raw * below + (chans - 1 - chan) * (p->rows + (!p->raw && !p->no_axes));
 
       for (row = 0; row < p->rows; ++row) {
-	int dBfsi, col;
-	float freq;
+        if (!p->interpolate) {
+	  /* dBfsi: index into dBfs[] nearest to the frequency */
+	  int this_i = lrint(row_to_index(row));
+          int col;
 
-	if (p->log10_axis) {
-	  freq = powf(10.0f, (float)row * log_scale_factor + log10_low_freq);
-	} else {
-	  freq = (float)row * lin_scale_factor + p->low_freq;
-	}
-	/* dBfsi: index into dBfs[] corresponding to frequency at this row */
-	dBfsi = lrint(freq * p->rows / nyquist_freq);
-	/* It is possible that upper freq > Nyquist freq: deal with that */
-	if (dBfsi >= p->rows) {
-	  dBfsi = p->rows - 1;
-	}
-	for (col = 0; col < p->cols; ++col) {
-	  pixel(!p->raw * left + col, base + row) =
-	    colour(p, pdBfs(q, dBfsi, col));
+          if (this_i >= p->rows) this_i = p->rows - 1;
+
+	  for (col = 0; col < p->cols; ++col)
+	     pixel(!p->raw * left + col, base + row) =
+                   color(p, pdBfs(q, this_i, col));
+        } else {
+          /* Interpolation, of two kinds:
+           * when output pixels are denser that the frequency bins,
+           * we invent more output points with a weighted average of
+           * the magnitudes of the bins below and above;
+           * when output pixels are denser than the frequency bins we
+           * average the magnitudes of bins that fall within this pixel row.
+           */
+          /* Indices into the frequency bins for this row and the one above */
+          float this = row_to_index(row);
+          float next = row_to_index(row + 1);
+
+          if (next - this <= 1.0) {
+            /* Output pixels are denser than frequency bins:
+             * do a weighted average of the bins below and above. */
+
+	    /* The index into dBfs[] at or below this row */
+	    int this_i = (int) this;
+            float fraction = this - this_i;
+            int col;
+
+            /* Deal with freq > Nyquist freq and < lowest frequency */
+
+            if (fraction) for (col = 0; col < p->cols; ++col) {
+              float dBfs = pdBfs(q, this_i, col);
+              dBfs += fraction * (pdBfs(q, this_i + 1, col) - dBfs);
+              pixel(!p->raw * left + col, base + row) = color(p, dBfs);
+            } else for (col = 0; col < p->cols; ++col) {
+              float dBfs = pdBfs(q, this_i, col);
+              pixel(!p->raw * left + col, base + row) = color(p, dBfs);
+            }
+          } else {
+            /* Output pixels are sparser than the frequency bins:
+             * average the bins that fall into this output row. */
+	    int this_i = (int)this;
+	    int next_i = (int)next;
+            int col;
+
+            for (col = 0; col < p->cols; ++col) {
+              /* Take a proportion of the first bin */
+              float count = 1.0 - (this - this_i);
+              float sum = pdBfs(q, this_i, col) * count;
+              int i;
+
+              /* plus the ones in between */
+              for (i = this_i + 1; i < next_i; i++) {
+                sum += pdBfs(q, i, col);
+                count++;
+              }
+
+              /* and part of the last one */
+              sum += pdBfs(q, next_i, col) * (next - next_i);
+              count += next - next_i;
+
+              pixel(!p->raw * left + col, base + row) = color(p, sum/count);
+            }
+          }
 	}
 	/* Y-axis lines */
 	if (!p->raw && !p->no_axes) {
@@ -848,40 +1157,75 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 
     /* X-axis */
     {
-      int step;
-      double dstep;
-      double limit;
+      float *labels;
+      unsigned nlabels;
+      float scale;
       char *prefix;
-      char text[16];
+      char text[32];
 
-      dstep = step =
-	axis(secs(p->cols), p->cols / (font_X * 9 / 2), &limit, &prefix);
+      labels = axis(0, secs(p->cols), p->cols, (font_X * 9 / 2),
+                    &nlabels, &scale, &prefix);
       sprintf(text, "Time (%.1ss)", prefix);               /* Axis label */
       print_at(left + (p->cols - font_X * (int)strlen(text)) / 2, 24, Text, text);
-      { int i, di;
-	for (i = 0, di = 0; i <= limit; i += step, di += dstep) {
-	  int x = limit? di / limit * p->cols + .5 : 0;
+      { unsigned i;
+        float gap = labels[1] - labels[0];
+
+	for (i = 0; i < nlabels; i++) {
+          float f = labels[i];
+	  int x = left + (p->cols * f / secs(p->cols));
 	  int y;
 
 	  for (y = 0; y < tick_len; ++y) {                   /* Ticks */
-	    pixel(left-1+x, below-1-y) = Grid;
-	    pixel(left-1+x, below+c_rows+y) = Grid;
+	    pixel(x-1, below-1-y) = Grid;
+	    pixel(x-1, below+c_rows+y) = Grid;
 	  }
-	  if (step == 5 && (i%10))
-	    continue;
-	  sprintf(text, "%g", .1 * di);     /* Tick labels */
-	  x = left + x - 3 * strlen(text);
+          /* Omit labels and just put ticks for 10.5 etc
+           * when the step is 0.5 */
+          if (DELTA_EQ(f/scale - floor(f/scale), 0.5)) {
+            /* Check the step size too */
+            if (i > 0 &&
+                DELTA_EQ(labels[i]/scale - labels[i-1]/scale, 0.5))
+              continue;
+            if (i < nlabels - 1 &&
+                DELTA_EQ(labels[i+1]/scale - labels[i]/scale, 0.5))
+              continue;
+          }
+          /* Tick labels */
+          if (p->hh_mm_ss && !strlen(prefix) && gap > 1 ) {
+            /* Time in seconds then hh:mm:ss format */
+            int hour = 0, min = 0, sec, tick;
+
+            tick = f / scale;
+            sec = tick;
+            if (tick >= 3600)
+                    hour = tick / 3600;
+            if (tick >= 60){
+                    min = tick / 60;
+                    sec = tick % 60;
+            }
+            if (hour != 0)
+                    sprintf(text, "%.2d:%.2d:%.2d", hour, min, sec);
+            else
+                    sprintf(text, "%.2d:%.2d", min, sec);
+          } else {
+                    sprintf(text, "%g", f / scale);     /* Labels */
+          }
+	  x = x - 3 * strlen(text);
 	  print_at(x, below - 6, Labels, text);
 	  print_at(x, below + c_rows + 14, Labels, text);
 	}
       }
+      free(labels);
 
       /* Y-axis */
       if (p->log10_axis) {
 	/* Log Y axis ticks and labels */
 	int start_decade = (int)log10_low_freq;
 	int end_decade = (int)log10_high_freq;
-	float log_scale = (float)p->rows / (log10_high_freq - log10_low_freq);
+	float log_scale = (float)(p->rows - 1) /
+                          (log10_high_freq - log10_low_freq);
+        /* Whether to add labels on positions 2 and 5 or one to nine */
+        enum { undecided, two_and_five, one_to_nine } intra_labels = undecided;
 
 	sprintf(text, "Frequency (Hz)");
 	print_up(10, below + (c_rows - font_X * (int)strlen(text)) / 2, Text, text);
@@ -890,34 +1234,25 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 	  int chan;
 
 	  for (chan = 0; chan < chans; ++chan) {
-	    int base = below + chan * (p->rows + 1);
+	    int base = below + chan * (p->rows + (!p->raw && !p->no_axes));
 	    int i;
 	    float fi;
 
 	    /* Label 10^n decades in view */
 	    for (fi = i = start_decade; i <= end_decade; i++, fi++) {
 	      int f = (int)powf(10.0, fi);
+	      int y = (fi - log10_low_freq) * log_scale;
 
-	      {
-		int y = (fi - log10_low_freq) * log_scale;
-
-		if (y >= 0) {
-		  char text[16];
-		  sprintf(text, "%5i", f);  /* Tick label (left) */
-		  print_at(left - 4 - font_X * 5, base + y + 5, Labels, text);
-		  sprintf(text, "%i",  f);     /* Tick label (right) */
-		  print_at(left + p->cols + 6, base + y + 5, Labels, text);
-		}
-	      }
+              frequency_label(y, f);
 
 	      /* intra-decade tick marks */
 	      {
 	        int j;
 
-		for (j = 1; j <= 10; j++) {
+		for (j = 1; j < 10; j++) {
 		  int y = (log10f((float)(j * f)) - log10_low_freq) * log_scale;
 
-		  if (y > 0 && y < p->rows) {
+		  if (y >= 0 && y < p->rows) {
 		    int x;
 
 		    for (x = 0; x < tick_len; ++x) {
@@ -927,47 +1262,109 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
 		  }
 		}
 	      }
+	      /* Intra-decade labels on every tick or at 2 and 5
+               * depending how close together 9 and 10 are.
+               *
+               * We have to decide once-and-for-all whether to put labels
+               * on every value or just on 2 and 5 because otherwise you
+               * can get 1 to 9 on one decade and 2 and 5 an another due to
+               * different rounded Y positions of 9 and 10 in different decades.
+               */
+	      {
+                int y9, y10;
+	        int j, y;
+
+                switch (intra_labels) {
+                case undecided:
+                  /* Put them on every tick if the distance between 9 and 10
+                   * respects the minimum label spacing, 2 and 5 otherwise */
+                  y9  = (log10f((float)( 9 * f)) - log10_low_freq) * log_scale;
+                  y10 = (log10f((float)(10 * f)) - log10_low_freq) * log_scale;
+                  if (y10 - y9 >= (font_y * 3) / 2) {
+                    intra_labels = one_to_nine;
+                    goto one_to_nine;
+                  } else {
+                    intra_labels = two_and_five;
+                    goto two_and_five;
+                  }
+                  break;
+                case one_to_nine:
+one_to_nine:      for (j = 1; j <= 9; j++) {
+		    y = (log10f((float)(j * f)) - log10_low_freq) * log_scale;
+                    frequency_label(y, j * f);
+                  }
+                  break;
+two_and_five:   case two_and_five:
+		  for (j = 2; j <= 5; j+=3) {
+		    y = (log10f((float)(j * f)) - log10_low_freq) * log_scale;
+                    frequency_label(y, j * f);
+		  }
+                  break;
+		}
+	      }
 	    }
 	  }
 	}
       } else {
-	/* Linear Y axis ticks and labels */
-	double limit;
-	char *prefix;
+        /* Linear Y axis ticks and labels */
+        float *labels;
+        unsigned nlabels;
+        char *prefix;
+        float scale;
         char text[16]; /* exactly! */
-	int step;
-	double dstep;
 
-	dstep = step = axis(p->high_freq - p->low_freq,
-			    (p->rows - 1) / ((font_y * 3 + 1) >> 1),
-			    &limit, &prefix);
-	sprintf(text, "Frequency (%.1sHz)", prefix);         /* Axis label */
-	print_up(10, below + (c_rows - font_X * (int)strlen(text)) / 2, Text, text);
-	{ int chan;
-	  for (chan = 0; chan < chans; ++chan) {
-	    int base = below + chan * (p->rows + 1);
-	    int i;
-	    double di;
+        labels = axis(p->low_freq, p->high_freq, p->rows, (font_y * 3) / 2,
+                      &nlabels, &scale, &prefix);
+        sprintf(text, "Frequency (%.1sHz)", prefix);         /* Axis label */
+        print_up(10, below + (c_rows - font_X * (int)strlen(text)) / 2, Text, text);
+        { int chan;
+          for (chan = 0; chan < chans; ++chan) {
+            int base = below + chan * (p->rows + !p->no_axes);
+            unsigned i;
 
-	    for (di = i = 0; i <= limit; i += step, di += dstep) {
-	      int f = p->low_freq/100 + i;       /* Frequency in 100Hz units */
-	      int y = limit ? di / limit * (p->rows - 1) + .5 : 0;
-	      int x;
+            for (i=0; i < nlabels; i++) {
+              float f = labels[i];
+              int y = base + (p->rows - 1) * (f - p->low_freq)
+                                           / (p->high_freq - p->low_freq);
+              int x;
 
-	      for (x = 0; x < tick_len; ++x) {                 /* Ticks */
-		pixel(left - 1 - x, base + y) = Grid;
-	        pixel(left + p->cols + x, base + y) = Grid;
-	      }
-	      if ((step == 5 && (i % 10)) || (!i && chan && chans > 1))
-		continue;
+              for (x = 0; x < tick_len; ++x) {                 /* Ticks */
+                pixel(left - 1 - x, y) = Grid;
+                pixel(left + p->cols + x, y) = Grid;
+              }
+              /* Omit labels and just put ticks for 9.5, 10.5 etc.
+               * when the step is 0.5 */
+              if (DELTA_EQ(f/scale - floor(f/scale), 0.5)) {
+                if (i > 0 &&
+                    DELTA_EQ(labels[i]/scale - labels[i-1]/scale, 0.5))
+                  continue;
+                if (i < nlabels - 1 &&
+                    DELTA_EQ(labels[i+1]/scale - labels[i]/scale, 0.5))
+                  continue;
+              }
+              /* Omit the bottom label of all except the first channel to
+               * avoid label overlap with the top label of the channel below
+               * if the distance between the centers of the labels is less
+               * that the height of the font.
+               */
+              if (chan > 0 && i == 0) {
+                /* These two repeat the "base =" and "y =" lines above */
+                int prev_top_label_y = below + (chan - 1) * ((p->rows - 1) + !p->no_axes)
+                                     + p->rows * (labels[nlabels - 1] - p->low_freq) / (p->high_freq - p->low_freq);
+                int this_bot_label_y = below + chan * ((p->rows - 1) + !p->no_axes)
+                                     + p->rows * (f - p->low_freq) / (p->high_freq - p->low_freq);
+                if (this_bot_label_y - prev_top_label_y < font_y)
+                  continue;
+              }
 
-	      sprintf(text, f?"%5g":"   DC", .1 * f);         /* Tick labels */
-	      print_at(left - 4 - font_X * 5, base + y + 5, Labels, text);
-	      sprintf(text, f?"%g":"DC", .1 * f);
-	      print_at(left + p->cols + 6, base + y + 5, Labels, text);
-	    }
-	  }
-	}
+              sprintf(text, f?"%5g":"   DC", f / scale);         /* Labels */
+              print_at(left - 4 - font_X * 5, y + 5, Labels, text);
+              sprintf(text, f?"%g":"DC", f / scale);
+              print_at(left + p->cols + 6, y + 5, Labels, text);
+            }
+          }
+        }
+        free(labels);
       }
     }
 
@@ -983,7 +1380,7 @@ static int stop(sox_effect_t * effp) /* only called, by end(), on flow 0 */
         int y;
 
 	for (y = 0; y < k; ++y) {                          /* Spectrum */
-	  png_byte b = colour(p, p->dB_range * (y / (k - 1.) - 1));
+	  png_byte b = color(p, p->dB_range * (y / (k - 1.) - 1));
 	  int x;
 
 	  for (x = 0; x < spectrum_width; ++x)
@@ -1045,25 +1442,18 @@ error:
     free(png_rows);
   }
   free(pixels);
+
+free_flow_data:
   free_tiles(p);
   free(p->buf);
   free(p->dft_buf);
+#if HAVE_FFTW
+  free(p->dft_buf2);
+#endif
   free(p->window);
   free(p->magnitudes);
 #if HAVE_FFTW
   fftw_destroy_plan(p->fftw_plan);
-#endif
-  return SOX_SUCCESS;
-}
-
-static int end(sox_effect_t * effp)
-{
-  priv_t *p = (priv_t *)effp->priv;
-  if (effp->flow == 0)
-    return stop(effp);
-  free_tiles(p);
-#if HAVE_FFTW
-  if (p->fftw_plan) fftw_destroy_plan(p->fftw_plan);
 #endif
   return SOX_SUCCESS;
 }
@@ -1074,34 +1464,39 @@ sox_effect_handler_t const * lsx_spectrogram_effect_fn(void)
   static char const * const extra_usage[] = {
 "-x num  X-axis size in pixels; default: derived from -X and -d, or 800",
 "-X num  X-axis pixels/second; default: derived from -x and -d, or 100",
-"-y num  Y-axis size in pixels per channel",
+"-d time Time to fit to the X-axis (default: all of it unless -X and -x)",
+"-y num  Y-axis size in pixels per channel; default: -Y num / nchannels, ",
 "-Y num  Total height; default 550",
 "-z num  Z-axis range in dB; default 120",
 "-Z num  Z-axis maximum in dBFS; default 0",
+"-L      Plot the frequency on a logarithmic axis",
+"-R L:H  Specify the frequency range (from L to H)",
+"-i      Interpolate between or average frequency bins",
 "-n      normalize: Set Z-axis maximum to the brightest pixel",
-"-q num  Z-axis quantisation (0-249); default 249",
+"-q num  Z-axis quantization (0-249); default 249",
 "-w name Window: Hann(default)/Hamming/Bartlett/Rectangular/Kaiser/Dolph",
 "-W num  Window adjust parameter (-10-10); applies only to Kaiser/Dolph",
 "-s      Slack overlap of windows",
 "-a      Suppress axis lines",
 "-r      Raw spectrogram: no axes or legends",
+"-g      Show many seconds in hh:mm:ss format",
 "-l      Light background",
 "-m      Monochrome",
-"-h      High colour",
-"-L      Plot the frequency on logarithmic axis",
-"-R L:H  Specify the frequency range (from L to H)",
+"-h      High color",
 "-p num  Permute colors (1-6); default 1",
 "-A      Alternative, inferior, fixed color-set",
 "-t text Title text",
 "-c text Comment text",
 "-o text Output file name; default `spectrogram.png'",
-"-d time Audio duration to fit to the X-axis",
 "-S pos  Start the spectrogram at the given input time",
     NULL
   };
   static sox_effect_handler_t handler = {
-    "spectrogram", usage, extra_usage, SOX_EFF_MODIFY,
-    getopts, start, flow, drain, end, 0, sizeof(priv_t)};
+    "spectrogram", usage, SOX_EFF_MODIFY,
+    getopts_spectrogram, start_spectrogram, flow_spectrogram,
+    drain_spectrogram, stop_spectrogram, NULL,
+    sizeof(priv_t), extra_usage, NULL, NULL,
+  };
 
   return &handler;
 }

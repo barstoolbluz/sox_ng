@@ -1,6 +1,8 @@
 '\" t
 '\" The line above instructs most `man' programs to invoke tbl
 '\"
+.nr IN 4n
+.nr SN 4n
 '\" Separate paragraphs; not the same as PP which resets indent level.
 .de SP
 .if t .sp .5
@@ -8,7 +10,7 @@
 ..
 '\"
 '\" Replacement em-dash for nroff (default is too short).
-.ie n .ds m " - 
+.ie n .ds m " -
 .el .ds m \(em
 '\"
 '\" Placeholder macro for if longer nroff arrow is needed.
@@ -19,6 +21,8 @@
 .if n .ds d .
 '\"
 '\" Enclosure macro for examples
+'\" From groff-1.23 CW is undeclared by default but nroff is CW anyway
+.if n .ftr CW R
 .de XE
 .SP
 .nf
@@ -29,537 +33,1533 @@
 .SP
 .fi
 ..
-.TH SoX 3 "August 11, 2024" "libsox_ng" "Sound eXchange_ng"
+.TH LIBSOX_NG 3 "August 11, 2024" "SoX" "Sound eXchange_ng"
 .SH NAME
-libsox_ng, another audio file-format and effect library
+libsox_ng \- another audio file format and effect library
 .SH SYNOPSIS
-.B #include <sox_ng.h>
-.na
-.nh
+#include <sox_ng.h>
 .P
-.B int sox_format_init(void);
-.P
-.B void sox_format_quit(void);
-.P
-.B sox_format_t\ *\:sox_open_read(char\ const\ *\fIpath\fB, sox_signalinfo_t\ const\ *\fIsignal\fB, sox_encodinginfo_t\ const\ *\fIencoding\fB, char\ const\ *\fIfiletype\fB);
-.P
-.B sox_format_t\ *\:sox_open_write(char\ const\ *\fIfilename\fB, sox_signalinfo_t\ const\ *\fIsignal\fB, sox_encodinginfo_t\ const\ *\fIencoding\fB, char\ const\ *\fIfiletype\fB, sox_oob_t\ const\ *\fIoob\fB, sox_bool\ (*overwrite_permitted)(char\ const\ *\fIfilename\fB));
-.P
-.B size_t\ sox_read(sox_format_t\ *\fIformat\fB, sox_sample_t\ *\fIbuf\fB, size_t\ \fIlen\fB);
-.P
-.B size_t\ sox_write(sox_format_t\ *\fIformat\fB, sox_sample_t\ const\ *\fIbuf\fB, size_t\ \fIlen\fB);
-.P
-.B int\ sox_seek(sox_format_t\ *\fIformat\fB, size_t\ \fIoffset\fB, int\ \fIwhence\fB);
-.P
-.B int\ sox_close(sox_format_t\ *\fIformat\fB);
-.P
-.B sox_effect_handler_t\ const\ *\:sox_find_effect(char\ const\ *\fIname\fB);
-.P
-.B sox_effect_t\ *\:sox_create_effect(sox_effect_handler_t\ const\ *\fIeffect\fB);
-.P
-.B int sox_effect_options(sox_effect_t\ *\fIeffect\fB, int\ \fIargc\fB, char\ *\ const\ \fIargv\fB[]);
-.P
-.B sox_effects_chain_t\ *\:sox_create_effects_chain(sox_encodinginfo_t\ const\ *\fIin_enc\fB, sox_encodinginfo_t\ const\ *\fIout_enc\fB);
-.P
-.B int sox_add_effect(sox_effects_chain_t\ *\fIchain\fB, sox_effect_t\ *\fIeffect\fB, sox_signalinfo_t\  *\fIin\fB, sox_signalinfo_t\  const\  *\fIout\fB);
-.P
-.B void sox_delete_effects_chain(sox_effects_chain_t\  *\fIecp\fB);
-.P
-.B cc \fIfile.c\fB -o \fIfile \fB-lsox_ng
-.SH TYPES
-The following structures describe audio file formats
-and how they encode samples:
-.XE
-typedef struct sox_format_t {
-  char         *filename;       /* File name                        */
-  sox_signalinfo_t   signal;    /* Signal specifications            */
-  sox_encodinginfo_t encoding;  /* Encoding/decoding specifications */
-  char         *filetype;       /* Type of file, "wav" etc.         */
-  sox_oob_t    oob;             /* Out-of-band data                 */
-  sox_bool     seekable;        /* Can we seek in this file?        */
-  char         mode;            /* Read or write mode ('r' or 'w')  */
-  sox_uint64_t olength;         /* Samples * chans written to file  */
-  sox_uint64_t clips;           /* Incremented if clipping occurs   */
-  int          sox_errno;       /* Failure error code               */
-  char         sox_errstr[256]; /* Failure error text               */
-  ...
-} sox_format_t;
-
-typedef double sox_rate_t;      /* sample frames per second         */
-
-typedef struct sox_signalinfo_t {
-  sox_rate_t   rate;      /* samples per second, 0 if unknown       */
-  unsigned     channels;  /* number of sound channels, 0 if unknown */
-  unsigned     precision; /* bits per sample, 0 if unknown          */
-  sox_uint64_t length;    /* samples * chans in file, 0 if unknown  */
-  ...
-} sox_signalinfo_t;
-
-typedef struct sox_encodinginfo_t {
-  sox_encoding_t encoding;      /* format of sample numbers         */
-  unsigned bits_per_sample;     /* 0 if unknown or variable;
-                                 * uncompressed value if lossless;
-                                 * compressed value if lossy        */
-  double compression;           /* compression factor if applicable */
-  sox_option_t reverse_bytes;   /* should bytes be reversed?        */
-  sox_option_t reverse_nibbles; /* should nibbles be reversed?      */
-  sox_option_t reverse_bits;    /* should bits be reversed?         */
-  sox_bool opposite_endian;     /* reverse the default endianness?  */
-} sox_encodinginfo_t;
-
-typedef struct sox_oob_t {
-  sox_comments_t   comments;         /* comment strings as id=value */
-  sox_instrinfo_t  instr;               /* instrument specification */
-  sox_loopinfo_t   loops[SOX_MAX_NLOOPS];  /* looping specification */
-} sox_oob_t;
-
-typedef char **sox_comments_t;
-
-typedef sox_int32_t sox_sample_t;   /* native SoX audio sample type */
-
-typedef enum sox_option_t {
-  sox_option_no,                     /* option specified as no  = 0 */
-  sox_option_yes,                    /* option specified as yes = 1 */
-  sox_option_default                 /* option unspecified      = 2 */
-} sox_option_t;
-
-typedef enum sox_bool {
-  sox_false,                                           /* false = 0 */
-  sox_true                                             /* true  = 1 */
-} sox_bool;
-
-typedef enum sox_encoding_t {
-SOX_ENCODING_UNKNOWN   ,/* encoding has not yet been determined      */
-SOX_ENCODING_SIGN2     ,/* signed linear 2's comp: Mac               */
-SOX_ENCODING_UNSIGNED  ,/* unsigned linear: Sound Blaster            */
-SOX_ENCODING_FLOAT     ,/* floating point (binary format)            */
-SOX_ENCODING_FLOAT_TEXT,/* floating point (text format)              */
-SOX_ENCODING_FLAC      ,/* FLAC compression                          */
-SOX_ENCODING_HCOM      ,/* Mac FSSD files with Huffman compression   */
-SOX_ENCODING_WAVPACK   ,/* WavPack with integer samples              */
-SOX_ENCODING_WAVPACKF  ,/* WavPack with float samples                */
-SOX_ENCODING_ULAW      ,/* u-law signed logs: US telephony/SPARC     */
-SOX_ENCODING_ALAW      ,/* A-law signed logs: non-US telephony/Psion */
-SOX_ENCODING_G721      ,/* G.721 4-bit ADPCM                         */
-SOX_ENCODING_G723      ,/* G.723 3 or 5 bit ADPCM                    */
-SOX_ENCODING_CL_ADPCM  ,/* Creative Labs 8->2,3,4-bit compressed PCM */
-SOX_ENCODING_CL_ADPCM16,/* Creative Labs 16->4-bit compressed PCM    */
-SOX_ENCODING_MS_ADPCM  ,/* Microsoft compressed PCM                  */
-SOX_ENCODING_IMA_ADPCM ,/* IMA compressed PCM                        */
-SOX_ENCODING_OKI_ADPCM ,/* Dialogic/OKI compressed PCM               */
-SOX_ENCODING_DPCM      ,/* Differential PCM: Fasttracker 2 (xi)      */
-SOX_ENCODING_DWVW      ,/* Delta Width Variable Word                 */
-SOX_ENCODING_DWVWN     ,/* Delta Width Variable Word N-bit           */
-SOX_ENCODING_GSM       ,/* GSM 6.10 33byte frame lossy compression   */
-SOX_ENCODING_MP3       ,/* MP3 compression                           */
-SOX_ENCODING_VORBIS    ,/* Vorbis compression                        */
-SOX_ENCODING_AMR_WB    ,/* AMR-WB compression                        */
-SOX_ENCODING_AMR_NB    ,/* AMR-NB compression                        */
-SOX_ENCODING_CVSD      ,/* Continuously Variable Slope Delta         */
-SOX_ENCODING_LPC10     ,/* Linear Predictive Coding                  */
-SOX_ENCODING_OPUS      ,/* Opus compression                          */
-SOX_ENCODING_DSD       ,/* Direct Stream Digital                     */
-SOX_ENCODINGS           /* end of list marker                        */
-} sox_encoding_t;
-.XX
-.hy
-.ad
+cc -o file file.c -lsox_ng
 .SH DESCRIPTION
-.I libsox_ng
+.B libsox_ng
 is a library of sound sample file format readers/writers and sound
 effects processors. It is mainly developed to be used by SoX
 but any audio application might find it useful.
-.P
-This is not really a manual for the libsox_ng API;
-it is an introduction to the basic operations
-for reading and writing audio files and how to use effect chains,
-followed by notes on how to write new format handlers and effects.
-For an exhaustive description of the libsox_ng API see
-http://martinwguy.net/test/soxygen/sox_8h.html
+.PP
+If you want to dive straight in reading and writing audio files,
+look at the start of \fBGENERIC FUNCTIONS\fR and
+the section on \fBREADING AND WRITING AUDIO FILES\fP.
+.TP
+.B #include <sox_ng.h>
+Declarations for all of the below (and a lot more!).
+However, you should only use items whose names begin with
+\fBsox_\fR or \fBSOX_\fR; the \fBlsx_\fR and \fBLSX_\fR items
+are intended for internal use by SoX's format and effect handlers.
+They are exported by \fBlibsox\fR so that dynamically-loaded
+format handlers and custom format and effect handlers can use them
+but should not be used by libSoX-based applications.
+.SP
+Programs should normally include \fB<sox.h>\fR to be portable to systems
+that have not upgraded to \fBsox_ng\fR yet; those that have upgraded should
+provide \fB<sox.h>\fR as an alias for \fB<sox_ng.h>\fR and the interface is
+unlikely to change.
+.TP
+.B cc \-o \fIfile file.c\fB \-lsox_ng
+Ensure that if a program includes \fB<sox.h>\fR, it is linked
+with \fB-lsox\fR, and \fB<sox_ng.h>\fR with \fB-lsox_ng\fR as
+some software distributions (or you) may choose to install them both
+side by side and the contents of their internal data structures differ.
+.SH BASIC TYPES
+.sp .5
+.TS
+lB l.
+sox_int8_t	Signed twos-complement 8-bit type
+sox_uint8_t	Unsigned 8-bit type
+sox_int16_t	Signed twos-complement 16-bit type
+sox_uint16_t	Unsigned 16-bit type
+sox_int32_t	Signed twos-complement 32-bit type
+sox_uint32_t	Unsigned 32-bit type
+sox_int64_t	Signed twos-complement 64-bit type
+sox_uint64_t	Unsigned 64-bit type
+sox_int24_t	Alias for \fBsox_int32_t\fP (beware of the extra byte)
+sox_uint24_t	Alias for \fBsox_uint32_t\fP (beware of the extra byte)
+sox_sample_t	Native SoX audio sample type (alias for \fBsox_int32_t\fP)
+sox_rate_t	Samples per second are stored as a double
+sox_bool	Boolean type: \fBsox_false\fP (=\ 0) or \fBsox_true\fP (=\ 1)
+.TE
+.SH ERROR HANDLING
+Most of the functions in libSoX return an integer error code
+which is \fBSOX_SUCCESS\fP if the functions succeeded
+or a \fBsox_error_t\fR which can take the following values:
+.RS
+.TS
+lB l.
+SOX_SUCCESS	Function succeeded = 0
+SOX_EOF	End Of File or other error
+SOX_EHDR	Invalid Audio Header
+SOX_EFMT	Unsupported data format
+SOX_ENOMEM	Can't alloc memory
+SOX_EPERM	Operation not permitted
+SOX_ENOTSUP	Operation not supported
+SOX_EINVAL	Invalid argument
+SOX_ENOKEYMAP	No such keymap
+SOX_ENOEFFECT	No such effect
+.TE
+.RE
+or other values mapped from \fBerrno\fR(3).
+.TP
+.B char *sox_strerror(int \fIsox_errno\fB)
+Converts a SoX error code into an error string and
+returns the error string corresponding to the specified error code,
+or a generic message if the error code is not recognized.
+.SH GENERIC FUNCTIONS
+.TP
+.B int sox_init(void)
+Initialize the effects library.
+Returns \fBSOX_SUCCESS\fP if successful.
 .TP
 .B int sox_format_init(void)
-\fBsox_format_init()\fR performs initialization required by
-all file format handlers.  If compiled with dynamic
-library support, this will detect and initialize all external
-libraries.  It should be called before any file operations
-are performed.
+Find and load format handler plugins.
+Returns \fBSOX_SUCCESS\fP if successful.
 .TP
 .B void sox_format_quit(void)
-\fBsox_format_quit()\fR performs cleanup
-related to all file format handlers and
-should be called after all file operations are completed.
+Unload format handler plugins.
 .TP
-.nh
-.na
-.B sox_format_t\ *\:sox_open_read(char\ const\ *\fIpath\fB, sox_signalinfo_t\ const\ *\fIsignal\fB, sox_encodinginfo_t\ const\ *\fIencoding\fB, char\ const\ *\fIfiletype\fB)
-.ad
-.hy
-\fBsox_open_read()\fR opens a file for reading.
-A special name of `\fB\-\fR' reads data from stdin.
-If \fIsignal\fR is not NULL, it specifies the properties of the audio signal
-such as the sample rate or the number of channels.
-If \fIencoding\fR is not NULL it specifies the sample encoding.
-Both \fIsignal\fR and \fIencoding\fR are normally only needed for
-headerless audio files where that information is not stored in the file.
-If \fIfiletype\fR is not NULL, it specifies the file type as
-the short strings listed in \fBsoxformats(7)\fR;
-otherwise, the file's type is guessed from the filename extension
-and/or the file's contents.
+.B int sox_quit(void)
+Close the effects library and unload format handler plugins.
+Returns \fBSOX_SUCCESS\fP if successful.
+.TP
+.B char *sox_version(void)
+Returns the version number string of libSoX, for example, "14.4.0".
+.TP
+.B sox_version_info_t *sox_version_info(void)
+Returns information about this build of libSoX, containing:
+.RS
+.TP
+.B size_t size
+Structure size = \fBsizeof(sox_version_info_t)\fP
+.TP
+.B sox_version_flags_t flags
+Feature flags bits indicating whether optional features are present
+in this build of libSoX, the logical OR of:
+.RS
+.TP
+.B sox_version_none
+No special features (=\ 0).
+.TP
+.B sox_version_have_popen
+Pipes are available to fetch URLs with \fBwget\fR or \fBcurl\fR,
+to use external codec programs like \fBffmpeg\fR
+and for piped inputs like \f(CW"|sox_ng -n -p synth 1"\fP.
+.TP
+.B sox_version_have_magic
+\fBlibmagic\fR is in use to autodetect the formats of files.
+.TP
+.B sox_version_have_threads
+OpenMP support is included, so effects and channels will run in parallel
+if \fBsox_get_globals()->use_threads\fR has not been set to \fBsox_false\fR.
+.TP
+.B sox_version_have_memopen
+\fBsox_open_mem_read()\fR, \fBsox_open_mem_write()\fR and
+\fBsox_open_memstream_write()\fR do what it says on the box.
+If \fBfmemopen\fR(3) is not available, they fall back to
+\fBsox_open_read()\fR and \fBsox_open_write()\fR.
+.RE
+.TP
+.B sox_uint32_t version_code
+Version number, for example 0x0E0402.
+.TP
+.B char *version
+Version string, for example, "14.4.2".
+.TP
+.B char *version_extra
+Version extra info or \fBNULL\fP, set by \fBPACKAGE_EXTRA\fR, for example, "beta".
+.TP
+.B char *distro
+Distro or \fBNULL\fP, set by \fBDISTRO\fR, for example, "Debian".
+.TP
+.B char *compiler
+Compiler info or \fBNULL\fP, for example, "msvc 160040219".
+.TP
+.B char *arch
+Architecture-dependent feature code.
+For example, "1248 48 44 L OMP" where the first four digits give
+the sizes in bytes of \fBchar\fR, \fBshort\fR, \fBlong\fP and \fBoff_t\fR,
+the next two the sizes of \fBfloat\fP and \fBdouble\fP,
+the next two the sizes of a data pointer and a function pointer,
+followed by \f(CWL\fR if the machine is little-endian
+or \f(CWB\fR if big-endian,
+and \f(CWOMP\fR if multi-threading is available using OpenMP.
+.RE
+.TP
+.B sox_globals_t *sox_get_globals(void)
+Returns a pointer to the structure with global settings
+for formats and effects, containing:
+.RS
+.TP
+.B char *myname
+The name the program was invoked as, for error reporting.
+\fBsox_ng\fR sets this to the bare program name without a directory path
+(or a \f(CW.exe\fR extension on Windows) as "sox_ng", "soxi_ng",
+"play_ng" or "rec_ng", or "sox", "soxi", "play" or "rec" when it
+replaces \fBsox\fR.
 .SP
-Upon successful completion, \fBsox_open_read()\fR returns a
-pointer to a filled \fIsox_format_t\fR, which should eventually
-be closed with \fBsox_close()\fR, or NULL otherwise.
-Currently there is no way to determine the reason for failure
-except for the error message printed on the standard error output (stderr).
+Other programs using \fBlibsox_ng\fR can set it to \fBargv[0]\fR on startup
+if they wish, but it is only used by libSoX when creating
+error messages for \fBlsx_fail()\fP when there are syntax errors
+in effects' options and leaving it \fBNULL\fP is harmless.
+.TP
+.B unsigned verbosity
+Messages are output by the default output message handler
+if \fBsox_get_globals()->verbosity\fP\ >=\ \fIlevel\fP.
+.TP
+.B sox_output_message_handler_t output_message_handler
+The address of a client-specified message output handling function of type
+.B void \fImessage_handler\fR(unsigned \fIlevel\fP, char *\fIfilename\fP, char *\fIfmt\fP, va_list \fIap\fP)
+.RS
+.TP 10
+.B level
+1=FAIL, 2=WARN, 3=INFO, 4=DEBUG, 5=DEBUG_MORE, 6=DEBUG_MOST.
+.TP 10
+.B filename
+Source code \f(CW__FILENAME__\fR from which a message originates.
+.TP 10
+.B fmt
+Message format string.
+.TP 10
+.B ap
+Message format parameters.
+.PP
+For examples of how to use it, see
+\f(CWsrc/example3.c\fR and \f(CWdemo/soxcopy.c\fR.
+.RE
+.TP
+.B sox_bool repeatable
+Use pre-determined timestamps and random number generator seed.
+.TP
+.B size_t bufsiz
+Default size (in bytes) used by libSoX for blocks of sample data.
+Plugins should use similarly-sized buffers to get best performance.
+.TP
+.B size_t input_bufsiz
+Default size (in bytes) used by libSoX for blocks of input sample data.
+Plugins should use similarly-sized buffers to get best performance.
+.TP
+.B sox_int32_t ranqd1
+Can be used to re-seed libSoX's random number generator.
+.TP
+.B size_t log2_dft_min_size
+Log to base 2 of the minimum size used by libSoX for DFT filtering.
+Plugins should use similarly-sized DFTs to get best performance.
+.TP
+.B float A4
+The frequency in Hz of A above middle C, usually 440,
+that is used when converting note names to frequencies.
+.SH FILE FORMAT HANDLERS
+Format handlers deal with decoding and encoding audio files
+and are accessed with the following types and functions:
+.TP
+.B sox_format_handler_t
+Handler structure defined by each format, containing:
+.RS
+.TP
+.B unsigned sox_lib_version_code
+Checked when loading format handler plugins.
+.TP
+.B char *description
+A short description of the format.
+.TP
+.B char **names
+Null-terminated array of filename extensions handled by this format.
+.TP
+.B unsigned int flags
+File flags, the logical OR of:
+.sp .5
+.RS
+.TS
+lB l.
+SOX_FILE_NOSTDIO	Does not use stdio routines
+SOX_FILE_DEVICE	File is an audio device
+SOX_FILE_PHONY	Phony file/device (for example /dev/null)
+SOX_FILE_REWIND	File should be rewound to write header
+SOX_FILE_BIT_REV	Is the file bit-reversed?
+SOX_FILE_NIB_REV	Is the file nibble-reversed?
+SOX_FILE_ENDIAN	Is the file format endian?
+SOX_FILE_ENDBIG	For an endian file format, is it big endian?
+SOX_FILE_MONO	Do channel restrictions allow mono?
+SOX_FILE_STEREO	Do channel restrictions allow stereo?
+SOX_FILE_QUAD	Do channel restrictions allow quad?
+SOX_FILE_LIT_END	A mask to OR in if the file is little-endian
+SOX_FILE_BIG_END	A mask to OR in if the file is big-endian
+SOX_FILE_CHANS	T{
+.ad
+A mask to interrogate channels restrictions.
+If \fBflags\ &\ SOX_FILE_CHANS\fR is 0, there are no restrictions.
+T}
+.TE
+.RE
+.TP
+.B int (*startread)(sox_format_t *\fIft\fP)
+The function to initialize the decoder.
+If it is \fBNULL\fP, the format cannot be read.
 .TP
 .nh
 .na
-.B sox_format_t\ *\:sox_open_write(char\ const\ *\fIfilename\fB, sox_signalinfo_t\ const\ *\fIsignal\fB, sox_encodinginfo_t\ const\ *\fIencoding\fB, char\ const\ *\fIfiletype\fB, sox_oob_t\ const\ *\fIoob\fB, sox_bool\ (*overwrite_permitted)(char\ const\ *\fIfilename\fB))
+.B size_t (*read)(sox_format_t *\fIft\fP, sox_sample_t *\fIbuf\fP, size_t \fIlen\fP)
 .ad
 .hy
-\fBsox_open_write()\fR opens the named file for writing.
-A special name of `\fB\-\fR' writes data to stdout.
-If \fIsignal\fR is not NULL,
-it specifies the data format of the output file;
-the \fIsignal\fR structure filled in by \fBsox_open_read()\fR
-can be used to copy data in the same format.
-If \fIencoding\fR is not NULL, it specifies the desired sample encoding.
-Since most file formats can encode data in different ways,
-this usually has to be specified; if it is NULL, a default is used.
-If \fIfiletype\fR is not NULL, it specifies the type of file to write,
-using the short strings listed in \fBsoxformat_ng\fR(7);
-otherwise, the file type is that of the filename's extension.
-If \fIoob\fR is not NULL and the file type supports comments and
-other out-of-band data like loop points and instrument information,
-these are stored in the file header.
-If \fIoverwrite\fR is not NULL and the file already exists,
-the function is called with the filename as its argument
-to determine whether the file should be overwritten.
-If it is NULL, existing files are overwritten.
-.SP
-\fBsox_open_write()\fR returns a pointer to a \fIsox_format_t\fR
-which must be closed with \fBsox_close()\fR, or NULL if it fails.
-Like \fBsox_open_read()\fR, there is no way to determine the reason for failure
-except for the error message it prints.
+Decode a block of samples.
+.TP
+.B int (*stopread)(sox_format_t *\fIft\fP)
+Close reader (decoder); \fBNULL\fP if no closing necessary.
+.TP
+.B int (*startwrite)(sox_format_t *\fIft\fP)
+The function to initialize the encoder.
+If it is \fBNULL\fP, the format cannot be written.
 .TP
 .nh
 .na
-.B size_t sox_read(sox_format_t\ *\fIformat\fB, sox_sample_t\ *\fIbuf\fB, size_t\ \fIlen\fB)
+.B size_t (*write)(sox_format_t *\fIft\fP, sox_sample_t *\fIbuf\fP, size_t \fIlen\fP);
 .ad
 .hy
-\fBsox_read()\fR reads \fIlen\fR samples into \fIbuf\fR
-using the format handler specified by \fIformat\fR.
-It is the caller's responsibility to provide a large enough buffer for
-up to \fIlen\fR samples.
-All data is converted to 32-bit signed samples before being placed in \fIbuf\fR.
-The value of \fIlen\fR is the total number of samples (number of sample frames
-multiplied by the number of channels) and
-if its value is not a multiple of the number of channels,
-anything might happen.
-.SP
-It returns the number of samples read,
-which may be less tha the number requested,
-or zero at the end of the file or if an error occurred.
-\fBsox_read()\fR's return value does not distiguish between
-the end of a file and an error
-but you can inspect \fBformat->sox_errno\fR to tell the difference.
-It should be \fBSOX_SUCCESS\fR or \fBSOX_EOF\fR unless some other error
-has occurred previously; you can clear \fBformat->sox_errno\fR to 0 beforehand
-to be sure and, if it's something other than \fBSOX_SUCCESS\fR,
-there will be a more explicit reason in \fBformat->sox_errstr\fR.
+Encode a block of sample.
 .TP
-.nh
-.na
-.B size_t sox_read(sox_format_t\ *\fIformat\fB, sox_sample_t\ *\fIbuf\fB, size_t\ \fIlen\fB)
-.ad
-.hy
-\fBsox_read()\fR returns the number of samples successfully read,
-If an error occurs or the end of the file has been reached,
-the return value is zero or \fBSOX_EOF\fR,
-depending on the function.
+.B int (*stopwrite)(sox_format_t *\fIft\fP)
+Close writer (decoder); \fBNULL\fP if no closing necessary.
 .TP
-.nh
-.na
-.B size_t sox_write(sox_format_t\ *\fIformat\fB, sox_sample_t\ const\ *\fIbuf\fB, size_t\ \fIlen\fB)
-.ad
-.hy
-\fBsox_write()\fR writes \fIlen\fR samples from \fIbuf\fR
-to the file described by \fIformat\fR and
-the 32-bit signed data in \fIbuf\fR are converted according to the format.
-The value of \fIlen\fR is the total samples and must be
-divisable by the number of channels, otherwise unexpected things will occur.
-It returns the actual number of samples encoded, zero if an error occurred.
+.B int (*seek)(sox_format_t *\fIft\fP, sox_uint64_t \fIoffset\fP)
+Reposition reader; \fBNULL\fP if not supported.
 .TP
-.nh
-.na
-.B int sox_seek(sox_format_t\ *\fIformat\fB, size_t\ \fIoffset\fB, int\ \fIwhence\fB)
-.hy
-.ad
-\fBsox_seek()\fR repositions the offset of the file associated with
-\fIformat\fR to the given \fIoffset\fR.
-On success, it returns \fBSOX_SUCCESS\fR; \fBSOX_EOF\fR otherwise.
-Since \fBsox_read()\fR and \fBsox_write()\fR carry out complex transformations
-of files' data, its usefulness is questionable.
-.TP
-.B int sox_close(sox_format_t\ *\fIformat\fB)
-\fBsox_close()\fR disassociates a \fBformat\fR from its underlying file.
-If the format handler was being used for output,
-any buffered data are written out first.
-It returns \fBSOX_SUCCESS\fR if all went well;
-if not, \fBSOX_EOF\fR or, occasionally, some other error code.
-Like \fBsox_open_read()\fR and \fBsox_open_write()\fR,
-there is currently no way to determine the precise reason for failure
-other than the messages printed to stderr.
-In either case, no further use should be made to the handle,
-not even another call to \fBsox_close()\fR.
-.SH EFFECTS
-.TP
-.nh
-.na
-.B sox_effect_handler_t\ const\ *\:sox_find_effect(char\ const\ *\fIname\fB)
-.ad
-.hy
-\fBsox_find_effect()\fR returns a pointer to the named effect's handler
-if it exists, NULL otherwise.
-.TP
-.nh
-.na
-.B sox_effect_t\ *\:sox_create_effect(sox_effect_handler_t\ const\ *\fIeffect\fB)
-.ad
-.hy
-\fBsox_create_effect()\fR instantiates an effect into a \fIsox_effect_t\fR
-given its \fIhandler\fR.
-Any missing methods are automatically set to the appropriate
-\fBnothing\fR method.
-It returns a pointer to the new effect 
-or NULL if it was not found or had problems starting up.
-.TP
-.nh
-.na
-.B int sox_effect_options(sox_effect_t\ *\fIeffect\fB, int\ \fIargc\fB, char\ *\ const\ \fIargv\fB[])
-.ad
-.hy
-\fBsox_effect_options()\fR passes options into an effect
-to control its behavior.
-If it succeeds, \fIeffect->in_signal\fR should contain
-the rate and channel count at which it requires input data
-and \fIeffect->out_signal\fR the rate and channel count it outputs.
-When it is present, this information is used to ensure that
-appropriate effects are placed in the effects chain to handle
-any needed conversions.
-It returns the number of arguments consumed
-or \fBSOX_EOF\fR if any invalid options were passed.
-.SP
-Setting options is only supported before the effect is started.
-The behavior is undefined if its called when the effect has already started.
-.TP
-.nh
-.na
-.B sox_effects_chain_t\ *\:sox_create_effects_chain(sox_encodinginfo_t\ const\ *\fIin_enc\fB, sox_encodinginfo_t\ const\ *\fIout_enc\fB)
-.ad
-.hy
-\fBsox_create_effects_chain()\fR creates an effects chain to which
-effects can be added.
-\fIin_enc\fR and \fIout_enc\fR are the signal encoding of
-the chain's input and output.
-The pointers to \fIin_enc\fR and \fIout_enc\fR
-are stored internally, so their memory should not be freed
-until the effect chain has been deleted.
-Their values may change to reflect new input or output encodings
-when effects start up or are restarted.
-It returns a pointer to the new chain or NULL if something went wrong.
-.TP
-.nh
-.na
-.B int sox_add_effect(sox_effects_chain_t\ *\fIchain\fB, sox_effect_t\ *\fIeffect\fB, sox_signalinfo_t\  *\fIin\fB, sox_signalinfo_t\  const\  *\fIout\fB)
-.ad
-.hy
-\fBsox_add_effect\fR adds an effect to a chain.
-\fIin\fR specifies the input signal info for the effect,
-\fIout\fR is a suggestion as to what the output signal should be
-but, depending on the effect options given and on \fIin\fR,
-the effect may choose a different encoding such as changing the
-number of channels or the sample rate.
-Whatever output rate and channels the effect produces are written
-back to \fIin\fR ready to be passed to subsequent calls
-of \fBsox_add_effect\fR so that changes propagate to each new effect.
-It returns SOX_SUCCESS if it was successful.
-.TP
-.nh
-.na
-.B void sox_delete_effects_chain(sox_effects_chain_t\  *\fIecp\fB)
-.ad
-.hy
-\fBsox_delete_effects_chain()\fR closes an effects chain down and
-releases any resources reserved during the creation of the chain.
-It also deletes all the effects in the chain.
-.SH EXAMPLES
-SoX includes skeleton C files to assist you in writing new
-formats (\fBskelform.c\fR) and effects (\fBskeleff.c\fR).
-New formats can often just deal with the header and then use
-\fBraw.c\fR's routines for reading and writing.
-.P
-\fBexample0.c\fR and \fBexample1.c\fR are a good starting point to see how
-to write applications using \fBlibsox_ng\fR and
-\fBsox_ng.c\fR itself is also a good reference.
-.P
-.SH INTERNALS
-SoX's formats and effects operate with an internal sample format of
-signed 32-bit integers.  The data processing routines are called with
-buffers of these samples and buffer sizes which refer to the number
-of samples processed, not the number of bytes.  File readers translate
-input samples to signed 32-bit integers and return the number of
-samples read.  For example, data in linear signed byte format is
-left-shifted 24 bits.
-.P
-Representing samples as integers can cause problems when processing audio.  
-For example, if an effect to mix down left and right channels into one
-monophonic channel were to use the obvious
+.B unsigned *write_formats
+An array of values indicating the encodings and precisions supported for
+writing. The data format is
+encoding, precision, precision, ..., 0, repeat, and end with 0.
+The default precision is given first.
+An example for a format supporting signed values at 16 and 24 bits,
+defaulting to 16 bits, and unsigned at 8 bits:
 .XE
-   *obuf++ = (*ibuf++ + *ibuf++)/2;
+  unsigned *formats = {
+    SOX_ENCODING_SIGN2, 16, 24, 0,
+    SOX_ENCODING_UNSIGNED, 8, 0,
+    0
+  }
 .XX
-distortion may occur since the intermediate addition can overflow 32 bits.
+.TP
+.B sox_rate_t *write_rates
+A null-terminated array of sample rates supported for writing,
+\fBNULL\fP if all (or almost all) rates are supported.
+.TP
+.B size_t priv_size
+SoX automatically allocates a buffer in which the handler can store data,
+of this size in bytes.
+.RE
+.TP
+.B sox_format_t
+Data passed to and from format handlers, containing:
+.RS
+.TP
+.B char *filename
+The file's name.
+.TP
+.B sox_signalinfo_t signal
+Signal specifications for the reader (decoder) or the writer (encoder):
+sample rate, number of channels, precision, length, headroom multiplier.
+Info will be \fBSOX_UNSPEC\fP if the user provided no info.
+.TP
+.B sox_encodinginfo_t encoding
+Encoding specifications for the reader or writer.
+.TP
+.B char *filetype
+The type of the file, as determined by inspection of
+the file's header or by \fBlibmagic\fP.
+.TP
+.B sox_oob_t oob
+Out-Of-Band data: comments (ID3 tags), instrument info, loop info.
+.TP
+.B sox_bool seekable
+Can seek on this file.
+.TP
+.B sox_bool last_byte_was_zero
+The last byte written was a zero.
+.TP
+.B char mode
+Read or write mode ('r' or 'w').
+.TP
+.B sox_uint64_t olength
+Samples *chans written to file.
+.TP
+.B sox_uint64_t clips
+Incremented if clipping occurs.
+.TP
+.B int sox_errno
+Failure error code.
+.TP
+.B char sox_errstr[256]
+Failure error text.
+.TP
+.B void *fp
+File stream pointer.
+.TP
+.B sox_uint8_t *pending_buffer
+Buffer of unreturned read bytes.
+.TP
+.B sox_uint8_t *pending_bytes
+Bytes read but not returned yet.
+.TP
+.B size_t pending_count
+How many bytes read but not returned.
+.TP
+.B lsx_io_type io_type
+Whether this stream is a file, a pipe or a URL, one of:
+.RS
+.TP
+.B lsx_io_file
+Stream is a real file.
+.TP
+.B lsx_io_pipe
+Stream is a pipe.
+.TP
+.B lsx_io_url
+Stream is a URL.
+.RE
+.TP
+.B sox_uint64_t tell_off
+Current offset within file.
+.TP
+.B sox_uint64_t data_start
+Offset at which sound data begins.
+.TP
+.B sox_format_handler_t handler
+The format handler for this file.
+.TP
+.B void *priv
+The format handler's private data area.
+.RE
+.TP
+.B sox_encodinginfo_t
+How samples are encoded, containing:
+.RS
+.TP
+.B sox_encoding_t encoding
+The encoding used for samples.
+.TP
+.B unsigned bits_per_sample
+0 if unknown or variable; uncompressed value if lossless;
+compressed value if lossy.
+.TP
+.B double compression
+Compression factor (where applicable).
+.TP
+.B sox_option_t reverse_bytes
+Should bytes be reversed?
+.TP
+.B sox_option_t reverse_nibbles
+Should nibbles be reversed?
+.TP
+.B sox_option_t reverse_bits
+Should bits be reversed?
+.TP
+.B sox_bool opposite_endian
+If set to true, the format should reverse its default endianness.
+.PP
+If the \fBreverse_\fP fields are \fBsox_option_default\fP during
+\fBsox_open_read()\fP or \fBsox_open_write()\fP, libSoX will set them to
+either \fBsox_option_no\fP or \fBsox_option_yes\fP according to
+the default of the machine or format.
+.RE
+.TP
+.B sox_option_t
+The type of the \fBsox_encodinginfo_t.reverse_*\fR fields, one of:
+.RS
+.TP 20
+.B sox_option_no
+Option specified as no (=\ 0).
+.TP 20
+.B sox_option_yes
+Option specified as yes.
+.TP 20
+.B sox_option_default
+Option unspecified, usually implies some kind of auto-detect logic.
+.RE
+.TP
+.B sox_format_tab_t *sox_get_format_fns(void)
+Returns a null-terminated table of information about the loaded format handlers,
+of which each entry contains:
+.RS
+.TP
+.B char *name
+The name of the format handler.
+.TP
+.B sox_format_handler_t *(*fn)(void)
+The function to call to get a pointer to the format handler's data.
+.RE
+.TP
+.nh
+.na
+.B sox_format_handler_t *sox_find_format(char *\fIname\fB, sox_bool \fIignore_devices\fB)
+.ad
+.hy
+Finds a format handler by name and returns it, or \fBNULL\fP if it is not found.
+.TP
+.nh
+.na
+.B sox_bool sox_format_supports_encoding(char *\fIpath\fR, char *\fIfiletype\fR, sox_encodinginfo_t *\fIencoding\fR)
+.ad
+.hy
+.TP 10
+.I path
+Path to file to be examined (required if \fIfiletype\fP is \fBNULL\fP).
+.TP 10
+.I filetype
+A previously-determined file type,
+or \fBNULL\fP to use the extension of \fIpath\fP.
+.TP 10
+.I encoding
+Encoding for which the format handler should be queried.
+.PP
+Returns true if the format handler for the specified file type supports the specified encoding.
+.RS
+.RE
+.TP
+.nh
+.na
+.B sox_format_handler_t sox_write_handler(char *\fIpath\fB, char *\fIfiletype\fB, char **\fIfiletype1\fB)
+.ad
+.hy
+Gets the format handler for a specified file type.
+Returns the found format handler, or \fBNULL\fP if not found.
+.RS
+.TP 10
+.I path
+Path to file (required if filetype is \fBNULL\fP).
+.TP 10
+.I filetype
+Filetype for which handler is needed, or \fBNULL\fP to use the extension from \fIpath\fP.
+.TP 10
+.I filetype1
+Receives the filetype that was detected. Pass \fBNULL\fP if not needed.
+.RE
+.SH ENCODINGS
+.TP
+.B sox_encoding_t
+The format of encoded sample data, one of:
+.sp .5
+.RS
+.TS
+lB l.
+SOX_ENCODING_UNKNOWN	Encoding has not yet been determined
+SOX_ENCODING_SIGN2	Signed linear 2's compliment
+SOX_ENCODING_UNSIGNED	Unsigned linear: Sound Blaster
+SOX_ENCODING_FLOAT	Floating point (binary format)
+SOX_ENCODING_FLOAT_TEXT	Floating point (text format)
+SOX_ENCODING_FLAC	FLAC compression
+SOX_ENCODING_HCOM	Mac FSSD files with Huffman compression
+SOX_ENCODING_WAVPACK	WavPack with integer samples
+SOX_ENCODING_WAVPACKF	WavPack with float samples
+SOX_ENCODING_ULAW	Mu-law signed logs: US telephony
+SOX_ENCODING_ALAW	A-law signed logs: non-US telephony
+SOX_ENCODING_G721	G.721 4-bit ADPCM
+SOX_ENCODING_G723	G.723 3 or 5 bit ADPCM
+SOX_ENCODING_CL_ADPCM	Creative Labs 8->2,3,4 bit compressed PCM
+SOX_ENCODING_CL_ADPCM16	Creative Labs 16->4 bit compressed PCM
+SOX_ENCODING_MS_ADPCM	Microsoft Compressed PCM
+SOX_ENCODING_IMA_ADPCM	IMA Compressed PCM
+SOX_ENCODING_OKI_ADPCM	Dialogic/OKI Compressed PCM
+SOX_ENCODING_DPCM	Differential PCM: Fasttracker 2 (\fBxi\fR format)
+SOX_ENCODING_DWVW	Delta Width Variable Word
+SOX_ENCODING_DWVWN	Delta Width Variable Word N-bit
+SOX_ENCODING_GSM	GSM 6.10 33byte frame lossy compression
+SOX_ENCODING_MP1	MPEG 1 Layer 1 compression
+SOX_ENCODING_MP2	MPEG 1 Layer 2 compression
+SOX_ENCODING_MP3	MPEG 1 Layer 3 compression
+SOX_ENCODING_VORBIS	Vorbis compression
+SOX_ENCODING_AMR_WB	AMR-WB compression
+SOX_ENCODING_AMR_NB	AMR-NB compression
+SOX_ENCODING_CVSD	Continuously Variable Slope Delta
+SOX_ENCODING_LPC10	Linear Predictive Coding
+SOX_ENCODING_OPUS	Opus compression
+SOX_ENCODING_DSD	Direct Stream Digital
+SOX_ENCODINGS	End of list marker
+.TE
+.RE
+.TP
+.B sox_encodings_info_t *sox_get_encodings_info(void)
+Returns a pointer to a null-terminated list of available encodings, containing:
+.RS
+.TP
+.B sox_encodings_flags_t flags
+How lossy the format is, one of:
+.RS
+.TP
+.B sox_encodings_none
+No flags specified (implies lossless encoding).
+.TP
+.B sox_encodings_lossy1
+Encode, decode: lossy once.
+.TP
+.B sox_encodings_lossy2
+Encode, decode, encode, decode: lossy twice.
+.RE
+.TP
+.B char *name
+Short name for the encoding.
+.TP
+.B char *desc
+Description of the encoding.
+.RE
+.TP
+.B void sox_init_encodinginfo(sox_encodinginfo_t *\fIe\fP)
+Fills in a \fBsox_encodinginfo_t\fP with default values.
+.TP
+.nh
+.na
+.B unsigned sox_precision(sox_encoding_t \fIencoding\fP, unsigned \fIbits\fP)
+.ad
+.hy
+Given an encoding and the encoded bits_per_sample,
+returns the number of useful bits per sample in the decoded data,
+or 0 to indicate that the value returned by the format handler
+should be used instead of a pre-determined precision.
+.RS
+.TP 10
+.I encoding
+Encoding for which to lookup precision information.
+.TP 10
+.I bits
+The number of encoded bits per sample.
+.RE
+.SH READING AND WRITING AUDIO FILES
+.TP
+.nh
+.na
+.B sox_format_t *sox_open_read(char *\fIpath\fP, sox_signalinfo_t *\fIsignal\fP, sox_encodinginfo_t *\fIencoding\fP, char *\fIfiletype\fP)
+.ad
+.hy
+Opens a decoding session for a file.
+.RS
+.TP 10
+.I path
+Path to file to be opened (required).
+.TP 10
+.I signal
+Information already known about audio stream, or \fBNULL\fP if none.
+.TP 10
+.I encoding
+Information already known about sample encoding, or \fBNULL\fP if none.
+.TP 10
+.I filetype
+Previously-determined file type, or \fBNULL\fP to auto-detect.
+.PP
+Returns the handle for the new session, which must be closed with \fBsox_close()\fP,
+or \fBNULL\fP on failure.
+.RE
+.TP
+.nh
+.na
+.B sox_format_t *sox_open_mem_read(void *\fIbuffer\fB, size_t \fIsize\fB, sox_signalinfo_t *\fIsignal\fB, sox_encodinginfo_t *\fIencoding\fB, char *\fIfiletype\fB)
+.ad
+.hy
+Opens a decoding session for a memory buffer.
+.RS
+.TP 10
+.I buffer
+Pointer to audio data buffer (required).
+.TP 10
+.I size
+Number of bytes to read from audio data buffer.
+.TP 10
+.I signal
+Information already known about audio stream, or \fBNULL\fP if none.
+.TP 10
+.I encoding
+Information already known about sample encoding, or \fBNULL\fP if none.
+.TP 10
+.I filetype
+Previously-determined file type, or \fBNULL\fP to auto-detect.
+.PP
+Returns a handle for the new session, which must be closed with \fBsox_close()\fP,
+or \fBNULL\fP on failure.
+.RE
+.TP
+.nh
+.na
+.B size_t sox_read(sox_format_t *\fIft\fB, sox_sample_t *\fIbuf\fB, size_t \fIlen\fB)
+.ad
+.hy
+Reads samples from a decoding session into a sample buffer.
+.RS
+.TP 10
+.I buf
+Buffer from which to read samples.
+.TP 10
+.I len
+Number of samples available in buf.
+.PP
+Returns the number of samples decoded, or 0 on EOF or a read error.
+If it was the end of the file, \fBerrno\fP will be zero,
+non-zero if there was a read error.
+.RE
+.TP
+.nh
+.na
+.B int sox_seek(sox_format_t *\fIft\fB, sox_uint64_t \fIoffset\fB, int \fIwhence\fB)
+.ad
+.hy
+Sets the location at which the next samples will be decoded.
+.RS
+.TP 10
+.I offset
+Sample offset at which to position reader.
+.TP 10
+.I whence
+Only \fBSOX_SEEK_SET\fR is currently supported.
+.PP
+Returns \fBSOX_SUCCESS\fP if successful.
+.RE
+.TP
+.nh
+.na
+.B sox_format_t *sox_open_write(char *\fIpath\fB, sox_signalinfo_t *\fIsignal\fB, sox_encodinginfo_t *\fIencoding\fB, char *\fIfiletype\fB, sox_oob_t *\fIoob\fB, sox_bool (*\fIoverwrite\fB)(char *\fIfilename\fB))
+.ad
+.hy
+Opens an encoding session for a file.
+.RS
+.TP 10
+path
+Path to file to be written (required).
+.TP 10
+.I signal
+Information about desired audio stream (required).
+.TP 10
+.I encoding
+Information about desired sample encoding, or \fBNULL\fP to use defaults.
+.TP 10
+.I filetype
+Previously-determined file type, or \fBNULL\fP to auto-detect.
+.TP
+.I oob
+Out-of-band data to add to file, or \fBNULL\fP if none.
+.TP 10
+.I overwrite
+Called if file exists to determine whether overwrite is ok.
+.PP
+Returns the new session handle, which must be closed with \fBsox_close()\fP,
+or \fBNULL\fP on failure.
+.RE
+.TP
+.nh
+.na
+.B sox_format_t *sox_open_mem_write(void *\fIbuffer\fB, size_t \fIsize\fB, sox_signalinfo_t *\fIsignal\fB, sox_encodinginfo_t *\fIencoding\fB, char *\fIfiletype\fB, sox_oob_t *\fIoob\fB)
+.ad
+.hy
+Opens an encoding session for a memory buffer.
+.RS
+.TP 10
+.I buffer
+A pointer to the audio data buffer that receives data (required).
+.TP 10
+.I size
+The maximum number of bytes to write to audio data buffer.
+.TP 10
+.I signal
+Information about the desired audio stream (required).
+.TP 10
+.I encoding
+Information about the desired sample encoding, or \fBNULL\fP to use defaults.
+.TP 10
+.I filetype
+The previously-determined file type, or \fBNULL\fP to auto-detect.
+.TP 10
+.I oob
+Out-of-band data to add to file, or \fBNULL\fP if none.
+.PP
+Returns the new session handle, which must be closed with \fBsox_close()\fP,
+or \fBNULL\fP on failure.
+.RE
+.TP
+.nh
+.na
+.B sox_format_t *sox_open_memstream_write(char **\fIbuffer_p\fB, size_t *\fIsize_p\fB, sox_signalinfo_t *\fIsignal\fB, sox_encodinginfo_t *\fIencoding\fB, char *\fIfiletype\fB, sox_oob_t *\fIoob\fB)
+.ad
+.hy
+Opens an encoding session for a memstream buffer. 
+.RS
+.TP 10
+.I buffer_p
+Receives pointer to audio data buffer that receives data (required).
+.TP 10
+.I size_p
+Receives size of data written to audio data buffer (required).
+.TP 10
+.I signal
+Information about desired audio stream (required).
+.TP 10
+.I encoding
+Information about desired sample encoding, or \fBNULL\fP to use defaults.
+.TP 10
+.I filetype
+Previously-determined file type, or \fBNULL\fP to auto-detect.
+.TP
+.I oob
+Out-of-band data to add to file, or \fBNULL\fP if none.
+.PP
+Returns the new session handle, which must be closed with \fBsox_close()\fP,
+or \fBNULL\fP on failure.
+.RE
+.TP
+.nh
+.na
+.B size_t sox_write(sox_format_t *\fIft\fB, sox_sample_t *\fIbuf\fB, size_t \fIlen\fB)
+.ad
+.hy
+Writes samples to an encoding session from a sample buffer.
+.RS
+.TP 10
+.I buf
+Buffer from which to read samples.
+.TP 10
+.I len
+Number of samples available in buf.
+.PP
+Returns the number of samples encoded, or zero if a write error occurred
+(for the reason, check \fBerrno\fR(3).)
+.RE
+.TP
+.B int sox_close(sox_format_t *\fIft\fP)
+Closes an encoding or decoding session.
+Returns \fBSOX_SUCCESS\fP if successful.
+.SH EFFECTS AND EFFECTS CHAINS
+The following types and functions are used to access libSoX's powerful effects.
+.TP
+.B sox_effect_t
+Effect information, containing:
+.RS
+.TP
+.B sox_effects_globals_t *global_info
+Global effects parameters, containing:
+.RS
+.TP
+.B sox_plot_t plot
+The type of plot requested, one of:
+.RS
+.TP
+.B sox_plot_off
+No plot.
+.TP
+.B sox_plot_octave
+Octave plot.
+.TP
+.B sox_plot_gnuplot
+Gnuplot plot.
+.TP
+.B sox_plot_data
+Output the plot data as text.
+.RE
+.TP
+.B sox_globals_t *global_info
+A pointer to the associated \fBsox_globals_t\fP.
+.RE
+.TP
+.B sox_signalinfo_t in_signal
+Info about the incoming data stream.
+.TP
+.B sox_signalinfo_t out_signal
+Info about the outgoing data stream.
+.TP
+.B sox_encodinginfo_t *in_encoding
+Info about the incoming data encoding.
+.TP
+.B sox_encodinginfo_t *out_encoding
+Info about the outgoing data encoding.
+.TP
+.B sox_effect_handler_t handler
+The handler for this effect.
+.TP
+.B sox_uint64_t clips
+Incremented when clipping occurs.
+.TP
+.B size_t flows
+1 if \fBhandler.flags\ &\ SOX_EFF_MCHAN\fP, or the number of channels otherwise.
+.TP
+.B size_t flow
+Flow number.
+.TP
+.B void *priv
+The effect's private data area (each flow has a separate copy).
+.RE
+.TP
+.B sox_signalinfo_t
+Signal parameters, containing:
+.RS
+.TP
+.B sox_rate_t rate
+Samples per second, 0 if unknown.
+.TP
+.B unsigned channels
+Number of sound channels, 0 if unknown.
+.TP
+.B unsigned precision
+Bits per sample, 0 if unknown.
+.TP
+.B sox_uint64_t length
+Samples in the file (sample frames \(mu channels),
+\fBSOX_UNSPEC\fR (=\ 0) if the actual value is not yet known,
+\fBSOX_UNKNOWN_LEN\fR is used within the effects chain if the actual length
+is not known. Format handlers use SOX_UNSPEC instead.
+\fBSOX_IGNORE_LENGTH\fR to indicate that a format handler should
+ignore length information in file headers.
+.TP
+.B double *mult
+Effects headroom multiplier; may be \fBNULL\fP.
+.PP
+Members are \fBSOX_UNSPEC\fR (=\ 0) if the actual value is not yet known.
+.RE
+.TP
+.B sox_effect_handler_t
+Effect handler information, containing:
+.RS
+.TP
+.B char *name
+The effect's name.
+.TP
+.B char *usage
+One-line effect usage and parameters.
+.TP
+.B char **extra_usage
+Additional lines of usage, null-terminated.
+.TP
+.B unsigned int flags
+The logical OR of:
+.RS
+.TP
+.B SOX_EFF_CHAN
+The effect might alter the number of channels.
+.TP
+.B SOX_EFF_RATE
+The effect might alter sample rate.
+.TP
+.B SOX_EFF_PREC
+The effect does its own calculation of output sample precision (otherwise a default value is taken, depending on the presence of SOX_EFF_MODIFY).
+.TP
+.B SOX_EFF_LENGTH
+The effect might alter audio length (as measured in time units, not necessarily in samples).
+.TP
+.B SOX_EFF_MCHAN
+The effect handles multiple channels internally.
+.TP
+.B SOX_EFF_NULL
+The effect does nothing and can be optimized out of the chain.
+.TP
+.B SOX_EFF_GAIN
+The effect does not support \fBgain\ \-r\fR.
+.TP
+.B SOX_EFF_MODIFY
+The effect does not modify sample values
+(but it might remove or duplicate samples or insert zeros).
+.TP
+.B SOX_EFF_INTERNAL
+The effect is present in libSoX but is not valid for use
+by SoX command-line tools.
+.RE
+.TP
+.B int (*getopts)(sox_effect_t *effp, int argc, char **argv)
+The effect's function to parse command-line arguments, called once per effect.
+.TP
+.B int (*start)(sox_effect_t *effp)
+The function to initialize effect, called once per flow.
+.TP
+.nh
+.na
+.B int (*flow)(sox_effect_t *effp, sox_sample_t *ibuf, sox_sample_t *obuf, size_t *isamp, size_t *osamp)
+.ad
+.hy
+The function to process samples.
+.RS
+.TP 10
+.B ibuf
+Buffer from which to read samples
+.TP 10
+.B obuf
+Buffer to which samples are written.
+.TP 10
+.B isamp
+On entry, contains the capacity of \fIibuf\fP in samples;
+on exit, contains the number of samples consumed.
+.TP 10
+.B osamp
+On entry, contains the capacity of \fIobuf\fP in samples;
+on exit, contains the number of samples written.
+.RE
+.TP
+.B int (*drain)(sox_effect_t *effp, sox_sample_t *obuf, size_t *osamp)
+The function to output after input is complete.
+Parameters are as for \fBflow\fR.
+.TP
+.B int (*stop)(sox_effect_t *effp)
+The function to shut the effect down (called once per flow).
+.TP
+.B int (*kill)(sox_effect_t *effp)
+The function to shut the effect down (called once per effect).
+.TP
+.B char *(*get)(sox_effect_t *effp, char *field)
+Pointer to a function to read the current value of an effect's parameter,
+returning \fBNULL\fP if there is no readable parameter of that name,
+or a pointer to mallocked memory containing a string value
+sprintfed with "%g" which it is the caller's responsibility to free.
+.TP
+.B char *(*set)(sox_effect_t *effp, char *field, char *value)
+Pointer to a function to set the value of an effect's parameter,
+returning \fBNULL\fP if that parameter cannot be set or if the value is garbage,
+or a pointer to mallocked memory containing the new value sprintfed with "%g".
+Values outside the parameter's range set the minimum or maximum value
+and return that.
+.TP
+.B size_t priv_size
+The size of the effect's private data.
+.RE
+.TP
+.B sox_effects_chain_t
+A chain of effects to be applied to a stream, containing:
+.RS
+.TP
+.B sox_effect_t **effects
+Table of effects to be applied to a stream.
+.TP
+.B size_t length
+Number of effects to be applied.
+.TP
+.B sox_effects_globals_t global_info
+Copy of global effects settings.
+.TP
+.B sox_encodinginfo_t *in_enc
+Input encoding.
+.TP
+.B sox_encodinginfo_t *out_enc
+Output encoding.
+.RE
+.TP
+.B sox_effects_globals_t *sox_get_effects_globals(void)
+Returns global parameters for effects.
+.TP
+.B sox_effect_handler_t *sox_find_effect(char *\fIname\fP)
+Finds the effect handler with the given name.
+Returns an effect pointer, or \fBNULL\fP if not found.
+.TP
+.B sox_effect_t *sox_create_effect(sox_effect_handler_t *\fIeh\fB)
+Creates an effect using the given handler.
+Returns the new effect, or \fBNULL\fP if not found.
+.TP
+.B int sox_effect_options(sox_effect_t *\fIeffp\fB, int \fIargc\fB, char **\fIargv\fB)
+Applies the command-line options to the effect.
+Returns the number of arguments consumed.
+.TP
+.B sox_effect_handler_t *sox_get_effect_fns(void)
+Returns an null-terminated array of the known effect handlers.
+.TP
+.nh
+.na
+.B sox_effects_chain_t *sox_create_effects_chain(sox_encodinginfo_t *\fIin_enc\fP, sox_encodinginfo_t *\fIout_enc\fB)
+.ad
+.hy
+Initializes an effects chain.
+.RS
+.TP 10
+in_enc
+Input encoding.
+.TP 10
+out_enc
+Output encoding.
+.RE
+.SP
+Returns a handle, which must be closed with \fBsox_delete_effects_chain()\fP.
+or \fBNULL\fP on failure.
+.TP
+.B void sox_delete_effects_chain(sox_effects_chain_t *\fIchain\fB)
+Closes an effects chain and deletes all the effects in it.
+.TP
+.nh
+.na
+.B int sox_add_effect(sox_effects_chain_t *\fIchain\fB, sox_effect_t *\fIeffp\fB, sox_signalinfo_t *\fIin\fB, sox_signalinfo_t *\fIout\fB)
+.ad
+.hy
+Adds an effect to the end of the effects chain.
+Returns \fBSOX_SUCCESS\fP if successful.
+.RS
+.TP 10
+.I in
+Characteristics of the input signal to the chain.
+.TP 10
+.I out
+Characteristics of the output signal from the chain.
+.RE
+.TP
+.nh
+.na
+.B int sox_flow_effects(sox_effects_chain_t *\fIchain\fB, int (*\fIcallback\fP)(sox_bool \fIall_done\fP, void *\fIdata), void *\fIdata\fB)
+.ad
+.hy
+Runs the effects chain. Returns \fBSOX_SUCCESS\fP if successful.
+.RS
+.TP 10
+.I chain
+Effects chain to run.
+.TP 10
+.I callback
+If not \fBNULL\fP, a pointer to a function for monitoring flow progress,
+called between processing each block of data. It is handed a copy of the
+\fIclient_data\fP pointer that was passed to \fBsox_flow_effects\fP and
+if the callback returns anything other than \fBSOX_SUCCESS\fP,
+the flow is stopped.
+.TP 10
+.I data
+A pointer that is pass to the callback.
+.RE
+.TP
+.B sox_uint64_t sox_effects_clips(sox_effects_chain_t *\fIchain\fB)
+Returns the number of clips that occurred while running an effects chain.
+.TP
+.B sox_uint64_t sox_stop_effect(sox_effect_t *\fIeffp\fB)
+Shuts down an effect (calls stop on each of its flows) and
+returns the number of clips from all flows.
+.TP
+.nh
+.na
+.B void sox_push_effect_last(sox_effects_chain_t *\fIchain\fB, sox_effect_t *\fIeffp\fB)
+.ad
+.hy
+Adds an already-initialized effect to the end of the chain.
+.TP
+.B sox_effect_t *sox_pop_effect_last(sox_effects_chain_t *\fIchain\fB)
+Removes and returns an effect from the end of the chain.
+Returns the removed effect, or \fBNULL\fP if the chain has no effects.
+.TP
+.B void sox_delete_effect(sox_effect_t *\fIeffp\fB)
+Shut down and delete an effect.
+.TP
+.B void sox_delete_effect_last(sox_effects_chain_t *\fIchain\fB)
+Shut down and delete the last effect in the chain.
+.TP
+.B void sox_delete_effects(sox_effects_chain_t *\fIchain\fB)
+Shut down and delete all effects in the chain.
+.SH EFFECT-SPECIFIC FUNCTIONS
+For both of these, \fI*effp\fP should be a \fBtrim\fP effect.
+.TP
+.B sox_uint64_t sox_trim_get_start(sox_effect_t *\fIeffp\fP)
+Gets the sample offset of the start of the \fBtrim\fP, useful for efficiently
+skipping the part that will be trimmed anyway (get trim start, seek, then
+clear trim start).
+Returns the sample offset of the start of the \fBtrim\fP.
+.TP
+.B void sox_trim_clear_start(sox_effect_t *\fIeffp\fB)
+Clears the start of the trim to 0.
+.SH OUT-OF-BAND DATA
+.TP
+.B sox_oob_t
+Out-Of-Band data: comments, instrument info and loop info, containing:
+.RS
+.TP
+.B sox_comments_t  comments
+File's metadata as comment strings in id=value format,
+accessed via the \fBsox_*_comments\fR functions below.
+.TP
+.B sox_instrinfo_t instr
+Instrument specification, containing:
+.RS
+.TP
+.B signed char MIDInote
+For unity pitch playback.
+.TP
+.B signed char MIDIlow
+MIDI pitch-bend low range.
+.TP
+.B signed char MIDIhi
+MIDI pitch-bend high range.
+.TP
+.B unsigned char loopmode
+Loop modes: the lower 4 bits describe the loop behaviour, one of:
+.RS
+.TP
+.B sox_loop_none
+Single-shot.
+.TP
+.B sox_loop_forward
+Forward loop.
+.TP
+.B sox_loop_forward_back.
+Forward/back loop.
+.RE
+.sp .5
+.RS
+and the upper 4 bits mask the loop blass, the logical OR of
+.TP
+.B sox_loop_8
+8 loops (??).
+.TP
+.B sox_loop_sustain_decay
+AIFF style, one sustain & one decay loop.
+.RE
+.TP
+.B unsigned nloops
+Number of active loops (max \fBSOX_MAX_NLOOPS\fP\ =\ 8).
+.RE
+.TP
+.B sox_loopinfo_t loops[SOX_MAX_NLOOPS];
+Looping specifications, containing:
+.RS
+.TP
+.B sox_uint64_t start
+First sample.
+.TP
+.B sox_uint64_t length
+Length of loop.
+.TP
+.B unsigned count
+Number of repeats, 0=forever.
+.TP
+.B unsigned char type
+Bits with the same meaning as \fBloopmode\fR above.
+.RE
+.RE
+.SH COMMENTS
+.TP
+.B size_t sox_num_comments(sox_comments_t \fIcomments\fP)
+Returns the number of items in the metadata block.
+.TP
+.B void sox_append_comment(sox_comments_t *\fIcomments\fP, char *\fIitem\fP)
+Adds an item to the metadata block, in "id=value" format.
+.TP
+.B void sox_append_comments(sox_comments_t *\fIcomments\fP, char *\fIitems\fP)
+Adds a newline-separated list of "id=value" items to the metadata block,
+for example "id1=value1\enid2=value2".
+.TP
+.B sox_comments_t sox_copy_comments(sox_comments_t \fIcomments\fP)
+Duplicates the metadata block and returns the copy.
+.TP
+.B void sox_delete_comments(sox_comments_t *\fIcomments\fP)
+Frees the metadata block.
+.TP
+.B char *sox_find_comment(sox_comments_t \fIcomments\fP, char *\fIid\fP)
+If "id=value" is found in the comments, returns a pointer to its value,
+or \fBNULL\fP if the id was not found.
+.SH PLAYLIST FUNCTIONS
+.TP
+.B sox_bool sox_is_playlist(char *\fIfilename\fB)
+Returns true if the specified file is a known playlist file type.
+.TP
+.B int sox_parse_playlist(int (*\fIcallback\fB)(void *\fIdata\fP, char *\fIfilename\fP), void *\fIdata\fB, char *\fIlistname\fB)
+Parses the specified playlist file.
+Returns \fBSOX_SUCCESS\fP if successful.
+.RS
+.TP 10
+.I callback
+The function to call for each item in the playlist.
+.TP 10
+.I data
+A pointer to client data, passed to the callback function.
+.TP 10
+.I listname
+The name of the playlist file.
+.RE
+.SH KEYMAPS
+Keymaps are the mechanism by which SoX allows you to modify effects'
+internal parameters on the fly by mapping keys with \fB\-\-keymap\fP
+and then pressing them while in \fB\-\-interactive\fP mode (e.g. when
+using \fBplay\fR or with \fB\-d\fP as the output filename.)
+.TP
+.B void sox_keymap_add(char *\fIkey\fP, char *\fIeffect\fP, char *\fIfield\fP, char \fIop\fP, double \fIstep\fP)
+Add a keymap.
+.RS
+.TP 10
+.I key
+The string name of the key to map, for example "D".
+.TP 10
+.I effect
+The name of the effect to affect. "echo" will affect all echoes
+in the effects chain; "echo2" will only affect the second instance of it.
+.TP 10
+.I field
+The name of the parameter in the effect's priv_t to change.
+For effects with multiple stages, "decay" will affect the decay of all stages
+and "decay2" will only affect the decay of the scond stage.
+.TP
+.I op 10
+How to affect the parameter: '\(pl', '\(mi', '*', '/' or '='.
+.TP
+.I step 10
+How much to add or subtract from the parameter, to muliply or divide it by,
+or to set its value to.
+.RE
+.TP
+.B extern sox_bool sox_is_keymapped(char *\fIkey\fP)
+See if a key or an effect.field is used in a keymap
+.TP
+.B int sox_keymap_apply(sox_effects_chain_t *\fIeffp\fP, char *\fIkey\fP)
+Apply a keymap.
+Returns \fBSOX_SUCCESS\fP on successful application,
+\fBSOX_ENOEFFECT\fP if the effect was not found in the chain
+or it was found but doesn't have a keymappable parameter of that name,
+\fBSOX_ENOKEYMAP\fP if the key was not mapped to anything.
+.TP
+.B void sox_keymap_free(void)
+Forget all keymaps.
+.SH MISCELLANEOUS UTILITY FUNCTIONS
+.TP
+.B size_t sox_basename(char *\fIbuffer\fB, size_t \fIlen\fB, char *\fIfilename\fB)
+Gets the basename of the specified file; for example, the basename of
+"/a/b/c.d" would be "c".
+Returns the number of characters written to the buffer,
+excluding the final nul character, or 0 on failure.
+.RS
+.TP 10
+.I buffer
+Buffer into which basename should be written.
+.TP 10
+.I len
+Size of \fIbuffer\fR, in bytes.
+.TP 10
+.I filename
+Filename from which to extract basename.
+.RE
+.SH GENERIC MACROS
+.TP
+.B SOX_LIB_VERSION(\fIa\fP, \fIb\fP, \fIc\fP)
+Compute a 32-bit integer API version from three 8-bit parts.
+\fIa\fR is the major version number, \fIb\fR the minor version and
+\fIc\fR the micro or bugfix version.
+Returns a 32-bit integer API version like 0x000a0b0c.
+.TP
+.B SOX_LIB_VERSION_CODE
+The current API version as a 32-bit integer
+which follows the version number of SoX.
+.TP
+.B SOX_INT_MIN(\fIbits\fP)
+Returns the smallest (most negative) value storable in a twos-complement
+signed integer with the specified number of bits, cast to an unsigned integer.
+For example, \fBSOX_INT_MIN(8)\fP = 0x80, \fBSOX_INT_MIN(16)\fP = 0x8000, etc.
+.RS
+.TP
+.I bits
+The size of value for which to calculate minimum and maximum values.
+.RE
+.TP
+.B SOX_INT_MAX(\fIbits\fP)
+Returns the largest (positive) value storable in a twos-complement signed
+integer with the specified number of bits, cast to an unsigned integer
+for example, \fBSOX_INT_MAX(8)\fP = 0x7F, \fBSOX_INT_MAX(16)\fP = 0x7FFF, etc.
+.TP
+.B SOX_UINT_MAX(\fIbits\fP)
+Returns the largest value storable in an unsigned integer with the specified
+number of bits; for example, \fBSOX_UINT_MAX(8)\fP = 0xFF,
+\fBSOX_UINT_MAX(16)\fP = 0xFFFF, etc.
+.TP
+.B SOX_INT8_MAX
+Returns 0x7F.
+.TP
+.B SOX_INT16_MAX
+Returns 0x7FFF.
+.TP
+.B SOX_INT24_MAX
+Returns 0x7FFFFF.
+.TP
+.B SOX_INT32_MAX
+Returns 0x7FFFFFFF.
+.TP
+.B SOX_SAMPLE_PRECISION
+Bits in a \fBsox_sample_t\fP (=\ 32).
+.TP
+.B SOX_SAMPLE_MAX
+The maximum value of a \fBsox_sample_t\fP (=\ 0x7FFFFFFF).
+.TP
+.B SOX_SAMPLE_MIN
+The minimum (most negative) value of a \fBsox_sample_t\fP (=\ 0x80000000).
+.TP
+.B SOX_SAMPLE_NEG
+The sign bit for \fBsox_sample_t\fP (=\ 0x80000000).
+.TP
+.B SOX_SIZE_MAX
+The maximum value of a \fBsize_t\fR.
+.SH SAMPLE CONVERSION
+.TS
+center;
+c1 s1 s1 s1 s1 s1 s1 s1 s
+c1 c1 c1 c1 s1 c1 c1 c1 s
+c1 c1 c1 c1 c1 c1 c1 c1 c
+l1 c1 c1 c1 c1 c1 c1 c1 c.
+.B
+Linear PCM <--> sox_sample_t
+.sp .5
+.B
+I/O	Input	sox_sample_t	Clips	Input	sox_sample_t	Clips
+.B
+Format	Minimum	Minimum	I	O	Maximum	Maximum	I	O
+.sp .5
+Float	\(miinf	\(mi1	y	n	inf	1\ \(mi\ 5e\(mi10	y	n
+Int8	\(mi128	\(mi128	n	n	127	127.9999999	n	y
+Int16	\(mi32768	\(mi32768	n	n	32767	32767.99998	n	y
+Int24	\(mi8388608	\(mi8388608	n	n	8388607	8388607.996	n	y
+Int32	\(mi2147483648	\(mi2147483648	n	n	2147483647	2147483647	n	n
+.TE
+.P
+Conversions are as accurate as possible (with rounding).
+.P
+Halves are rounded toward \(plinfinity, all others to nearest integer.
+.P
+\fBClips\fP shows whether on not there is the possibility of a conversion
+clipping to the minimum or maximum value when inputting from or outputting
+to a given type.
+.P
+Unsigned integers are converted to and from signed integers by flipping
+the uppermost bit then treating them as signed integers.
+.P
+Before you use the following SoX sample conversion macros in a function,
+\fBSOX_SAMPLE_LOCALS\fR declares the temporary local variables they require.
+For example:
 .XE
-   *obuf++ = *ibuf++/2 + *ibuf++/2;
+   sox_int16_t sox_sample_to_CD(sox_sample_t sample)
+   {
+     SOX_SAMPLE_LOCALS
+     unsigned clips = 0;
+
+     return SOX_SAMPLE_TO_SIGNED(16, sample, clips);
+   }
 .XX
-would get round the overflow but at the expense of the least significant bit.
 .P
-Stereo data is stored with the left and right speaker data
-in successive samples and
-quadraphonic data is stored left front, right front, left rear, right rear.
-.SH FORMATS
-A 
-.I format 
-is responsible for translating between sound sample files
-and an internal buffer.
-The internal buffer is stored in signed longs with a fixed sampling rate.
-The 
-.I format
-operates from two data structures:
-a format structure and a private structure.
-.P
-The format structure contains a list of control parameters for
-the audio: sampling rate, data size (8, 16 or 32 bits),
-encoding (unsigned, signed, floating point etc.),
-and the number of sound channels.
-It also contains other state information: whether the sample file
-needs to be byte-swapped, whether \fBsox_seek()\fR will work, its suffix,
-its file stream pointer, its 
-.I format
-pointer and the format's private structure.
-.P
-The 
-.I private 
-area is a preallocated data array for the 
-.I format
-to use however it wishes.  
-It should have a defined data structure
-and cast the array to that structure.  
-See \fBvoc.c\fR for an example of the use of a private data area.  
-\fBvoc.c\fR has to track the number of samples it 
-writes and, when finishing, seek back to the beginning of the file
-and write it nto the header.
-The private area is usually not very large and some effects,
-such as \fBecho\fR, \fBlsx_malloc()\fR larger areas for delay lines and such.
-.P
-A 
-.I format
-has 6 routines:
-.TP 20
-startread
-Set up the format parameters, read in
-a data header and do anything else that needs to be done.
-.TP 20
-read
-Given a buffer and a length,
-read up to that many samples, 
-transform them into signed long integers,
-and copy them into the buffer.
-It returns the number of samples actually read.
-.TP 20
-stopread
-Do what needs to be done when it has finished reading.
-.TP 20
-startwrite
-Set up the format parameters, maybe write out 
-a data header and any other preliminaries for writing the format.
-.TP 20
-write
-Given a buffer and a length,
-copy that many samples out of the buffer,
-convert them from signed longs to the appropriate data
-and write them to the file.
-If it can't write out all the samples, it will return
-a lesser number of samples.
-.TP 20
-stopwrite
-Typically, fix up the file header or whatever else needs to be done.
-.SH EFFECTS
-Each effect runs with one input and one output stream.
-An effect's implementation comprises six functions that may be called
-according to the following flow diagram:
-.XE
-LOOP (invocations with different parameters)
-  getopts
-  LOOP (invocations with the same parameters)
-    LOOP (channels)
-      start
-    LOOP (while there is input audio to process)
-      LOOP (channels)
-        flow
-    LOOP (while there is output audio to generate)
-      LOOP (channels)
-        drain
-    LOOP (channels)
-      stop
-  kill
-.XX
-Functions that an effect does not need can be NULL.
-An effect that is marked `MCHAN' does not use the LOOP
-(channels) lines and must perform multiple channel processing
-inside the affected functions.  Multiple effect instances may be
-processed in parallel.
-.TP 20
-getopts
-is called with a character string argument list for the effect.
-.TP 20
-start
-is called with the signal parameters for the input and output
-streams.
-.TP 20 
-flow
-is called with input and output data buffers,
-and (by reference) the input and output data buffer sizes.
-It processes the input buffer into the output buffer,
-and sets the size variables to the numbers of samples
-actually processed.
-It is under no obligation to read from the input buffer or
-write to the output buffer during the same call.  If the
-call returns \fBSOX_EOF\fR, this means
-that the effect will not read any more data and can be used
-to switch to drain mode sooner.
-.TP 20 
-drain
-is called when there are no more input data samples.
-If the effect wishes to generate more data samples,
-it copies the generated data into the given buffer
-and returns the number of samples generated.
-If it fills the buffer, it will be called again;
-The \fBecho\fR effect uses this to fade away.
-.TP 20
-stop
-is called when there are no more input samples and no more output
-samples to process.
-It is typically used to close or free resources such as
-memory and temporary files that were allocated during
-.IR start .
-See \fBecho.c\fR for an example.
-.TP 20
-kill
-is called to allow resources allocated by
-.I getopts
-to be released.
-See \fBpad.c\fR for an example.
+The following macros return a SoX native sample value and
+parameters are:
+.RS
+.TP 8
+.B bits
+The width of the resulting sample (1 through 32).
+.TP 8
+.B d
+The value to be converted.
+.TP 8
+.B clips
+A variable that is incremented if the result is too big.
+.RE
+These macros are largely agnostic to the numeric types of their arguments.
+.TP
+.B SOX_SIGNED_TO_SAMPLE(\fIbits\fP, \fId\fP)
+Converts a signed integer of width \fIbits\fP to \fBsox_sample_t\fR.
+.TP
+.B SOX_UNSIGNED_TO_SAMPLE(\fIbits\fP, \fId\fP)
+Converts an unsigned integer of width \fIbits\fP to \fBsox_sample_t\fP.
+.TP
+.B SOX_UNSIGNED_8BIT_TO_SAMPLE(sox_uint8_t \fId\fP, \fIclips\fP)
+Converts an unsigned 8-bit integer to \fBsox_sample_t\fR.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SIGNED_8BIT_TO_SAMPLE(sox_int8_t \fId\fP, \fIclips\fP)
+Converts a signed 8-bit integer to \fBsox_sample_t\fP.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_UNSIGNED_16BIT_TO_SAMPLE(sox_uint16_t \fId\fP, \fIclips\fP)
+Converts an unsigned 16-bit integer to \fBsox_sample_t\fP.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SIGNED_16BIT_TO_SAMPLE(sox_int16_t \fId\fP, \fIclips\fP)
+Converts a signed 16-bit integer to \fBsox_sample_t\fR.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_UNSIGNED_24BIT_TO_SAMPLE(sox_int24_t \fId\fP, \fIclips\fP)
+Converts an unsigned 24-bit integer to \fBsox_sample_t\fR.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SIGNED_24BIT_TO_SAMPLE(sox_int24_t \fId\fP, \fIclips\fP)
+Converts a signed 24-bit integer to \fBsox_sample_t\fR.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_UNSIGNED_32BIT_TO_SAMPLE(sox_uint32_t \fId\fP, \fIclips\fP)
+Converts an unsigned 32-bit integer to \fBsox_sample_t\fR.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SIGNED_32BIT_TO_SAMPLE(sox_int32_t \fId\fP, \fIclips\fP)
+Converts a signed 32-bit integer to \fBsox_sample_t\fR.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_FLOAT_32BIT_TO_SAMPLE(float \fId\fP, \fIclips\fP)
+Converts a 32-bit float to \fBsox_sample_t\fR.
+.TP
+.B SOX_FLOAT_64BIT_TO_SAMPLE(double \fId\fP, \fIclips\fP)
+Converts a 64-bit float to \fBsox_sample_t\fR.
+.TP
+.B SOX_SAMPLE_TO_UNSIGNED(\fIbits\fP, sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to an unsigned integer of width \fIbits\fP.
+.TP
+.B SOX_SAMPLE_TO_SIGNED(\fIbits\fP, sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to a signed integer of width \fIbits\fP.
+.TP
+.B SOX_SAMPLE_TO_UNSIGNED_8BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to an unsigned 8-bit integer.
+.TP
+.B SOX_SAMPLE_TO_SIGNED_8BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to an signed 8-bit integer.
+.TP
+.B SOX_SAMPLE_TO_UNSIGNED_16BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to an unsigned 16-bit integer.
+.TP
+.B SOX_SAMPLE_TO_SIGNED_16BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to a signed 16-bit integer.
+.TP
+.B SOX_SAMPLE_TO_UNSIGNED_24BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to an unsigned 24-bit integer.
+.TP
+.B SOX_SAMPLE_TO_SIGNED_24BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to a signed 24-bit integer.
+.TP
+.B SOX_SAMPLE_TO_UNSIGNED_32BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to an unsigned 32-bit integer.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SAMPLE_TO_SIGNED_32BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to a signed 32-bit integer.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SAMPLE_TO_FLOAT_32BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to a 32-bit float.
+.TP
+.B SOX_SAMPLE_TO_FLOAT_64BIT(sox_sample_t \fIsamp\fP, \fIclips\fP)
+Converts a SoX native sample to a 64-bit float.
+The \fIclips\fR parameter is not used.
+.TP
+.B SOX_SAMPLE_CLIP_COUNT(\fId\fP, \fIclips\fP)
+Clips a value of a type that is larger then \fBsox_sample_t\fR
+(for example, \fBsox_int64_t\fR)
+to \fBsox_sample_t\fR's limits and increment a counter if clipping occurs.
+\fId\fR is the value (an lvalue) to be clipped, updated as necessary.
+.TP
+.B SOX_ROUND_CLIP_COUNT(\fId\fB, \fIclips\fB)
+Clips a value of a type that is larger then \fBsox_sample_t\fR
+(for example, \fBsox_int64_t\fR)
+to \fBsox_sample_t\fR's limits and increment a counter if clipping occurs.
+Returns the clipped value.
+.TP
+.B SOX_INTEGER_CLIP_COUNT(\fIbits\fP, \fId\fP, \fIclips\fP)
+Clips a value to the limits of a signed integer of the specified width
+and increment a counter if clipping occurs.
+Returns the clipped value.
+.TP
+.B SOX_16BIT_CLIP_COUNT(\fId\fP, \fIclips\fP)
+Clips a value to the limits of a 16-bit signed integer and increment a counter
+if clipping occurs.
+Returns the clipped value.
+.TP
+.B SOX_24BIT_CLIP_COUNT(\fId\fP, \fIclips\fP)
+Clips a value to the limits of a 24-bit signed integer and increments a counter
+if clipping occurs.
+Returns the clipped value.
+.TP
+.B SOX_DEFAULT_CHANNELS
+The default channel count is 2 (stereo).
+.TP
+.B SOX_DEFAULT_RATE
+The default sample rate is 48000Hz.
+.TP
+.B SOX_DEFAULT_PRECISION
+The default precision is 16 bits per sample.
+.TP
+.B SOX_DEFAULT_ENCODING
+The default encoding is \fBSOX_ENCODING_SIGN2\fR (linear 2's complement PCM).
 .SH LINKING
 How you link against libsox_ng depends on how SoX was
 built on your system. For a static build, just link against the
@@ -585,5 +1585,6 @@ The many authors and contributors are listed in the README file that
 is distributed with the source code.
 .SH SEE ALSO
 .BR sox_ng (1),
+.BR libsoxeffect_ng (3),
 .BR soxformat_ng (7),
-\fBsrc/example*.c\fR in the SoX source distribution.
+\f(CWsrc/example*.c\fR and \f(CWdemo/*.c\fR in the SoX source distribution.

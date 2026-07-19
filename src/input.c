@@ -50,8 +50,9 @@ static int drain(
 sox_effect_handler_t const * lsx_input_effect_fn(void)
 {
   static sox_effect_handler_t handler = {
-    "input", NULL, NULL, SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_INTERNAL,
-    getopts, NULL, NULL, drain, NULL, NULL, sizeof(priv_t)
+    "input", NULL, SOX_EFF_MCHAN | SOX_EFF_LENGTH | SOX_EFF_INTERNAL,
+    getopts, NULL, NULL, drain, NULL, NULL,
+    sizeof(priv_t), NULL, NULL, NULL,
   };
   return &handler;
 }

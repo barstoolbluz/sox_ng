@@ -244,7 +244,7 @@ static int start(sox_format_t* ft)
 
         if (!strncasecmp(ft->filename, dev_name, name_len))
         {
-          lsx_report("Requested name \"%s\" matched device %d: \"%s\"", ft->filename, dev, dev_name);
+          lsx_report("requested name \"%s\" matched device %d: \"%s\"", ft->filename, dev, dev_name);
           break;
         }
       }

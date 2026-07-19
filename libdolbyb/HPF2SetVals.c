@@ -27,6 +27,13 @@
 #include "SetGate.h"
 
 #include <stdlib.h>  /* for malloc() and calloc() */
+#include <math.h>
+
+/* These are not defined/declared when compiling -ansi (C90) */
+#ifndef M_PI
+# define M_PI 3.14159265358979323846
+#endif
+extern double round(double x);
 
 /* Try adding a facility to start attenuating the filter output */
 /* rather than keep increasing to fc of the filter */

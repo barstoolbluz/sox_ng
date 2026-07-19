@@ -16,5 +16,4 @@ AM_CPPFLAGS=-I../src
 if HAVE_LIBLTDL
 AM_LDFLAGS=-avoid-version -module
 endif
-EXTRA_DIST = CMakeLists.txt
 endif
