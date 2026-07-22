@@ -48,7 +48,8 @@
  * When magic length is detected on inputs, disable any length
  * logic.
  */
-#define MS_UNSPEC 0x7ffff000
+#include "wav-size.h"
+#define MS_UNSPEC LSX_WAV_MS_UNSPEC
 
 #include "wav-formats.h"
 
@@ -93,9 +94,7 @@ typedef struct {
     /* WAV write-side diagnostics.  A seekable output can write the header
      * twice, so keep warning state in the format instance rather than
      * emitting duplicate advisories from wavwritehdr(). */
-    sox_bool       warnedSamplesUnspec;
-    sox_bool       warnedDataUnspec;
-    sox_bool       firstHeaderDataUnspec;
+    lsx_wav_warning_state_t sizeWarnings;
 } priv_t;
 
 static char *wav_format_str(unsigned wFormatTag);
@@ -108,12 +107,14 @@ static const char write_error_msg[] = "write error";
     return SOX_EOF; \
 }
 
-static void wav_warn_once(sox_bool * warned, char const * message)
+static void wav_emit_size_warnings(unsigned actions)
 {
-    if (!*warned) {
-        lsx_warn("%s", message);
-        *warned = sox_true;
-    }
+    if (actions & LSX_WAV_WARN_SAMPLE_COUNT)
+        lsx_warn("sample count exceeds WAV fact chunk's 32-bit field: "
+            "writing unspecified sample count");
+    if (actions & LSX_WAV_WARN_DATA_LENGTH)
+        lsx_warn("RIFF or data length exceeds WAV's 32-bit size fields: "
+            "writing unspecified data length");
 }
 
 
@@ -1590,9 +1591,7 @@ static int startwrite_wav(sox_format_t * ft)
 
     wav->numSamples = 0;
     wav->dataLength = 0;
-    wav->warnedSamplesUnspec = sox_false;
-    wav->warnedDataUnspec = sox_false;
-    wav->firstHeaderDataUnspec = sox_false;
+    lsx_wav_warning_state_init(&wav->sizeWarnings);
     if (!ft->signal.length && !ft->seekable)
         lsx_warn("length in output header will be wrong since can't seek to fix it");
 
@@ -1721,7 +1720,8 @@ static int wavwritehdr(sox_format_t * ft, int second_header)
     /* internal variables, intermediate values etc */
     int bytespersample; /* (uncompressed) bytes per sample (per channel) */
     uint64_t blocksWritten = 0;
-    uint64_t riffLength64;
+    lsx_wav_header_sizes_t headerSizes;
+    unsigned warningActions;
     sox_bool isExtensible = sox_false;    /* WAVE_FORMAT_EXTENSIBLE? */
     sox_bool writesFact;
 
@@ -1833,45 +1833,19 @@ static int wavwritehdr(sox_format_t * ft, int second_header)
 
     writesFact = isExtensible || wFormatTag != WAVE_FORMAT_PCM;
 
-    /* The fact sample count is independent of the RIFF/data sizes.  Clamp it
-     * only when this layout actually writes a fact chunk; PCM has no field to
-     * overflow and therefore needs no sample-count advisory. */
-    if (writesFact && dwSamplesWritten > UINT32_MAX) {
-        if (second_header || !ft->seekable)
-            wav_warn_once(&wav->warnedSamplesUnspec,
-                "sample count exceeds WAV fact chunk's 32-bit field: "
-                "writing unspecified sample count");
-        dwSamplesWritten = MS_UNSPEC;
-    }
+    /* Calculate the serialized 32-bit fields through the shared, overflow-
+     * safe planner.  It preserves exact values through the final valid byte,
+     * then switches data and RIFF to SoX's internally consistent read-to-EOF
+     * sentinel representation.  The fact sample count remains independent. */
+    headerSizes = lsx_wav_header_sizes(dwDataLength, dwSamplesWritten,
+        wFmtSize, dwFactSize, writesFact);
+    warningActions = lsx_wav_header_warning_actions(&wav->sizeWarnings,
+        &headerSizes, second_header, ft->seekable);
+    wav_emit_size_warnings(warningActions);
 
-    /* Derive the RIFF ChunkSize in 64 bits.  The data length can still fit in
-     * its own 32-bit field while data + container overhead does not; assigning
-     * the old expression directly to wRiffLength wrapped in that final window
-     * below 4 GiB.  In either overflow case, use SoX's read-to-EOF sentinel for
-     * data and recompute an internally consistent RIFF size.  This sacrifices
-     * an exact data length for those boundary files, but avoids a contradictory
-     * header in which the data chunk extends beyond the declared RIFF extent. */
-    riffLength64 = 4u + (8u + wFmtSize) +
-        (8u + dwDataLength + dwDataLength % 2u);
-    if (writesFact)
-        riffLength64 += 8u + dwFactSize;
-
-    if (riffLength64 > UINT32_MAX) {
-        if (second_header || !ft->seekable)
-            wav_warn_once(&wav->warnedDataUnspec,
-                "RIFF or data length exceeds WAV's 32-bit size fields: "
-                "writing unspecified data length");
-        else
-            wav->firstHeaderDataUnspec = sox_true;
-
-        dwDataLength = MS_UNSPEC;
-        riffLength64 = 4u + (8u + wFmtSize) +
-            (8u + dwDataLength + dwDataLength % 2u);
-        if (writesFact)
-            riffLength64 += 8u + dwFactSize;
-    }
-
-    wRiffLength = (uint32_t)riffLength64;
+    wRiffLength = headerSizes.riff_length;
+    dwDataLength = headerSizes.data_length;
+    dwSamplesWritten = headerSizes.sample_count;
 
     /* dwAvgBytesPerSec <-- this is BEFORE compression, isn't it? guess not. */
     /* Round before dividing so that txw's 33333.3 doesn't become
@@ -2078,10 +2052,8 @@ static int stopwrite_wav(sox_format_t * ft)
            * had to use MS_UNSPEC because the RIFF size overflowed while the
            * sample count still fit, emit the advisory here; suppressing first-
            * header warnings previously made this successful path silent. */
-          if (wav->firstHeaderDataUnspec)
-            wav_warn_once(&wav->warnedDataUnspec,
-                "RIFF or data length exceeds WAV's 32-bit size fields: "
-                "writing unspecified data length");
+          wav_emit_size_warnings(
+              lsx_wav_retained_header_warning_actions(&wav->sizeWarnings));
           return SOX_SUCCESS;
         }
         if (!ft->seekable)

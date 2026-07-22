@@ -70,4 +70,9 @@ expect_fields f64_4g8 32f0ff7f 54 00f0ff7f
 probe u8_4g8 4294967304 u8 1
 expect_fields u8_4g8 24f0ff7f 40 00f0ff7f
 
+# Exercise the production size planner's seekable state transitions without
+# performing multi-gigabyte I/O.  This permanently asserts the retained-first-
+# header fast path, the fact+data seek-back rewrite, and exactly-once warnings.
+"${wav_size_state_test:-../wav_size_state_test}"
+
 exit 0
