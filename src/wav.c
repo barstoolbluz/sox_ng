@@ -1811,6 +1811,27 @@ static int wavwritehdr(sox_format_t * ft, int second_header)
     else if (wFormatTag != WAVE_FORMAT_PCM)
         wFmtSize += 2+wExtSize; /* plus ExtData */
 
+    /* The RIFF/data/fact size fields are only 32 bits wide.  If the true
+     * data length or sample count exceeds that, we cannot record it, so
+     * write SoX's "unspecified length" sentinel (MS_UNSPEC) rather than a
+     * truncated (wrapped) value that would make a size-honoring reader stop
+     * short.  This must happen BEFORE wRiffLength is derived below, and for
+     * every header we write -- not just the seek-back "second" header.  A
+     * non-seekable output (pipe) only ever writes the first header, so
+     * clamping only on the second header (as was done previously) left
+     * streamed >4GB output with a wrapped RIFF and data size.
+     */
+    if (dwSamplesWritten > 0xffffffffu) {
+        if (second_header || !ft->seekable)
+            lsx_warn("length is 4G or more samples: writing unspecified length");
+        dwSamplesWritten = MS_UNSPEC;
+    }
+    if (dwDataLength > 0xffffffffu) {
+        if (second_header || !ft->seekable)
+            lsx_warn("length is 4GB or more of data: writing unspecified length");
+        dwDataLength = MS_UNSPEC;
+    }
+
     wRiffLength = 4 + (8+wFmtSize) + (8+dwDataLength+dwDataLength%2);
     if (isExtensible || wFormatTag != WAVE_FORMAT_PCM) /* PCM omits the "fact" chunk */
         wRiffLength += (8+dwFactSize);
@@ -1904,20 +1925,9 @@ static int wavwritehdr(sox_format_t * ft, int second_header)
         break;
     }
 
-    /* WAV files can't specify more than 4G samples or 4GB of data:
-     * warn and write UNSPEC instead of creating files with a random
-     * (truncated) size field.
-     */
-    if (second_header) {
-	if (dwSamplesWritten > 0xffffffffu) {
-	    lsx_warn("length is 4G or more samples: file may read truncated");
-	    dwSamplesWritten = MS_UNSPEC;
-	}
-	if (dwDataLength > 0xffffffffu) {
-	    lsx_warn("length is 4GB or more of data: file may read truncated");
-	    dwDataLength = MS_UNSPEC;
-	}
-    }
+    /* Oversized (>32-bit) RIFF/data/fact sizes are clamped to MS_UNSPEC
+     * above, before wRiffLength is computed, for both the first and the
+     * second header. */
 
     /* if not PCM, write the 'fact' chunk */
     if (isExtensible || wFormatTag != WAVE_FORMAT_PCM){
