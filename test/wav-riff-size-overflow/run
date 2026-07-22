@@ -1,0 +1,78 @@
+#! /bin/sh
+
+# Verify that WAV RIFF/data sizes do not wrap at either side of the 32-bit
+# boundary.  Sparse raw inputs provide a trustworthy length hint; head stops
+# the pipeline after the header so this test performs no multi-gigabyte I/O.
+
+set -e
+
+command -v truncate >/dev/null 2>&1 || exit 254
+
+work=wav-riff-size-overflow.$$
+mkdir "$work"
+trap 'rm -rf "$work"' 0 1 2 3 15
+
+field_hex()
+{
+    od -An -v -t x1 -j "$2" -N 4 "$1" | tr -d ' \n'
+}
+
+probe()
+{
+    name=$1
+    bytes=$2
+    type=$3
+    channels=$4
+
+    truncate -s "$bytes" "$work/$name.raw"
+    ${sox:-sox} -t "$type" -r 48000 -c "$channels" "$work/$name.raw" \
+        -t wav - 2>/dev/null | head -c 96 > "$work/$name.wav"
+}
+
+expect_fields()
+{
+    name=$1
+    riff=$2
+    data_offset=$3
+    data=$4
+
+    actual_riff=`field_hex "$work/$name.wav" 4`
+    actual_data=`field_hex "$work/$name.wav" "$data_offset"`
+    if test "x$actual_riff" != "x$riff" || test "x$actual_data" != "x$data"
+    then
+        echo "$name: RIFF=$actual_riff data=$actual_data; expected RIFF=$riff data=$data" 1>&2
+        exit 2
+    fi
+}
+
+# PCM: largest exact data size, then the immediately following byte where
+# data + odd-byte padding + 0x24 bytes of RIFF overhead no longer fits.
+probe u8_exact 4294967258 u8 1
+expect_fields u8_exact feffffff 40 daffffff
+probe u8_overflow 4294967259 u8 1
+expect_fields u8_overflow 24f0ff7f 40 00f0ff7f
+
+# IEEE float: frame-aligned values around the 0x32-byte-overhead boundary.
+probe f64_exact 4294967240 f64 1
+expect_fields f64_exact faffffff 54 c8ffffff
+probe f64_overflow 4294967248 f64 1
+expect_fields f64_overflow 32f0ff7f 54 00f0ff7f
+
+# Four-channel 24-bit PCM uses WAVE_FORMAT_EXTENSIBLE and 0x48 overhead.
+probe extensible_exact 4294967220 s24 4
+expect_fields extensible_exact fcffffff 76 b4ffffff
+probe extensible_overflow 4294967232 s24 4
+expect_fields extensible_overflow 48f0ff7f 76 00f0ff7f
+
+# The previously fixed >4 GiB streamed cases must remain sentinel-based.
+probe f64_4g8 4294967304 f64 1
+expect_fields f64_4g8 32f0ff7f 54 00f0ff7f
+probe u8_4g8 4294967304 u8 1
+expect_fields u8_4g8 24f0ff7f 40 00f0ff7f
+
+# Exercise the production size planner's seekable state transitions without
+# performing multi-gigabyte I/O.  This permanently asserts the retained-first-
+# header fast path, the fact+data seek-back rewrite, and exactly-once warnings.
+"${wav_size_state_test:-../wav_size_state_test}"
+
+exit 0
