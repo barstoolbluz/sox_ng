@@ -78,7 +78,7 @@ sox_sample_test_SOURCES = sox_sample_test.c sox_sample_test.h
 libsox_ng_la_SOURCES = adpcms.c adpcms.h aiff.c aiff.h cvsd.c cvsd.h cvsdfilt.h \
 	g711.c g711.h g721.c g723_24.c g723_40.c g72x.c g72x.h vox.c vox.h \
 	mod.c mod.h mod-tabs.c msupcm.c mul.c raw.c raw.h \
-	formats.c formats.h formats_i.c sox_i.h keymap.c \
+	formats.c formats.h formats_i.c sox_i.h wav-size.h keymap.c \
 	xmalloc.c xmalloc.h getopt.c util.c util.h libsox_ng.c libsox_i.c \
 	sox-fmt.c soxomp.h win32-unicode.c win32-unicode.h
 
