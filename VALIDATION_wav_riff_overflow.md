@@ -18,11 +18,19 @@ The independent `fact` sample-count clamp remains separate and is applied only t
 
 ## Archive and provenance
 
-The supplied archive matched the expected digest:
+### Input handoff archive
+
+The archive used as the source input for this work matched the digest specified in the brief:
 
 ```
 4cec1e85a7f6255e2fa7b6ac18686dc7fd21d202a3298132d3adde97eb860f7e  sox_ng_wav_fix_handoff.tar.gz
 ```
+
+This hash identifies the **input handoff archive only**. It does not identify a corrected delivery bundle. A previous revision used the ambiguous phrase "supplied archive" here even though the first corrected delivery archive was a different artifact with SHA-256 `6cc64f6b1ba725a5ff8b0299f4eabd26fe5a518e36884a974c2c71b9926f0f78`. That provenance wording was incorrect and is corrected in this revision.
+
+### Corrected delivery archive
+
+The corrected delivery archive is identified by its detached `.sha256` sidecar, generated only after the repository has been committed, cleaned, and packaged. Its checksum is intentionally not embedded in this tracked report: changing this report would change the archive and invalidate any hash written inside it. The detached sidecar is therefore the authoritative binding between the delivered filename and bytes.
 
 The unpatched baseline was built from `058d1c90^` (`a615a4f16e739d33bfa541abb11234300148eac4`), not `HEAD~1`. Classic `/usr/bin/sox` reports SoX 14.4.2 and reproduced both wraps, confirming long-standing upstream lineage rather than a sox_ng regression.
 
@@ -103,13 +111,31 @@ This confirms that the independent `fact` clamp and the unified RIFF/data clamp 
 
 ## Regression tests
 
-A permanent sparse-header regression was added at `test/wav-riff-size-overflow/run`. It covers PCM, IEEE float, and WAVE_FORMAT_EXTENSIBLE immediately below and above their exact overflow boundaries, plus the prior >4 GiB streamed cases.
+The permanent regression now has two complementary layers:
+
+1. `test/wav-riff-size-overflow/run` exercises the real streamed writer at the PCM, IEEE float, and WAVE_FORMAT_EXTENSIBLE last-exact/first-overflow boundaries and at the prior >4 GiB cases.
+2. `test/wav-size-state.c` compiles against the same internal size and warning-state planner used by `src/wav.c`. It permanently asserts:
+   - the seekable fast path that retains the first sentinel header;
+   - exactly one deferred data-length advisory on that path;
+   - the seekable second-header rewrite when both the `fact` sample count and data/RIFF sizes overflow;
+   - exactly one sample-count advisory and one data-length advisory on that path;
+   - no duplicate advisory on repeated terminal calls;
+   - clearing of a provisional warning when an exact seek-back header replaces the first header; and
+   - overflow safety for a maximal `uint64_t` input.
+
+The shared planner uses a subtraction-based fit check rather than adding arbitrary `uint64_t` payload lengths before comparison, so even pathological internal values cannot wrap the intermediate calculation.
+
+After adding this coverage, the real seekable paths were rerun against the rebuilt binary:
+
+- f64 payload `0xfffffff0`: RIFF `0x7ffff032`, exact `fact` count `0x1ffffffe`, data `0x7ffff000`, exactly one data-length warning, physical size 4,294,967,338 bytes, full decode count 4,294,967,280 bytes.
+- f64 payload 34,359,738,368 bytes (2^32 samples): RIFF `0x7ffff032`, `fact` `0x7ffff000`, data `0x7ffff000`, exactly one sample-count warning and one data-length warning, physical size 34,359,738,426 bytes.
 
 Results in the available native build environment:
 
-- `make check`: exit 0; both `wav-length-over-4GB` and `wav-riff-size-overflow` report `OK`.
+- `make check`: exit 0; both `wav-length-over-4GB` and the expanded `wav-riff-size-overflow` report `OK`.
 - `cd src && make sox_sample_test && builddir=. bash ./tests.sh`: exit 0; 148 `ok`, zero failure/error/not-ok lines. The build lacked optional Flox-provided codec libraries, so `wv w64 paf mat5 mat4 flac caf` were skipped and the brief's 172-case count was not available.
 - Rebuild produced no compiler warnings attributable to the patch.
+- `make distcheck` was attempted but could not start the distribution build because this container lacks the documentation tools `tbl`, `nroff`, and `pdfroff`. No source or test failure occurred before that toolchain error.
 
 ## Environment limitation
 
