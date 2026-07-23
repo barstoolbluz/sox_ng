@@ -57,6 +57,7 @@ static const char* const sndfile_library_names[] =
   SNDFILE_FUNC(f,x, int, sf_format_check, (const SF_INFO *info)) \
   SNDFILE_FUNC(f,x, int, sf_command, (SNDFILE *sndfile, int command, void *data, int datasize)) \
   SNDFILE_FUNC(f,x, sf_count_t, sf_read_int, (SNDFILE *sndfile, int *ptr, sf_count_t items)) \
+  SNDFILE_FUNC(f,x, sf_count_t, sf_read_float, (SNDFILE *sndfile, float *ptr, sf_count_t items)) \
   SNDFILE_FUNC(f,x, sf_count_t, sf_write_int, (SNDFILE *sndfile, const int *ptr, sf_count_t items)) \
   SNDFILE_FUNC(f,x, sf_count_t, sf_seek, (SNDFILE *sndfile, sf_count_t frames, int whence)) \
   SNDFILE_FUNC(f,x, const char*, sf_strerror, (SNDFILE *sndfile))
@@ -67,6 +68,9 @@ typedef struct {
   SF_INFO *sf_info;
   char * log_buffer;
   char const * log_buffer_ptr;
+  float * read_buffer;
+  size_t read_buffer_len;
+  sox_bool read_float;
   LSX_DLENTRIES_TO_PTRS(SNDFILE_FUNC_ENTRIES, sndfile_dl);
 } priv_t;
 
@@ -371,6 +375,7 @@ int stop_sndfile(sox_format_t * ft)
   sf->sf_close(sf->sf_file);
   free((void *)sf->log_buffer);
   free((void *)sf->sf_info);
+  free(sf->read_buffer);
   LSX_DLLIBRARY_CLOSE(sf, sndfile_dl);
   return SOX_SUCCESS;
 }
@@ -448,10 +453,10 @@ int startread_sndfile(sox_format_t * ft)
   }
   else rate = sf->sf_info->samplerate;
 
-  if ((sf->sf_info->format & SF_FORMAT_SUBMASK) == SF_FORMAT_FLOAT) {
-    sf->sf_command(sf->sf_file, SFC_SET_SCALE_FLOAT_INT_READ, NULL, SF_TRUE);
+  sf->read_float =
+      (sf->sf_info->format & SF_FORMAT_SUBMASK) == SF_FORMAT_FLOAT;
+  if (sf->read_float)
     sf->sf_command(sf->sf_file, SFC_SET_CLIPPING, NULL, SF_TRUE);
-  }
 
 #if 0 /* FIXME */
     sox_append_comments(&ft->oob.comments, buf);
@@ -468,6 +473,29 @@ int startread_sndfile(sox_format_t * ft)
 size_t read_samples_sndfile(sox_format_t * ft, sox_sample_t *buf, size_t len)
 {
   priv_t * sf = (priv_t *)ft->priv;
+
+  if (!len)
+    return 0;
+
+  if (sf->read_float) {
+    sf_count_t actual;
+    size_t i;
+    SOX_SAMPLE_LOCALS;
+
+    if (len > sf->read_buffer_len) {
+      sf->read_buffer = lsx_realloc_array(
+          sf->read_buffer, len, sizeof(*sf->read_buffer));
+      sf->read_buffer_len = len;
+    }
+
+    actual = sf->sf_read_float(sf->sf_file, sf->read_buffer, (sf_count_t)len);
+    if (actual <= 0)
+      return 0;
+    for (i = 0; i < (size_t)actual; ++i)
+      buf[i] = SOX_FLOAT_32BIT_TO_SAMPLE(sf->read_buffer[i], ft->clips);
+    return (size_t)actual;
+  }
+
   /* FIXME: We assume int == sox_sample_t here */
   return (size_t)sf->sf_read_int(sf->sf_file, (int *)buf, (sf_count_t)len);
 }

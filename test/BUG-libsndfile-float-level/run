@@ -1,0 +1,64 @@
+#!/bin/sh
+
+# Verify level-preserving f32 reads without changing the established f64 path.
+
+set -u
+
+require_float_format()
+{
+  info=`$sox --help-format "$1" 2>/dev/null` || exit 254
+  printf '%s\n' "$info" | grep '^Reads: yes$' >/dev/null || exit 254
+  printf '%s\n' "$info" | grep '32-bit Floating Point PCM' >/dev/null || exit 254
+  printf '%s\n' "$info" | grep '64-bit Floating Point PCM' >/dev/null || exit 254
+}
+
+check_peak()
+{
+  file=$1
+  bits=$2
+  label=$3
+
+  actual_bits=`$sox --i -b "$file" 2>/dev/null` || exit 2
+  test "$actual_bits" = "$bits" || {
+    echo "$label: expected $bits bits, got $actual_bits" >&2
+    exit 2
+  }
+
+  peak=`$sox "$file" -n stat 2>&1 |
+    sed -n 's/^Maximum amplitude:[[:space:]]*//p'`
+  test -n "$peak" || {
+    echo "$label: could not read maximum amplitude" >&2
+    exit 2
+  }
+
+  awk -v peak="$peak" 'BEGIN { exit !(peak > 0.099 && peak < 0.101) }' || {
+    echo "$label: expected peak near 0.1, got $peak" >&2
+    exit 2
+  }
+}
+
+require_float_format w64
+require_float_format caf
+
+work=tmp.$$
+trap 'rm -rf "$work"' 0 1 2 3 15
+mkdir "$work" || exit 2
+
+for format in w64 caf
+do
+  check_peak "sox-f32-minus20.$format" 32 \
+    "pre-fix SoX f32 $format fixture"
+  check_peak "sox-f64-minus20.$format" 64 \
+    "pre-fix SoX f64 $format fixture"
+
+  for bits in 32 64
+  do
+    output="$work/current-f$bits.$format"
+    $sox -R -n -r 8000 -c 1 -e floating-point -b "$bits" "$output" \
+      synth 0.01 sine 1000 gain -20 >/dev/null 2>&1 || exit 2
+    check_peak "$output" "$bits" \
+      "current SoX f$bits $format round trip"
+  done
+done
+
+exit 0
