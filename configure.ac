@@ -251,6 +251,7 @@ AC_CHECK_HEADERS(fcntl.h unistd.h byteswap.h sys/ioctl.h sys/select.h sys/stat.h
 
 dnl Checks for library functions.
 AC_CHECK_FUNCS(strcasecmp strdup popen vsnprintf gettimeofday mkstemp fmemopen)
+AC_CHECK_MEMBERS([struct stat.st_blocks], [], [], [[#include <sys/stat.h>]])
 AC_CHECK_FUNCS(getenv setenv execvp)
 AC_CHECK_FUNCS(posix_fadvise)
 
