@@ -278,6 +278,9 @@ skip_check () {
 # Run tests
 
 ${builddir}/sox_sample_test${EXEEXT} || exit 1
+if test -x "${builddir}/sparse_file_test${EXEEXT}"; then
+  LD_LIBRARY_PATH="${libdir}" ${builddir}/sparse_file_test${EXEEXT} || exit 1
+fi
 
 skip_check caf flac mat4 mat5 paf w64 wv
 
