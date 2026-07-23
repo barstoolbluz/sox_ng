@@ -285,7 +285,16 @@ sox_uint64_t lsx_filelength(sox_format_t * ft)
   struct stat st;
   int ret = ft->fp ? fstat(fileno((FILE*)ft->fp), &st) : 0;
 
-  return (!ret && (st.st_mode & S_IFREG))? (sox_uint64_t)st.st_size : 0;
+  if (!ret && (st.st_mode & S_IFREG)) {
+    sox_uint64_t length = (sox_uint64_t)st.st_size;
+
+    /* A pending sparse write has advanced the logical end without yet
+     * extending the file's physical size. */
+    if (ft->mode == 'w' && ft->last_byte_was_zero)
+      length = max(length, ft->tell_off);
+    return length;
+  }
+  return 0;
 }
 
 int lsx_flush(sox_format_t * ft)
