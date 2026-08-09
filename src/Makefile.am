@@ -52,6 +52,14 @@ endif
 
 bin_PROGRAMS = sox_ng
 EXTRA_PROGRAMS = example0 example1 example2 example3 example4 example5 example6 sox_sample_test
+
+if HAVE_SNDFILE
+EXTRA_PROGRAMS += sparse_file_test
+SPARSE_FILE_TEST = sparse_file_test$(EXEEXT)
+sparse_file_test_SOURCES = sparse_file_test.c
+sparse_file_test_CFLAGS = @WARN_CFLAGS@ @SNDFILE_CFLAGS@
+sparse_file_test_LDADD = $(sox_ng_LDADD) $(SNDFILE_LIBS)
+endif
 lib_LTLIBRARIES = libsox_ng.la
 include_HEADERS = sox_ng.h
 sox_ng_SOURCES = sox_ng.c
@@ -67,6 +75,7 @@ example4_SOURCES = example4.c
 example5_SOURCES = example5.c
 example6_SOURCES = example6.c
 sox_sample_test_SOURCES = sox_sample_test.c sox_sample_test.h
+sox_sample_test_DEPENDENCIES = $(SPARSE_FILE_TEST)
 
 
 
@@ -270,7 +279,7 @@ loc:
 # Ideally we would use the "check" target so that "make distcheck"
 # would run the test suite, but an uninstalled libltdl build cannot
 # currently load its formats and effects, so the checks would fail.
-installcheck: sox_sample_test
+installcheck: sox_sample_test $(SPARSE_FILE_TEST)
 	$(srcdir)/tests.sh --bindir=$(DESTDIR)${bindir} \
 		--libdir=$(DESTDIR)${libdir} \
 		--builddir=${builddir} --srcdir=${srcdir}
@@ -278,5 +287,5 @@ installcheck: sox_sample_test
 		--libdir=$(DESTDIR)${libdir} \
 		--srcdir=${srcdir}
 
-check-am: sox_sample_test
+check-am: sox_sample_test $(SPARSE_FILE_TEST)
 	sh $(srcdir)/tests.sh

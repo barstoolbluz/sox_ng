@@ -1,0 +1,15 @@
+These fixtures and checks cover the libsndfile-backed W64 and CAF float paths.
+
+The four fixture files were written by the unmodified SoX tree at 8 kHz, mono,
+with a 1 kHz sine wave at -20 dBFS. The f32 files contain normalized floating
+point samples. The f64 files contain the integer-scale double representation
+written by the existing SoX libsndfile path.
+
+The test verifies:
+
+1. Pre-fix f32 W64 and CAF files read at their stored level.
+2. Pre-fix f64 W64 and CAF files retain their established read behavior.
+3. Current f32 and f64 W64 and CAF write/read round trips retain level.
+
+The f64 checks prevent an f32 repair from changing the existing double path
+without also solving its separate read and write compatibility problem.
